@@ -1,23 +1,8 @@
 import { parseFrDate } from "../../src/lib/dates";
 import { decodeEntities } from "../../src/lib/normalize";
 
-/** Decodes BDPM bytes (windows-1252). */
-export function decodeCp1252(bytes: Uint8Array | ArrayBuffer): string {
-	return new TextDecoder("windows-1252").decode(bytes);
-}
-
-/** Splits headerless, unquoted TSV into trimmed fields; every line must have `expectedCols` columns. */
-export function parseTsv(text: string, expectedCols: number, fileName: string): string[][] {
-	const lines = text.split(/\r?\n/);
-	if (lines.at(-1) === "") lines.pop();
-	return lines.map((line, i) => {
-		const fields = line.split("\t");
-		if (fields.length !== expectedCols) {
-			throw new Error(`${fileName}: line ${i + 1} has ${fields.length} columns, expected ${expectedCols}`);
-		}
-		return fields.map((f) => f.trim());
-	});
-}
+export { decodeCp1252 } from "../../src/lib/cp1252";
+export { parseTsv } from "../../src/lib/tsv";
 
 /** Extracts the release date (`Dernière mise à jour le DD/MM/YYYY`) of the download page as ISO, or null. */
 export function parseBanner(html: string): string | null {
