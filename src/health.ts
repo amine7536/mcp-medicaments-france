@@ -1,7 +1,7 @@
 import { STATUSES, type Status } from "./ingest/ansm";
 import { log } from "./ingest/http";
 import { RUNNING_TTL_MS } from "./ingest/run";
-import { STALE_AFTER_MS } from "./mcp/envelope";
+import { isStale } from "./mcp/envelope";
 import { PROBABLE_MATCH_BELOW } from "./mcp/schemas";
 
 export const HEALTH_MAX_AGE_SECONDS = 300;
@@ -38,7 +38,7 @@ FROM shortages s WHERE s.listed = 1`;
 
 /** Health status: `stale` without a recent ok ANSM run, else `degraded` when the latest run failed or is stuck. */
 export function healthStatus(lastOkAt: string | null, lastRun: Run | null, now: Date): HealthStatus {
-	if (lastOkAt === null || now.getTime() - Date.parse(lastOkAt) > STALE_AFTER_MS) return "stale";
+	if (isStale(lastOkAt, now)) return "stale";
 	if (lastRun === null) return "ok";
 	if (lastRun.status === "aborted" || lastRun.status === "error") return "degraded";
 	if (lastRun.status === "running" && now.getTime() - Date.parse(lastRun.started_at) > RUNNING_TTL_MS) return "degraded";
