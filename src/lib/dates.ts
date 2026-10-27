@@ -1,10 +1,13 @@
 import { normalize } from "./normalize";
 
+export const RETURN_PRECISIONS = ["day", "month", "quarter", "year"] as const;
+export const RETURN_PARTS = ["debut", "mi", "fin"] as const;
+
 export interface ExpectedReturn {
 	earliest: string | null;
 	latest: string | null;
-	precision: "day" | "month" | "quarter" | "year" | null;
-	part: "debut" | "mi" | "fin" | null;
+	precision: (typeof RETURN_PRECISIONS)[number] | null;
+	part: (typeof RETURN_PARTS)[number] | null;
 }
 
 const NONE: ExpectedReturn = { earliest: null, latest: null, precision: null, part: null };

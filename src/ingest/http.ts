@@ -14,6 +14,9 @@ export function get(fetcher: Fetcher, url: string): Promise<Response> {
 	return fetcher(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 }
 
-export function log(event: string, fields: Record<string, unknown> = {}): void {
-	console.log(JSON.stringify({ event, ...fields }));
+/** One JSON log line; `error` lines go to stderr. */
+export function log(event: string, fields: Record<string, unknown> = {}, level: "info" | "error" = "info"): void {
+	const line = JSON.stringify({ event, ...fields });
+	if (level === "error") console.error(line);
+	else console.log(line);
 }

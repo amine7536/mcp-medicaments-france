@@ -3,7 +3,8 @@ import { sha256Hex } from "../lib/hash";
 import { decodeEntities, normalize } from "../lib/normalize";
 import { log } from "./http";
 
-export type Status = "rupture" | "tension" | "remise_a_disposition" | "arret_commercialisation" | "autre";
+export const STATUSES = ["rupture", "tension", "arret_commercialisation", "remise_a_disposition", "autre"] as const;
+export type Status = (typeof STATUSES)[number];
 
 export interface ListRow {
 	id: string;
@@ -20,7 +21,8 @@ export interface ListRow {
 	list_hash: string;
 }
 
-export type Scope = "ville" | "hopital" | "ville_hopital" | "inconnu";
+export const SCOPES = ["ville", "hopital", "ville_hopital", "inconnu"] as const;
+export type Scope = (typeof SCOPES)[number];
 
 export interface DetailFields {
 	ansm_published_at: string | null;
