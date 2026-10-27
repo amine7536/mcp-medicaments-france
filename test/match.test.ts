@@ -16,7 +16,7 @@ import {
 } from "../src/ingest/match";
 import { runIngest } from "../src/ingest/run";
 import { normalize } from "../src/lib/normalize";
-import { ran, resetDb } from "./db";
+import { queryCount, ran, resetDb } from "./db";
 import { fakeFetcher, fixtureBytes, LIST_HTML } from "./fixtures";
 
 const shortage = (id: string, name: string, path = `/p/${id}`): ListedShortage => ({
@@ -169,33 +169,6 @@ const seedMedicine = (m: { cis: string; name: string }): D1PreparedStatement =>
 		normalize(m.name),
 	);
 
-/** `env` whose DB counts queries: direct statements plus one per batch. */
-function countingEnv(): { env: Env; queries: () => number; batches: () => number } {
-	let prepared = 0;
-	let batched = 0;
-	let batches = 0;
-	const db = new Proxy(env.DB, {
-		get(target, prop) {
-			if (prop === "prepare") {
-				return (sql: string) => {
-					prepared++;
-					return target.prepare(sql);
-				};
-			}
-			if (prop === "batch") {
-				return (stmts: D1PreparedStatement[]) => {
-					batches++;
-					batched += stmts.length;
-					return target.batch(stmts);
-				};
-			}
-			const v = Reflect.get(target, prop, target);
-			return typeof v === "function" ? v.bind(target) : v;
-		},
-	});
-	return { env: { ...env, DB: db }, queries: () => prepared - batched + batches, batches: () => batches };
-}
-
 const matches = () =>
 	env.DB.prepare("SELECT shortage_id, cis, method, confidence, is_best FROM shortage_matches ORDER BY shortage_id, cis")
 		.all()
@@ -223,10 +196,10 @@ describe("matchAll", () => {
 	it("replaces all rows in one batch with exactly 4 queries and logs unmatched entries", async () => {
 		await seed();
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
-		const counting = countingEnv();
-		expect(await matchAll(counting.env)).toEqual({ manual: 0, dispo: 1, exact: 1, fuzzy: 0, none: 1 });
-		expect(counting.queries()).toBe(4);
-		expect(counting.batches()).toBe(1);
+		const counted = queryCount();
+		expect(await matchAll(env)).toEqual({ manual: 0, dispo: 1, exact: 1, fuzzy: 0, none: 1 });
+		expect(counted.queries()).toBe(4);
+		expect(counted.batches()).toBe(1);
 		expect(await matches()).toEqual([
 			{ shortage_id: "1", cis: "100", method: "exact", confidence: 0.95, is_best: 1 },
 			{ shortage_id: "2", cis: "200", method: "dispo", confidence: 1, is_best: 1 },
@@ -243,9 +216,9 @@ describe("matchAll", () => {
 			env.DB.prepare("INSERT INTO bdpm_dispo (cis, status_code, status_label, ansm_path) VALUES (?, 1, 'Rupture', '/p/many')").bind(String(1000 + i)),
 		);
 		await env.DB.batch(dispo);
-		const counting = countingEnv();
-		await matchAll(counting.env);
-		expect(counting.queries()).toBe(4);
+		const counted = queryCount();
+		await matchAll(env);
+		expect(counted.queries()).toBe(4);
 		expect(await matches()).toHaveLength(45);
 	});
 

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runIngest } from "../src/ingest/run";
-import { count, ran, resetDb } from "./db";
+import { count, queryCount, ran, resetDb } from "./db";
 import { detailCalls, type FakeOptions, fakeFetcher, fixtureText, LIST_HTML } from "./fixtures";
 
 const OPTS = { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: async () => "" };
@@ -225,12 +225,8 @@ describe("diff", { timeout: 30_000 }, () => {
 	});
 
 	it("keeps the counts within the D1 query budget", async () => {
-		const spy = vi.spyOn(env.DB, "prepare");
-		const batch = vi.spyOn(env.DB, "batch");
+		const counted = queryCount();
 		await run();
-		const direct = spy.mock.calls.length;
-		// Every statement is either run directly or batched; count batches as one query each.
-		const batched = batch.mock.calls.reduce((n, c) => n + c[0].length, 0);
-		expect(direct - batched + batch.mock.calls.length).toBeLessThanOrEqual(50);
+		expect(counted.queries()).toBeLessThanOrEqual(50);
 	});
 });
