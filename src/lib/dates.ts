@@ -51,11 +51,11 @@ const QUARTERS: Array<[RegExp, number]> = [
 ];
 
 const RE_NUMERIC = /^(\d{1,2}\/\d{1,2}\/\d{4})(?= |$)/;
-const RE_DAY = new RegExp(`^(\\d{1,2}) ${MONTH} ${YEAR}`);
+const RE_DAY = new RegExp(`^(?:(1) ER|(\\d{1,2})) ${MONTH} ${YEAR}`);
 const RE_PART_MONTH = new RegExp(`^(DEBUT|MI|FIN) ${MONTH} ${YEAR}`);
 const RE_MONTH = new RegExp(`^(?:COURANT )?${MONTH} ${YEAR}`);
 const RE_QUARTER = new RegExp(`^(PREMIER|1 ?ER|DEUXIEME|2 ?EME|SECOND|TROISIEME|3 ?EME|QUATRIEME|4 ?EME) TRIMESTRE ${YEAR}`);
-const RE_PART_YEAR = new RegExp(`^(DEBUT|FIN)(?: D ANNEE)? ${YEAR}`);
+const RE_PART_YEAR = new RegExp(`^(?:(DEBUT)|(FIN)(?: D ANNEE)?) ${YEAR}`);
 const RE_YEAR = new RegExp(`^(?:COURANT )?${YEAR}`);
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -113,7 +113,7 @@ export function parseExpectedReturn(line: string): ExpectedReturn {
 		return date ? day(date) : NONE;
 	}
 	if ((m = RE_DAY.exec(tail))) {
-		const date = validDay(Number(m[3]), monthIndex(m[2] as string), Number(m[1]));
+		const date = validDay(Number(m[4]), monthIndex(m[3] as string), Number(m[1] ?? m[2]));
 		return date ? day(date) : NONE;
 	}
 	if ((m = RE_PART_MONTH.exec(tail))) {
@@ -137,8 +137,8 @@ export function parseExpectedReturn(line: string): ExpectedReturn {
 		};
 	}
 	if ((m = RE_PART_YEAR.exec(tail))) {
-		y = Number(m[2]);
-		return yearInRange(y) ? year(y, PARTS[m[1] as string] ?? null) : NONE;
+		y = Number(m[3]);
+		return yearInRange(y) ? year(y, PARTS[(m[1] ?? m[2]) as string] ?? null) : NONE;
 	}
 	if ((m = RE_YEAR.exec(tail))) {
 		y = Number(m[1]);

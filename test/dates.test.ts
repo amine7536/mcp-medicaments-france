@@ -34,6 +34,7 @@ describe("parseExpectedReturn: rules", () => {
 	it.each<[string, ExpectedReturn]>([
 		[`${P} le 5/1/2027`, r("2027-01-05", "2027-01-05", "day")],
 		[`${P} le 3 mars 2027`, r("2027-03-03", "2027-03-03", "day")],
+		[`${P} le 1er mars 2027`, r("2027-03-01", "2027-03-01", "day")],
 		[`${P} début février 2028`, r("2028-02-01", "2028-02-29", "month", "debut")],
 		[`${P} mi-avril 2027`, r("2027-04-01", "2027-04-30", "month", "mi")],
 		[`${P} en août 2027`, r("2027-08-01", "2027-08-31", "month")],
@@ -47,6 +48,7 @@ describe("parseExpectedReturn: rules", () => {
 		[`${P} au 4ème trimestre 2027`, r("2027-10-01", "2027-12-31", "quarter")],
 		[`${P} début 2027`, r("2027-01-01", "2027-12-31", "year", "debut")],
 		[`${P} fin d'année 2026`, r("2026-01-01", "2026-12-31", "year", "fin")],
+		[`${P} début d'année 2027`, NONE],
 		[`${P} en 2027`, r("2027-01-01", "2027-12-31", "year")],
 		[`${P} à partir du 10/03/2027`, r("2027-03-10", "2027-03-10", "day")],
 		[`${P} prochainement`, NONE],
