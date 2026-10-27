@@ -7,7 +7,6 @@ import worker from "../src/index";
 import { count, ran, resetDb } from "./db";
 import { type FakeFetcher, fakeFetcher } from "./fixtures";
 
-
 const TOKEN = "s3cret-token";
 const URL = "https://ruptures-medicaments.a3e.dev/admin/ingest";
 
@@ -47,16 +46,26 @@ describe("POST /admin/ingest", () => {
 		expect(fake.calls).toEqual([]);
 	});
 
-	it("401 on a missing or bad token", async () => {
-		for (const headers of [{}, { Authorization: "Bearer wrong" }, { Authorization: TOKEN }] as Record<string, string>[]) {
-			const res = await call({ headers });
-			expect(res.status).toBe(401);
-			expect(await res.json()).toEqual({ error: "unauthorized" });
+	it("401 on a missing or bad token, for any method", async () => {
+		for (const method of ["POST", "GET"]) {
+			for (const headers of [{}, { Authorization: "Bearer wrong" }, { Authorization: TOKEN }] as Record<string, string>[]) {
+				const res = await call({ method, headers });
+				expect(res.status).toBe(401);
+				expect(await res.json()).toEqual({ error: "unauthorized" });
+			}
 		}
 		expect(fake.calls).toEqual([]);
 	});
 
-	it("409 while a run is in progress", async () => {
+	it("405 on an authenticated GET", async () => {
+		const res = await call({ method: "GET", headers: auth });
+		expect(res.status).toBe(405);
+		expect(res.headers.get("Allow")).toBe("POST");
+		expect(fake.calls).toEqual([]);
+		expect(await runs()).toBe(0);
+	});
+
+	it("409 while a run holds the claim", async () => {
 		await env.DB.prepare("INSERT INTO ingest_runs (source, status, started_at) VALUES ('ansm', 'running', ?)")
 			.bind(new Date(Date.now() - 60_000).toISOString())
 			.run();
@@ -67,24 +76,26 @@ describe("POST /admin/ingest", () => {
 		expect(await runs()).toBe(1);
 	});
 
-	it("202 on success, ignoring stale running runs", async () => {
+	it("200 with the run summary, ignoring stale running runs", async () => {
 		await env.DB.prepare("INSERT INTO ingest_runs (source, status, started_at) VALUES ('ansm', 'running', ?)")
 			.bind(new Date(Date.now() - 21 * 60_000).toISOString())
 			.run();
 		fake = fakeFetcher({ list: SHORT_LIST });
 		vi.stubGlobal("fetch", fake);
 		const res = await call({ headers: auth });
-		expect(res.status).toBe(202);
-		expect(await res.json()).toEqual({ accepted: true });
+		expect(res.status).toBe(200);
+		const last = await env.DB.prepare("SELECT id, status, message FROM ingest_runs ORDER BY id DESC LIMIT 1").first<{ id: number }>();
+		expect(await res.json()).toEqual({
+			run_id: last?.id,
+			status: "aborted",
+			message: "bootstrap; list has 0 rows",
+			entries_seen: 0,
+			entries_new: null,
+			entries_changed: null,
+			entries_delisted: null,
+		});
 		expect(fake.calls[0]).toBe(ANSM_LIST_URL);
-		const last = await env.DB.prepare("SELECT status, message FROM ingest_runs ORDER BY id DESC LIMIT 1").first();
-		expect(last).toEqual({ status: "aborted", message: "bootstrap; list has 0 rows" });
-	});
-
-	it("405 on GET", async () => {
-		const res = await call({ method: "GET", headers: auth });
-		expect(res.status).toBe(405);
-		expect(fake.calls).toEqual([]);
+		expect(last).toMatchObject({ status: "aborted", message: "bootstrap; list has 0 rows" });
 	});
 
 	it("leaves other paths at 404", async () => {
