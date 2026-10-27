@@ -1,18 +1,16 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fetchBytes } from "./bdpm/download";
 import { FILES, validateAndMap } from "./bdpm/map";
 import { decodeCp1252, parseBanner, parseTsv } from "./bdpm/parse";
 import { buildImportSql } from "./bdpm/sql";
-import { USER_AGENT } from "../src/ingest/http";
 
 const BASE = "https://base-donnees-publique.medicaments.gouv.fr";
 const OUT_DIR = ".bdpm";
 const SQL_PATH = join(OUT_DIR, "bdpm.sql");
 
 async function download(url: string, fileName: string): Promise<Uint8Array> {
-	const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-	if (res.status !== 200) throw new Error(`${url}: HTTP ${res.status}`);
-	const bytes = new Uint8Array(await res.arrayBuffer());
+	const bytes = await fetchBytes(fetch, url);
 	await writeFile(join(OUT_DIR, fileName), bytes);
 	return bytes;
 }

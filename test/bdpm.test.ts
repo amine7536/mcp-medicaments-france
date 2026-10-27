@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { fetchBytes } from "../scripts/bdpm/download";
 import { validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
 import { decodeCp1252, parseBanner, parseTsv } from "../scripts/bdpm/parse";
 import { buildImportSql, insertStatements, sqlLiteral } from "../scripts/bdpm/sql";
+import { USER_AGENT } from "../src/ingest/http";
 import { parseTsv as sharedParseTsv } from "../src/lib/tsv";
 
 const cis = (i: number): string => String(60_000_000 + i);
@@ -25,6 +27,23 @@ describe("decodeCp1252", () => {
 	it("decodes windows-1252 bytes", () => {
 		expect(decodeCp1252(new Uint8Array([0x64, 0x92, 0x69, 0x6e, 0x69, 0x74]))).toBe("d’init");
 		expect(decodeCp1252(new Uint8Array([0x63, 0x6f, 0x6d, 0x70, 0x72, 0x69, 0x6d, 0xe9]))).toBe("comprimé");
+	});
+});
+
+describe("fetchBytes", () => {
+	it("downloads through the shared GET (User-Agent and timeout)", async () => {
+		const inits: (RequestInit | undefined)[] = [];
+		const bytes = await fetchBytes(async (_url, init) => {
+			inits.push(init);
+			return new Response(new Uint8Array([1, 2, 3]));
+		}, "https://x/f.txt");
+		expect(bytes).toEqual(new Uint8Array([1, 2, 3]));
+		expect(new Headers(inits[0]?.headers).get("User-Agent")).toBe(USER_AGENT);
+		expect(inits[0]?.signal).toBeInstanceOf(AbortSignal);
+	});
+
+	it("throws on a non-200 status", async () => {
+		await expect(fetchBytes(async () => new Response("", { status: 503 }), "https://x/f.txt")).rejects.toThrow("https://x/f.txt: HTTP 503");
 	});
 });
 
