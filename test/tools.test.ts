@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
+import { log } from "../src/ingest/http";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER } from "../src/mcp/envelope";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
@@ -19,6 +20,15 @@ const ctx: ToolContext = { db: env.DB, now: NOW };
 const text = (r: CallToolResult): string => (r.content[0] as { text: string }).text;
 /** The summary part of a result's text (before the JSON). */
 const summary = (r: CallToolResult): string => text(r).split("\n\n")[0] as string;
+
+/** A D1 binding whose every query throws. */
+const brokenDb = (): D1Database =>
+	new Proxy(env.DB, {
+		get(target, prop) {
+			if (prop === "prepare" || prop === "batch") return () => { throw new Error("D1_ERROR: database unavailable"); };
+			return Reflect.get(target, prop);
+		},
+	});
 
 /**
  * Calls a handler with arguments parsed by its input schema; every non-error result is checked against
@@ -414,16 +424,17 @@ describe("runTool", () => {
 
 	it("turns a D1 error into the unavailable error result", async () => {
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		const broken = new Proxy(env.DB, {
-			get(target, prop) {
-				if (prop === "prepare" || prop === "batch") return () => { throw new Error("D1_ERROR: database unavailable"); };
-				return Reflect.get(target, prop);
-			},
-		});
+		const info = vi.spyOn(console, "log");
 		const writeDataPoint = vi.fn();
-		const res = await runTool({ DB: broken, USAGE: { writeDataPoint } }, listCurrentShortages, listCurrentShortages.inputSchema.parse({}));
+		const res = await runTool({ DB: brokenDb(), USAGE: { writeDataPoint } }, listCurrentShortages, listCurrentShortages.inputSchema.parse({}));
 		expect(res).toEqual({ isError: true, content: [{ type: "text", text: `${UNAVAILABLE}\n${UNKNOWN_SOURCE_LINE}` }] });
 		expect(error).toHaveBeenCalledOnce();
+		expect(JSON.parse(error.mock.calls[0]?.[0] as string)).toEqual({
+			event: "tool_error",
+			tool: "list_current_shortages",
+			error: "Error: D1_ERROR: database unavailable",
+		});
+		expect(info).not.toHaveBeenCalled();
 		expect(writeDataPoint.mock.calls[0]?.[0].blobs).toEqual(["list_current_shortages", "error", ""]);
 	});
 
@@ -446,5 +457,18 @@ describe("runTool", () => {
 		const res = await runTool({ DB: flaky, USAGE: { writeDataPoint: vi.fn() } }, listCurrentShortages, listCurrentShortages.inputSchema.parse({}));
 		expect(res.isError).toBe(true);
 		expect(text(res)).toBe(`${UNAVAILABLE}\n${SOURCE_LINE}`);
+	});
+});
+
+describe("log", () => {
+	it("writes one JSON line to stdout, or to stderr at the error level", () => {
+		const info = vi.spyOn(console, "log").mockImplementation(() => {});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		log("ingest_ok", { rows: 3 });
+		expect(info).toHaveBeenCalledWith('{"event":"ingest_ok","rows":3}');
+		expect(error).not.toHaveBeenCalled();
+		log("tool_error", { tool: "x" }, "error");
+		expect(error).toHaveBeenCalledWith('{"event":"tool_error","tool":"x"}');
+		expect(info).toHaveBeenCalledOnce();
 	});
 });

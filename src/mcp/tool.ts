@@ -1,5 +1,6 @@
 import type { CallToolResult, StandardSchemaWithJSON, ToolAnnotations } from "@modelcontextprotocol/server";
 import type * as z from "zod";
+import { log } from "../ingest/http";
 import { errorResult, loadSourceDates, UNKNOWN_DATES } from "./envelope";
 
 export const ANNOTATIONS: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -48,7 +49,7 @@ export async function runTool<I extends z.ZodObject, O extends z.ZodType>(
 	try {
 		outcome = await tool.handler({ db: env.DB, now: new Date() }, args);
 	} catch (err) {
-		console.error(JSON.stringify({ event: "tool_error", tool: tool.name, error: String(err) }));
+		log("tool_error", { tool: tool.name, error: String(err) }, "error");
 		const dates = await loadSourceDates(env.DB).catch(() => UNKNOWN_DATES);
 		outcome = { result: errorResult(UNAVAILABLE, dates) };
 	}
