@@ -28,7 +28,6 @@ export interface IngestResult {
 	detailsFetched: number;
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /** Fetches and parses detail pages with `DETAIL_CONCURRENCY` lanes, each spacing its request starts. */
@@ -51,7 +50,7 @@ async function fetchDetails(rows: ListRow[], fetcher: Fetcher, intervalMs: numbe
 				log("detail_failed", { id: row.id, reason: errorMessage(err) });
 			}
 			const wait = intervalMs - (Date.now() - started);
-			if (wait > 0 && next < rows.length) await sleep(wait);
+			if (wait > 0 && next < rows.length) await scheduler.wait(wait);
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(DETAIL_CONCURRENCY, rows.length) }, lane));

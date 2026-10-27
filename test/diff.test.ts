@@ -47,6 +47,16 @@ beforeEach(async () => {
 });
 
 describe("diff", { timeout: 30_000 }, () => {
+	it("spaces detail requests with scheduler.wait", async () => {
+		const wait = vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const res = ran(await runIngest(env, fakeFetcher(), { ...OPTS, detailIntervalMs: 60_000 }));
+		expect(res.status).toBe("ok");
+		// Each of the 4 lanes skips the wait once the queue is empty.
+		expect(wait).toHaveBeenCalledTimes(res.detailsFetched - 4);
+		for (const [ms] of wait.mock.calls) expect(ms).toBeGreaterThan(0);
+		for (const [ms] of wait.mock.calls) expect(ms).toBeLessThanOrEqual(60_000);
+	});
+
 	it("bootstrap writes every row but no history", async () => {
 		const { res, f } = await run();
 		expect(res.status).toBe("ok");
