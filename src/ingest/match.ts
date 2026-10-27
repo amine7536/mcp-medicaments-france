@@ -115,12 +115,11 @@ export function matchFuzzy(inputs: MatchInputs, s: ListedShortage): Candidate[] 
 	const brand = ta[0];
 	if (brand === undefined || brand.length < 3 || /^\d+$/.test(brand) || brand === "SPECIALITES") return [];
 	const setA = new Set(ta);
-	const numeric = [...setA].filter((t) => NUMERIC.test(t));
+	const numeric = new Set([...setA].filter((t) => NUMERIC.test(t)));
 	const out: Candidate[] = [];
 	for (const m of inputs.byBrand.get(brand) ?? []) {
-		if (!numeric.every((t) => m.tokens.has(t))) continue;
-		const shared = [...setA].filter((t) => m.tokens.has(t)).length;
-		const score = shared / (setA.size + m.tokens.size - shared);
+		if (!numeric.isSubsetOf(m.tokens)) continue;
+		const score = setA.intersection(m.tokens).size / setA.union(m.tokens).size;
 		if (score >= FUZZY_MIN_SCORE) out.push({ cis: m.cis, confidence: Math.round(score * 100) / 100 });
 	}
 	return out;
