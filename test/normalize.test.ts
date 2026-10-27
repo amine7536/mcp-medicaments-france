@@ -65,6 +65,10 @@ describe("decodeEntities", () => {
 		expect(decodeEntities("&nbsp;")).toBe(" ");
 	});
 
+	it("decodes HTML5-only named entities", () => {
+		expect(decodeEntities("&hellip;&rsquo;")).toBe("…’");
+	});
+
 	it("keeps tags and unknown entities", () => {
 		expect(decodeEntities("<b>&unknown;</b>")).toBe("<b>&unknown;</b>");
 	});
