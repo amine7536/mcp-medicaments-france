@@ -64,6 +64,12 @@ describe("validateAndMap", () => {
 		expect(() => validateAndMap(input({ cisBdpm }))).toThrow('CIS_bdpm.txt: line 42 has invalid CIS "1234567"');
 	});
 
+	it("rejects an empty MITM ATC", () => {
+		const mitm = input().mitm;
+		mitm[9] = mitm[9].with(1, "");
+		expect(() => validateAndMap(input({ mitm }))).toThrow("CIS_MITM.txt: line 10 has an empty ATC");
+	});
+
 	it("rejects a missing banner date", () => {
 		expect(() => validateAndMap(input({ bannerDate: null }))).toThrow("release date");
 	});

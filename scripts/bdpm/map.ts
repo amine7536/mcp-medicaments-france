@@ -79,6 +79,9 @@ export function validateAndMap({ cisBdpm, compo, mitm, bannerDate }: BdpmInput):
 	validate(cisBdpm, FILES.cisBdpm);
 	validate(compo, FILES.compo);
 	validate(mitm, FILES.mitm);
+	mitm.forEach((row, i) => {
+		if (req(row[1]) === "") throw new Error(`${FILES.mitm.name}: line ${i + 1} has an empty ATC, expected a non-empty value`);
+	});
 	if (bannerDate === null) throw new Error("telechargement: release date banner not found or invalid");
 
 	const skipped: Skipped = { medicines: 0, substances: 0, mitm: 0 };
@@ -126,7 +129,7 @@ export function validateAndMap({ cisBdpm, compo, mitm, bannerDate }: BdpmInput):
 	for (const r of mitm) {
 		const cis = req(r[0]);
 		const atc = req(r[1]);
-		if (!known.has(cis) || atc === "") {
+		if (!known.has(cis)) {
 			skipped.mitm++;
 			continue;
 		}
