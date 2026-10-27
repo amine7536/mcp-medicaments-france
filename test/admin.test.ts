@@ -10,9 +10,9 @@ import { type FakeFetcher, fakeFetcher } from "./fixtures";
 const TOKEN = "s3cret-token";
 const URL = "https://ruptures-medicaments.a3e.dev/admin/ingest";
 
-async function call(init: RequestInit<IncomingRequestCfProperties> = {}, secret: { token?: string } = { token: TOKEN }): Promise<Response> {
+async function call(init: RequestInit<IncomingRequestCfProperties> = {}, testEnv: Env = env): Promise<Response> {
 	const ctx = createExecutionContext();
-	const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL, { method: "POST", ...init }), { ...env, ADMIN_TOKEN: secret.token } as Env, ctx);
+	const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL, { method: "POST", ...init }), testEnv, ctx);
 	await waitOnExecutionContext(ctx);
 	return res;
 }
@@ -38,12 +38,18 @@ const runs = () => count("SELECT COUNT(*) AS n FROM ingest_runs");
 
 describe("POST /admin/ingest", () => {
 	it("404 when the secret is unset or empty", async () => {
-		for (const secret of [{}, { token: "" }]) {
-			const res = await call({ headers: auth }, secret);
+		// ADMIN_TOKEN is a required secret in the types; drop it to simulate an unset secret.
+		const { ADMIN_TOKEN: _, ...unset } = env;
+		for (const testEnv of [unset as unknown as Env, { ...env, ADMIN_TOKEN: "" }]) {
+			const res = await call({ headers: auth }, testEnv);
 			expect(res.status).toBe(404);
 			expect(await res.json()).toEqual({ error: "not_found" });
 		}
 		expect(fake.calls).toEqual([]);
+	});
+
+	it("reads the secret from the env bindings", () => {
+		expect(env.ADMIN_TOKEN).toBe(TOKEN);
 	});
 
 	it("401 on a missing or bad token, for any method", async () => {
@@ -100,7 +106,7 @@ describe("POST /admin/ingest", () => {
 
 	it("leaves other paths at 404", async () => {
 		const ctx = createExecutionContext();
-		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://x/admin"), { ...env, ADMIN_TOKEN: TOKEN } as Env, ctx);
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://x/admin"), env, ctx);
 		expect(res.status).toBe(404);
 	});
 });

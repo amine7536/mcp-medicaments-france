@@ -16,7 +16,7 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 
 /** `POST /admin/ingest`: runs an ANSM ingest and responds with its summary. */
 export async function handleAdminIngest(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-	const token = (env as Env & { ADMIN_TOKEN?: string }).ADMIN_TOKEN;
+	const token = env.ADMIN_TOKEN;
 	if (!token) return json({ error: "not_found" }, 404);
 	if (!(await safeEqual(request.headers.get("Authorization") ?? "", `Bearer ${token}`))) {
 		return json({ error: "unauthorized" }, 401);

@@ -18,7 +18,7 @@ export default defineConfig({
 	plugins: [
 		cloudflareTest({
 			wrangler: { configPath: "./wrangler.jsonc" },
-			miniflare: { bindings: { TEST_MIGRATIONS, TEST_FIXTURES } },
+			miniflare: { bindings: { TEST_MIGRATIONS, TEST_FIXTURES, ADMIN_TOKEN: "s3cret-token" } },
 		}),
 	],
 	test: {
