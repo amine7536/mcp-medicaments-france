@@ -1,0 +1,44 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "mcp-ruptures-medicaments",
+	"main": "src/index.ts",
+	"account_id": "7806bdd95447f476c67e586e0421c666",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"triggers": {
+		"crons": ["0 5 * * *"]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ruptures",
+			"database_id": "9bc8faf1-2bd8-42a5-9d79-ccfdf7d938b5",
+			"migrations_dir": "migrations"
+		}
+	],
+	"analytics_engine_datasets": [
+		{
+			"binding": "USAGE",
+			"dataset": "ruptures_usage"
+		}
+	],
+	"ratelimits": [
+		{
+			"name": "MCP_LIMIT",
+			"namespace_id": "1001",
+			"simple": {
+				"limit": 60,
+				"period": 60
+			}
+		}
+	],
+	"routes": [
+		{
+			"pattern": "ruptures-medicaments.a3e.dev",
+			"custom_domain": true
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}
