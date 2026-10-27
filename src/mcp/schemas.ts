@@ -1,8 +1,8 @@
 import * as z from "zod";
+import { SCOPES, STATUSES } from "../ingest/ansm";
 import { ANSM_ORIGIN } from "../ingest/http";
+import { RETURN_PARTS, RETURN_PRECISIONS } from "../lib/dates";
 
-export const STATUSES = ["rupture", "tension", "arret_commercialisation", "remise_a_disposition", "autre"] as const;
-export const SCOPES = ["ville", "hopital", "ville_hopital", "inconnu"] as const;
 export const CHANGE_TYPES = ["new", "status_change", "return_date_change", "delisted", "relisted"] as const;
 
 export const Status = z.enum(STATUSES);
@@ -16,8 +16,8 @@ export const PROBABLE_MATCH_BELOW = 0.8;
 export const ExpectedReturn = z.object({
 	earliest: z.iso.date().nullable(),
 	latest: z.iso.date().nullable(),
-	precision: z.enum(["day", "month", "quarter", "year"]).nullable(),
-	part: z.enum(["debut", "mi", "fin"]).nullable(),
+	precision: z.enum(RETURN_PRECISIONS).nullable(),
+	part: z.enum(RETURN_PARTS).nullable(),
 	raw: z.string().nullable(),
 	passed: z.boolean(),
 });
