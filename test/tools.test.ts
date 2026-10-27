@@ -351,6 +351,11 @@ describe("list_current_shortages", () => {
 		const since = await call(listCurrentShortages, { updated_since: "2026-10-25" });
 		expect(since.data.items.map((i: { shortage_id: string }) => i.shortage_id)).toEqual(["1006", "1002"]);
 	});
+
+	it("returns an empty list when the therapeutic area normalizes to nothing", async () => {
+		const { data } = await call(listCurrentShortages, { therapeutic_area: "--" });
+		expect(data).toEqual({ kind: "list", total: 0, items: [], next_offset: null });
+	});
 });
 
 describe("recent_changes", () => {

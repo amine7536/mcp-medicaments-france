@@ -41,14 +41,19 @@ export const listCurrentShortages: Tool<typeof inputSchema, typeof outputSchema>
 	outputSchema,
 	async handler({ db, now }, { status, scope, therapeutic_area, updated_since, limit, offset }) {
 		const dates = await loadSourceDates(db);
-		const { total, items: rows } = await listShortages(db, {
-			statuses: status,
-			scopes: scope === undefined ? null : SCOPE_MATCHES[scope],
-			area: therapeutic_area === undefined ? null : normalize(therapeutic_area),
-			updatedSince: updated_since ?? null,
-			limit,
-			offset,
-		});
+		const area = therapeutic_area === undefined ? null : normalize(therapeutic_area);
+		// An area that normalizes to nothing matches no entry (instr with '' would match every row).
+		const { total, items: rows } =
+			area === ""
+				? { total: 0, items: [] }
+				: await listShortages(db, {
+						statuses: status,
+						scopes: scope === undefined ? null : SCOPE_MATCHES[scope],
+						area,
+						updatedSince: updated_since ?? null,
+						limit,
+						offset,
+					});
 		const items = rows.map((r) => ({ ...toShortageSummary(r, now), cis: r.cis }));
 		const next_offset = offset + items.length < total ? offset + items.length : null;
 		const lines = [`${total} listed ANSM entr${total === 1 ? "y" : "ies"} match; showing ${items.length} from offset ${offset}.`];
