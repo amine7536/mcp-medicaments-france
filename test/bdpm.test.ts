@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
 import { decodeCp1252, parseBanner, parseTsv } from "../scripts/bdpm/parse";
 import { buildImportSql, insertStatements, sqlLiteral } from "../scripts/bdpm/sql";
+import { parseTsv as sharedParseTsv } from "../src/lib/tsv";
 
 const cis = (i: number): string => String(60_000_000 + i);
 
@@ -28,6 +29,10 @@ describe("decodeCp1252", () => {
 });
 
 describe("parseTsv", () => {
+	it("re-exports the shared parser", () => {
+		expect(parseTsv).toBe(sharedParseTsv);
+	});
+
 	it("splits CRLF lines, trims fields and drops the final empty line", () => {
 		expect(parseTsv("a \tb\r\nc\t d \r\n", 2, "F.txt")).toEqual([
 			["a", "b"],

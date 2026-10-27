@@ -38,7 +38,7 @@ describe("parseDispo", () => {
 	});
 
 	it("rejects a wrong column count and too few rows", () => {
-		expect(() => parseDispo(new TextEncoder().encode("a\tb\r\n"), 1)).toThrow("columns");
+		expect(() => parseDispo(new TextEncoder().encode("a\tb\r\n"), 1)).toThrow("CIS_CIP_Dispo_Spec.txt: line 1 has 2 columns, expected 8");
 		expect(() => parseDispo(BYTES)).toThrow("50 rows, expected at least 200");
 	});
 

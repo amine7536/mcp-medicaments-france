@@ -1,5 +1,6 @@
 import { decodeCp1252 } from "../lib/cp1252";
 import { parseFrDate } from "../lib/dates";
+import { parseTsv } from "../lib/tsv";
 import { DISPO_URL, type Fetcher, get, log } from "./http";
 
 export interface DispoRow {
@@ -14,21 +15,17 @@ export interface DispoRow {
 }
 
 const COLS = 8;
+const DISPO_FILE = "CIS_CIP_Dispo_Spec.txt";
 const ROWS_PER_INSERT = 12; // 8 columns x 12 rows = 96 bound parameters (limit 100)
 
 const date = (s: string): string | null => (s === "" ? null : parseFrDate(s));
 
 /** Decodes and validates `CIS_CIP_Dispo_Spec.txt`; throws on any malformed line or too few rows. */
 export function parseDispo(bytes: ArrayBuffer | Uint8Array, minRows = 200): DispoRow[] {
-	const lines = decodeCp1252(bytes)
-		.split(/\r?\n/)
-		.filter((line) => line !== "");
-	const rows = lines.map((line, i) => {
-		const f = line.split("\t").map((v) => v.trim());
-		if (f.length !== COLS) throw new Error(`line ${i + 1} has ${f.length} columns, expected ${COLS}`);
+	const rows = parseTsv(decodeCp1252(bytes), COLS, DISPO_FILE, { skipEmptyLines: true }).map((f, i) => {
 		const [cis, cip13, code, label, debut, maj, remise, url] = f as [string, string, string, string, string, string, string, string];
 		const status_code = Number(code);
-		if (cis === "" || code === "" || !Number.isInteger(status_code)) throw new Error(`line ${i + 1}: invalid CIS or status code`);
+		if (cis === "" || code === "" || !Number.isInteger(status_code)) throw new Error(`${DISPO_FILE}: line ${i + 1}: invalid CIS or status code`);
 		return {
 			cis,
 			cip13: cip13 === "" ? null : cip13,
