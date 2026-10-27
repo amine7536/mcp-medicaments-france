@@ -41,13 +41,7 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 	});
 }
 
-export type Envelope<D> = {
-	data: D;
-	source: { ansm: typeof ANSM_SOURCE_URL; bdpm: typeof BDPM_SOURCE_URL } & SourceDates;
-	coverage_note: typeof COVERAGE_NOTE;
-	disclaimer: typeof DISCLAIMER;
-	warning?: string;
-};
+export type Envelope<D> = z.output<ReturnType<typeof envelopeSchema<z.ZodType<D>>>>;
 
 /** Wraps tool data with its sources, coverage note, disclaimer and, when the ANSM data is stale, a warning. */
 export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D> {
