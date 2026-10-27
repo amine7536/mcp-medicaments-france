@@ -51,7 +51,7 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 
 export type Envelope<D> = z.output<ReturnType<typeof envelopeSchema<z.ZodType<D>>>>;
 
-/** Wraps tool data with its sources, coverage note, disclaimer and, when the ANSM data is stale, a warning. */
+/** Wraps tool data with its sources, coverage note, disclaimer, safety notice and, when the ANSM data is stale, a warning. */
 export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D> {
 	const { ansm_last_ingest } = dates;
 	const stale = isStale(ansm_last_ingest, now);
