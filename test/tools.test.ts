@@ -3,6 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
+import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER } from "../src/mcp/envelope";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
@@ -275,6 +276,25 @@ describe("get_availability", () => {
 		const none = await call(getAvailability, { name: "zzzunknown" });
 		expect(none.data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
 		expect(summary(none.result)).toContain("Check the spelling or search by active substance");
+	});
+
+	it("by name, not_found: lists unmatched entries sharing the query's brand token", async () => {
+		await env.DB.prepare(
+			`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, scope_raw, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
+			VALUES ('1009', '/disponibilites-des-produits-de-sante/medicaments/entry-1009', 'COLI-GENTA AP-HP', ?, 'rupture', 'Rupture de stock', 'hopital', 'Hôpital', '2026-10-23', 'h', ?, ?, 1)`,
+		)
+			.bind(normalize("COLI-GENTA AP-HP"), "2026-10-23T05:00:00.000Z", ANSM_LAST_INGEST)
+			.run();
+		try {
+			const { data, result } = await call(getAvailability, { name: "coli-genta injectable" });
+			expect(data.kind).toBe("not_found");
+			expect(data.possibly_related_shortages).toHaveLength(1);
+			expect(data.possibly_related_shortages[0]).toMatchObject({ shortage_id: "1009", name: "COLI-GENTA AP-HP", status: "rupture", match_confidence: null });
+			expect(summary(result)).toContain("ANSM lists possibly related entries: COLI-GENTA AP-HP (rupture). This does not guarantee availability in your pharmacy.");
+			expect((await call(getAvailability, { name: "co injectable" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		} finally {
+			await seed();
+		}
 	});
 
 	it("not_found: unknown CIS, unknown shortage id", async () => {
