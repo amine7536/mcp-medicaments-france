@@ -4,7 +4,7 @@ import { runIngest } from "../src/ingest/run";
 import { count, ran, resetDb } from "./db";
 import { detailCalls, type FakeOptions, fakeFetcher, fixtureText, LIST_HTML } from "./fixtures";
 
-const OPTS = { dispoMinRows: 10, detailIntervalMs: 0 };
+const OPTS = { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: async () => "" };
 const TOTAL = LIST_HTML.match(/<tr class="product-item"/g)?.length as number;
 
 const rowRe = (id: string): RegExp => new RegExp(`<tr class="product-item"\\s+data-id="${id}"[\\s\\S]*?</tr>`);

@@ -4,7 +4,7 @@ import type { IngestOutcome, IngestResult } from "../src/ingest/run";
 /** Empties the tables the ingest writes. */
 export async function resetDb(): Promise<void> {
 	await env.DB.batch(
-		["bdpm_dispo", "shortages", "status_history", "ingest_runs"].map((t) => env.DB.prepare(`DELETE FROM ${t}`)),
+		["bdpm_dispo", "shortages", "status_history", "ingest_runs", "shortage_matches", "medicines"].map((t) => env.DB.prepare(`DELETE FROM ${t}`)),
 	);
 }
 
