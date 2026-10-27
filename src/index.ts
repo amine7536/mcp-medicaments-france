@@ -1,4 +1,5 @@
 import { handleAdminIngest } from "./admin";
+import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
 
 export default {
@@ -9,6 +10,10 @@ export default {
 	},
 
 	async scheduled(_controller, env, ctx): Promise<void> {
-		ctx.waitUntil(runIngest(env, fetch));
+		ctx.waitUntil(
+			runIngest(env, fetch).then((outcome) => {
+				if ("skipped" in outcome) log("ingest_skipped");
+			}),
+		);
 	},
 } satisfies ExportedHandler<Env>;

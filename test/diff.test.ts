@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runIngest } from "../src/ingest/run";
-import { count, resetDb } from "./db";
+import { count, ran, resetDb } from "./db";
 import { detailCalls, type FakeOptions, fakeFetcher, fixtureText, LIST_HTML } from "./fixtures";
 
 const OPTS = { dispoMinRows: 10, detailIntervalMs: 0 };
@@ -24,7 +24,7 @@ const setUpdated = (html: string, id: string, date: string): string =>
 
 async function run(opts: FakeOptions = {}) {
 	const f = fakeFetcher(opts);
-	const res = await runIngest(env, f, OPTS);
+	const res = ran(await runIngest(env, f, OPTS));
 	return { res, f };
 }
 

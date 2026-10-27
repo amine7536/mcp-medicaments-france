@@ -58,29 +58,64 @@ async function fetchDetails(rows: ListRow[], fetcher: Fetcher, intervalMs: numbe
 	return out;
 }
 
-/** One ANSM ingest: list, sanity, BDPM shortage file, details, diff, hook, run bookkeeping. */
-export async function runIngest(env: Env, fetcher: Fetcher, opts: IngestOptions = {}): Promise<IngestResult> {
-	const db = env.DB;
-	const startedAt = new Date();
-	const now = startedAt.toISOString();
-	const staleBefore = new Date(startedAt.getTime() - RUNNING_TTL_MS).toISOString();
+export type IngestOutcome = IngestResult | { skipped: "ingest_running" } | { error: string };
 
+const CLOSE_SQL =
+	"UPDATE ingest_runs SET status = ?, finished_at = ?, entries_seen = ?, entries_new = ?, entries_changed = ?, entries_delisted = ?, message = ? WHERE id = ?";
+
+/** Closes stale running runs, then claims a new run row; `null` when another run holds the claim. */
+async function claimRun(db: D1Database, now: string, staleBefore: string): Promise<number | null> {
 	await db
 		.prepare(
 			"UPDATE ingest_runs SET status = 'error', finished_at = ?, message = 'stale running run' WHERE source = 'ansm' AND status = 'running' AND started_at < ?",
 		)
 		.bind(now, staleBefore)
 		.run();
-	const opened = await db
-		.prepare("INSERT INTO ingest_runs (source, status, started_at) VALUES ('ansm', 'running', ?) RETURNING id")
+	const claimed = await db
+		.prepare(
+			"INSERT INTO ingest_runs (source, status, started_at) SELECT 'ansm', 'running', ?1 WHERE NOT EXISTS (SELECT 1 FROM ingest_runs WHERE source = 'ansm' AND status = 'running') RETURNING id",
+		)
 		.bind(now)
 		.first<{ id: number }>();
-	const id = (opened as { id: number }).id;
+	return claimed?.id ?? null;
+}
+
+/** One ANSM ingest: claim, list, sanity, BDPM shortage file, details, diff, hook, run bookkeeping. */
+export async function runIngest(env: Env, fetcher: Fetcher, opts: IngestOptions = {}): Promise<IngestOutcome> {
+	const db = env.DB;
+	const startedAt = new Date();
+	const now = startedAt.toISOString();
+	const staleBefore = new Date(startedAt.getTime() - RUNNING_TTL_MS).toISOString();
+
+	let id: number | null;
+	try {
+		id = await claimRun(db, now, staleBefore);
+	} catch (err) {
+		const error = errorMessage(err).slice(0, MESSAGE_MAX);
+		console.error(JSON.stringify({ event: "ingest_error", reason: error }));
+		return { error };
+	}
+	if (id === null) return { skipped: "ingest_running" };
 
 	let status: RunStatus = "ok";
 	let counts: Partial<DiffCounts> = {};
 	let detailsFetched = 0;
+	let message = "";
 	const parts: string[] = [];
+	const close = (): Promise<unknown> =>
+		db
+			.prepare(CLOSE_SQL)
+			.bind(
+				status,
+				new Date().toISOString(),
+				counts.entries_seen ?? null,
+				counts.entries_new ?? null,
+				counts.entries_changed ?? null,
+				counts.entries_delisted ?? null,
+				message,
+				id,
+			)
+			.run();
 
 	try {
 		const previous = await db
@@ -118,29 +153,19 @@ export async function runIngest(env: Env, fetcher: Fetcher, opts: IngestOptions 
 				log("hook_failed", { id, reason: errorMessage(err) });
 			}
 		}
+		message = parts.filter((p) => p !== "").join("; ");
+		await close();
 	} catch (err) {
 		console.error(JSON.stringify({ event: "ingest_error", id, reason: errorMessage(err) }));
 		status = "error";
-		parts.length = 0;
-		parts.push(errorMessage(err).slice(0, MESSAGE_MAX));
+		message = errorMessage(err).slice(0, MESSAGE_MAX);
+		try {
+			await close();
+		} catch (closeErr) {
+			console.error(JSON.stringify({ event: "ingest_close_failed", id, reason: errorMessage(closeErr) }));
+		}
+	} finally {
+		log("ingest_done", { id, status, message, details_fetched: detailsFetched, ...counts });
 	}
-
-	const message = parts.filter((p) => p !== "").join("; ");
-	await db
-		.prepare(
-			"UPDATE ingest_runs SET status = ?, finished_at = ?, entries_seen = ?, entries_new = ?, entries_changed = ?, entries_delisted = ?, message = ? WHERE id = ?",
-		)
-		.bind(
-			status,
-			new Date().toISOString(),
-			counts.entries_seen ?? null,
-			counts.entries_new ?? null,
-			counts.entries_changed ?? null,
-			counts.entries_delisted ?? null,
-			message,
-			id,
-		)
-		.run();
-	log("ingest_done", { id, status, message, details_fetched: detailsFetched, ...counts });
 	return { id, status, message, counts, detailsFetched };
 }

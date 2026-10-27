@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ANSM_LIST_URL } from "../src/ingest/http";
 import { runIngest } from "../src/ingest/run";
 import worker from "../src/index";
-import { count, resetDb } from "./db";
+import { count, ran, resetDb } from "./db";
 import { type FakeFetcher, fakeFetcher } from "./fixtures";
 
 
@@ -98,7 +98,7 @@ describe("hook", () => {
 	it("a thrown hook error keeps the run ok", async () => {
 		const hook = vi.fn().mockRejectedValue(new Error("boom"));
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook });
+		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
 		expect(res).toMatchObject({ status: "ok", message: "bootstrap; dispo=ok" });
 		expect(hook).toHaveBeenCalledWith(env, { id: res.id, bootstrap: true });
 		expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "hook_failed", id: res.id, reason: "boom" }));
@@ -108,7 +108,7 @@ describe("hook", () => {
 
 	it("appends the hook fragment to the message", async () => {
 		const afterIngest = vi.fn().mockResolvedValue("matched=3");
-		const res = await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest });
+		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest }));
 		expect(res.message).toBe("bootstrap; dispo=ok; matched=3");
 	});
 });
@@ -122,5 +122,18 @@ describe("scheduled", () => {
 		await waitOnExecutionContext(ctx);
 		expect(fake.calls[0]).toBe(ANSM_LIST_URL);
 		expect(await env.DB.prepare("SELECT status FROM ingest_runs").first()).toEqual({ status: "aborted" });
+	});
+
+	it("logs ingest_skipped while a run holds the claim", async () => {
+		await env.DB.prepare("INSERT INTO ingest_runs (source, status, started_at) VALUES ('ansm', 'running', ?)")
+			.bind(new Date(Date.now() - 60_000).toISOString())
+			.run();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const ctx = createExecutionContext();
+		await worker.scheduled({ scheduledTime: Date.now(), cron: "0 5 * * *", noRetry() {} }, env, ctx);
+		await waitOnExecutionContext(ctx);
+		expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "ingest_skipped" }));
+		expect(fake.calls).toEqual([]);
+		expect(await runs()).toBe(1);
 	});
 });
