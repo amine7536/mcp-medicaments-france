@@ -2,9 +2,9 @@ import { STATUSES, type Status } from "./ingest/ansm";
 import { log } from "./ingest/http";
 import { RUNNING_TTL_MS } from "./ingest/run";
 import { STALE_AFTER_MS } from "./mcp/envelope";
+import { PROBABLE_MATCH_BELOW } from "./mcp/schemas";
 
 export const HEALTH_MAX_AGE_SECONDS = 300;
-export const MATCH_THRESHOLD = 0.8;
 
 export type HealthStatus = "ok" | "stale" | "degraded";
 
@@ -55,7 +55,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 		),
 		db.prepare("SELECT status, COUNT(*) AS n FROM shortages WHERE listed = 1 GROUP BY status"),
 		db.prepare("SELECT (SELECT COUNT(*) FROM medicines) AS medicines, (SELECT COUNT(*) FROM mitm) AS mitm, (SELECT COUNT(*) FROM bdpm_dispo) AS bdpm_dispo"),
-		db.prepare(LISTED_SQL).bind(MATCH_THRESHOLD),
+		db.prepare(LISTED_SQL).bind(PROBABLE_MATCH_BELOW),
 		db.prepare(
 			"SELECT expected_return_raw AS raw FROM shortages WHERE listed = 1 AND status IN ('rupture', 'tension') AND expected_return_raw IS NOT NULL AND expected_return_earliest IS NULL",
 		),
