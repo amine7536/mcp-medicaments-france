@@ -24,6 +24,9 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const { pathname } = new URL(request.url);
+		if ((pathname === "/" || pathname === "/health") && request.method !== "GET") {
+			return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "GET" } });
+		}
 		if (pathname === "/") return handleLanding();
 		if (pathname === "/health") return handleHealth(request, env, ctx);
 		if (pathname === "/admin/ingest") return handleAdminIngest(request, env, ctx);

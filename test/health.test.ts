@@ -188,6 +188,21 @@ describe("GET /health", () => {
 	});
 });
 
+describe("non-GET methods", () => {
+	it("405 with Allow: GET on POST / and POST /health, without touching D1", async () => {
+		const broken = new Proxy(env.DB, {
+			get() {
+				throw new Error("D1 accessed");
+			},
+		});
+		for (const url of ["https://ruptures-medicaments.a3e.dev/", URL]) {
+			const res = await get({ ...env, DB: broken }, url, "POST");
+			expect(res.status).toBe(405);
+			expect(res.headers.get("Allow")).toBe("GET");
+		}
+	});
+});
+
 describe("unknown paths", () => {
 	it("keep the 404 JSON", async () => {
 		await resetDb();
