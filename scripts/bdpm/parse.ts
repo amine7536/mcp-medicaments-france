@@ -1,10 +1,7 @@
 import { parseFrDate } from "../../src/lib/dates";
 import { decodeEntities } from "../../src/lib/normalize";
 
-/** Decodes BDPM bytes (windows-1252). */
-export function decodeCp1252(bytes: Uint8Array | ArrayBuffer): string {
-	return new TextDecoder("windows-1252").decode(bytes);
-}
+export { decodeCp1252 } from "../../src/lib/cp1252";
 
 /** Splits headerless, unquoted TSV into trimmed fields; every line must have `expectedCols` columns. */
 export function parseTsv(text: string, expectedCols: number, fileName: string): string[][] {

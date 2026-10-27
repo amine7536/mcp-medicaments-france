@@ -3,10 +3,9 @@ import { join } from "node:path";
 import { FILES, validateAndMap } from "./bdpm/map";
 import { decodeCp1252, parseBanner, parseTsv } from "./bdpm/parse";
 import { buildImportSql } from "./bdpm/sql";
+import { USER_AGENT } from "../src/ingest/http";
 
 const BASE = "https://base-donnees-publique.medicaments.gouv.fr";
-const USER_AGENT =
-	"mcp-ruptures-medicaments/1.0 (+https://ruptures-medicaments.a3e.dev; contact: https://github.com/amine7536/mcp-ruptures-medicaments/issues)";
 const OUT_DIR = ".bdpm";
 const SQL_PATH = join(OUT_DIR, "bdpm.sql");
 
