@@ -12,7 +12,10 @@
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",
     "typecheck": "wrangler types --check && tsc && tsc -p test",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bdpm:import": "tsx scripts/bdpm-import.ts",
+    "bdpm:apply": "wrangler d1 execute ruptures --remote --file .bdpm/bdpm.sql --yes",
+    "bdpm:apply:local": "wrangler d1 execute ruptures --local --file .bdpm/bdpm.sql --yes"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
