@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
 import { normalize } from "../src/lib/normalize";
-import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale } from "../src/mcp/envelope";
+import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
@@ -15,6 +15,7 @@ import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, 
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown).";
+const SAFETY_LINE = `Safety: ${SAFETY}`;
 
 const ctx: ToolContext = { db: env.DB, now: NOW };
 
@@ -45,13 +46,15 @@ async function call<I extends z.ZodObject, O extends z.ZodType>(tool: Tool<I, O>
 		source: Record<string, unknown>;
 		coverage_note: string;
 		disclaimer: string;
+		safety: string;
 		warning?: string;
 	};
 	expect(sc.source).toMatchObject({ ansm: ANSM_SOURCE_URL, bdpm: BDPM_SOURCE_URL });
 	expect(sc.coverage_note).toBe(COVERAGE_NOTE);
 	expect(sc.disclaimer).toBe(DISCLAIMER);
 	const { ansm_last_ingest, bdpm_release } = sc.source as { ansm_last_ingest: string | null; bdpm_release: string | null };
-	expect(summary(result).endsWith(`Source: ANSM (updated ${ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${bdpm_release ?? "unknown"}).`)).toBe(true);
+	expect(sc.safety).toBe(SAFETY);
+	expect(summary(result).endsWith(`\n${SAFETY_LINE}\nSource: ANSM (updated ${ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${bdpm_release ?? "unknown"}).`)).toBe(true);
 	expect(text(result)).toBe(`${summary(result)}\n\n${JSON.stringify(sc)}`);
 	return { result, data: sc.data as any, sc };
 }
@@ -68,6 +71,12 @@ beforeEach(() => {
 });
 
 describe("envelope", () => {
+	it("carries the fixed safety notice", () => {
+		expect(SAFETY).toBe(
+			"Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.",
+		);
+	});
+
 	it("isStale: null or older than 72 h", () => {
 		const at = Date.parse(ANSM_LAST_INGEST);
 		expect(isStale(null, NOW)).toBe(true);
@@ -168,13 +177,13 @@ describe("get_availability", () => {
 		for (const args of [{}, { cis: MEDICINES.kardegic.cis, name: "kardegic" }, { cis: MEDICINES.kardegic.cis, shortage_id: "1001", name: "x".repeat(3) }]) {
 			const { result } = await call(getAvailability, args);
 			expect(result.isError).toBe(true);
-			expect(text(result)).toBe(`Provide exactly one of cis, shortage_id or name.\n${SOURCE_LINE}`);
+			expect(text(result)).toBe(`Provide exactly one of cis, shortage_id or name.\n${SAFETY_LINE}\n${SOURCE_LINE}`);
 		}
 	});
 
 	it("returns the argument error with unknown dates when the source dates fail to load", async () => {
 		const { result } = await getAvailability.handler({ db: brokenDb(), now: NOW }, getAvailability.inputSchema.parse({}));
-		expect(result).toEqual({ isError: true, content: [{ type: "text", text: `Provide exactly one of cis, shortage_id or name.\n${UNKNOWN_SOURCE_LINE}` }] });
+		expect(result).toEqual({ isError: true, content: [{ type: "text", text: `Provide exactly one of cis, shortage_id or name.\n${SAFETY_LINE}\n${UNKNOWN_SOURCE_LINE}` }] });
 	});
 
 	it("validates its input", () => {
@@ -407,14 +416,14 @@ describe("is_major_therapeutic_interest", () => {
 		for (const args of [{}, { cis: MEDICINES.kardegic.cis, name: "kardegic" }]) {
 			const { result } = await call(isMajorTherapeuticInterest, args);
 			expect(result.isError).toBe(true);
-			expect(text(result)).toBe(`Provide exactly one of cis or name.\n${SOURCE_LINE}`);
+			expect(text(result)).toBe(`Provide exactly one of cis or name.\n${SAFETY_LINE}\n${SOURCE_LINE}`);
 		}
 	});
 
 	it("returns the argument error with unknown dates when the source dates fail to load", async () => {
 		const args = isMajorTherapeuticInterest.inputSchema.parse({ cis: MEDICINES.kardegic.cis, name: "kardegic" });
 		const { result } = await isMajorTherapeuticInterest.handler({ db: brokenDb(), now: NOW }, args);
-		expect(result).toEqual({ isError: true, content: [{ type: "text", text: `Provide exactly one of cis or name.\n${UNKNOWN_SOURCE_LINE}` }] });
+		expect(result).toEqual({ isError: true, content: [{ type: "text", text: `Provide exactly one of cis or name.\n${SAFETY_LINE}\n${UNKNOWN_SOURCE_LINE}` }] });
 	});
 
 	it("mitm variant with the release-dated source and the MITM sentence", async () => {
@@ -470,7 +479,7 @@ describe("runTool", () => {
 		const info = vi.spyOn(console, "log");
 		const writeDataPoint = vi.fn();
 		const res = await runTool({ DB: brokenDb(), USAGE: { writeDataPoint } }, listCurrentShortages, listCurrentShortages.inputSchema.parse({}));
-		expect(res).toEqual({ isError: true, content: [{ type: "text", text: `${UNAVAILABLE}\n${UNKNOWN_SOURCE_LINE}` }] });
+		expect(res).toEqual({ isError: true, content: [{ type: "text", text: `${UNAVAILABLE}\n${SAFETY_LINE}\n${UNKNOWN_SOURCE_LINE}` }] });
 		expect(error).toHaveBeenCalledOnce();
 		expect(JSON.parse(error.mock.calls[0]?.[0] as string)).toEqual({
 			event: "tool_error",
@@ -499,7 +508,7 @@ describe("runTool", () => {
 		});
 		const res = await runTool({ DB: flaky, USAGE: { writeDataPoint: vi.fn() } }, listCurrentShortages, listCurrentShortages.inputSchema.parse({}));
 		expect(res.isError).toBe(true);
-		expect(text(res)).toBe(`${UNAVAILABLE}\n${SOURCE_LINE}`);
+		expect(text(res)).toBe(`${UNAVAILABLE}\n${SAFETY_LINE}\n${SOURCE_LINE}`);
 	});
 });
 

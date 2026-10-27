@@ -3,7 +3,7 @@
   "name": "io.github.amine7536/ruptures-medicaments",
   "title": "Ruptures de médicaments (France)",
   "description": "Medicine shortages in France (ANSM + BDPM): status, expected return, recent changes, MITM.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "websiteUrl": "https://ruptures-medicaments.a3e.dev/",
   "repository": {
     "url": "https://github.com/amine7536/mcp-ruptures-medicaments",

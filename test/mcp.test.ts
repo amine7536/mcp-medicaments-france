@@ -3,10 +3,16 @@ import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION } from "../src/mcp/server";
+import { INFO_ONLY } from "../src/mcp/tool";
 import { seed } from "./seed";
 
 const URL = "https://ruptures-medicaments.a3e.dev/mcp";
 const PROTOCOL_VERSION = "2025-11-25";
+
+const SUBSTITUTION_RULE =
+	"Substitution, dosage and stopping questions: if the user asks what to take instead, for a substitute, an alternative, an equivalent or a replacement, or whether to change a dose or stop a treatment, do not name or list any other medicine, brand, presentation or active substance, whether from your own knowledge or from tool results. Other medicines returned by the tools, including products with the same active substance, are not alternatives. Answer only with the shortage status of the medicine asked about, say that only a pharmacist or doctor can choose an alternative or change a treatment, and give that medicine's ANSM page link when there is one.";
+const NEW_INFO_ONLY =
+	"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.";
 
 const TOOLS = ["search_medicine", "get_availability", "list_current_shortages", "recent_changes", "is_major_therapeutic_interest"];
 
@@ -48,6 +54,8 @@ describe("/mcp", () => {
 			instructions: INSTRUCTIONS,
 			capabilities: { tools: {} },
 		});
+		expect(init.result.instructions).toContain(SUBSTITUTION_RULE);
+		expect(INFO_ONLY).toBe(NEW_INFO_ONLY);
 
 		const list = await rpc(2, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
 		const tools = list.result.tools as Array<{ name: string; annotations: Record<string, boolean>; outputSchema: object; description: string }>;
@@ -55,9 +63,7 @@ describe("/mcp", () => {
 		for (const t of tools) {
 			expect(t.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 			expect(t.outputSchema).toMatchObject({ type: "object" });
-			expect(t.description.endsWith("Information only: never use this to recommend a substitute, a dosage change or stopping a treatment.")).toBe(
-				true,
-			);
+			expect(t.description.endsWith(NEW_INFO_ONLY)).toBe(true);
 		}
 	});
 
