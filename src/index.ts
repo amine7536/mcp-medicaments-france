@@ -1,7 +1,9 @@
 import { createMcpHandler } from "agents/mcp/server";
 import { handleAdminIngest } from "./admin";
+import { handleHealth } from "./health";
 import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
+import { handleLanding } from "./landing";
 import { createServer } from "./mcp/server";
 
 const RETRY_AFTER_SECONDS = 60;
@@ -22,6 +24,11 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const { pathname } = new URL(request.url);
+		if ((pathname === "/" || pathname === "/health") && request.method !== "GET") {
+			return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "GET" } });
+		}
+		if (pathname === "/") return handleLanding();
+		if (pathname === "/health") return handleHealth(request, env, ctx);
 		if (pathname === "/admin/ingest") return handleAdminIngest(request, env, ctx);
 		if (pathname === "/mcp") return handleMcp(request, env, ctx);
 		return Response.json({ error: "not_found" }, { status: 404 });

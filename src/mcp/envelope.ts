@@ -11,6 +11,11 @@ export const DISCLAIMER = "Information only. Ask your pharmacist or doctor. No s
 
 export const STALE_AFTER_MS = 72 * 3600 * 1000;
 
+/** ANSM data is stale without a successful ingest or when the last one is older than 72 h. */
+export function isStale(lastIngest: string | null, now: Date): boolean {
+	return lastIngest === null || now.getTime() - Date.parse(lastIngest) > STALE_AFTER_MS;
+}
+
 export interface SourceDates {
 	ansm_last_ingest: string | null;
 	bdpm_release: string | null;
@@ -46,7 +51,7 @@ export type Envelope<D> = z.output<ReturnType<typeof envelopeSchema<z.ZodType<D>
 /** Wraps tool data with its sources, coverage note, disclaimer and, when the ANSM data is stale, a warning. */
 export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D> {
 	const { ansm_last_ingest } = dates;
-	const stale = ansm_last_ingest === null || now.getTime() - Date.parse(ansm_last_ingest) > STALE_AFTER_MS;
+	const stale = isStale(ansm_last_ingest, now);
 	return {
 		data,
 		source: { ansm: ANSM_SOURCE_URL, bdpm: BDPM_SOURCE_URL, ...dates },

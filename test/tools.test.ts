@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
 import { normalize } from "../src/lib/normalize";
-import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER } from "../src/mcp/envelope";
+import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale } from "../src/mcp/envelope";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
@@ -68,6 +68,13 @@ beforeEach(() => {
 });
 
 describe("envelope", () => {
+	it("isStale: null or older than 72 h", () => {
+		const at = Date.parse(ANSM_LAST_INGEST);
+		expect(isStale(null, NOW)).toBe(true);
+		expect(isStale(ANSM_LAST_INGEST, new Date(at + 72 * 3600_000))).toBe(false);
+		expect(isStale(ANSM_LAST_INGEST, new Date(at + 72 * 3600_000 + 1))).toBe(true);
+	});
+
 	it("carries the source dates and no warning when fresh", async () => {
 		const { sc } = await call(searchMedicine, { query: "kardegic" });
 		expect(sc.source).toEqual({ ansm: ANSM_SOURCE_URL, bdpm: BDPM_SOURCE_URL, ansm_last_ingest: ANSM_LAST_INGEST, bdpm_release: BDPM_RELEASE });
