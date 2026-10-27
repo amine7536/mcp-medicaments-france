@@ -165,6 +165,11 @@ describe("get_availability", () => {
 		}
 	});
 
+	it("returns the argument error with unknown dates when the source dates fail to load", async () => {
+		const { result } = await getAvailability.handler({ db: brokenDb(), now: NOW }, getAvailability.inputSchema.parse({}));
+		expect(result).toEqual({ isError: true, content: [{ type: "text", text: `Provide exactly one of cis, shortage_id or name.\n${UNKNOWN_SOURCE_LINE}` }] });
+	});
+
 	it("validates its input", () => {
 		expect(getAvailability.inputSchema.safeParse({ cis: "1234567" }).success).toBe(false);
 		expect(getAvailability.inputSchema.safeParse({ shortage_id: "" }).success).toBe(false);
@@ -392,6 +397,12 @@ describe("is_major_therapeutic_interest", () => {
 			expect(result.isError).toBe(true);
 			expect(text(result)).toBe(`Provide exactly one of cis or name.\n${SOURCE_LINE}`);
 		}
+	});
+
+	it("returns the argument error with unknown dates when the source dates fail to load", async () => {
+		const args = isMajorTherapeuticInterest.inputSchema.parse({ cis: MEDICINES.kardegic.cis, name: "kardegic" });
+		const { result } = await isMajorTherapeuticInterest.handler({ db: brokenDb(), now: NOW }, args);
+		expect(result).toEqual({ isError: true, content: [{ type: "text", text: `Provide exactly one of cis or name.\n${UNKNOWN_SOURCE_LINE}` }] });
 	});
 
 	it("mitm variant with the release-dated source and the MITM sentence", async () => {

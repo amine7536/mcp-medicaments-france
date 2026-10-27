@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { getMedicines, type MedicineRow } from "../../lib/db";
-import { envelope, envelopeSchema, errorResult, loadSourceDates, toolResult } from "../envelope";
+import { envelope, envelopeSchema, errorResult, loadSourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
 import { Candidates, Cis, NotFound } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
@@ -35,8 +35,10 @@ export const isMajorTherapeuticInterest: Tool<typeof inputSchema, typeof outputS
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, name }): Promise<ToolOutcome> {
+		if ((cis === undefined) === (name === undefined)) {
+			return { result: errorResult(EXACTLY_ONE("cis or name"), await loadSourceDates(db).catch(() => UNKNOWN_DATES)) };
+		}
 		const dates = await loadSourceDates(db);
-		if ((cis === undefined) === (name === undefined)) return { result: errorResult(EXACTLY_ONE("cis or name"), dates) };
 		let medicine: MedicineRow | undefined;
 		if (cis !== undefined) {
 			medicine = (await getMedicines(db, [cis])).get(cis);

@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { currentShortages, getHistory, getMedicines, getShortage, type HistoryRow, type MedicineRow } from "../../lib/db";
 import { normalize } from "../../lib/normalize";
-import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult } from "../envelope";
+import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, NO_GUARANTEE, notFound, possiblyRelated, relatedList, resolveName } from "../resolve";
 import { Candidates, Cis, describeShortage, NotFound, type ShortageRow, ShortageSummary, Status, toShortageSummary } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
@@ -149,10 +149,10 @@ export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, shortage_id, name }): Promise<ToolOutcome> {
-		const dates = await loadSourceDates(db);
 		if ([cis, shortage_id, name].filter((a) => a !== undefined).length !== 1) {
-			return { result: errorResult(EXACTLY_ONE("cis, shortage_id or name"), dates) };
+			return { result: errorResult(EXACTLY_ONE("cis, shortage_id or name"), await loadSourceDates(db).catch(() => UNKNOWN_DATES)) };
 		}
+		const dates = await loadSourceDates(db);
 		if (shortage_id !== undefined) {
 			const out = await byShortageId(db, now, shortage_id);
 			return { result: result(dates, now, out), cis: out.cis };
