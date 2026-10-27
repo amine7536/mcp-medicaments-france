@@ -1,34 +1,26 @@
+// Standard ISO-8859-1 entity names for U+00A0–U+00FF, in code point order.
+const LATIN1_NAMES = (
+	"nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr " +
+	"deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest " +
+	"Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml " +
+	"ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig " +
+	"agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml " +
+	"eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml"
+).split(" ");
+
 const NAMED_ENTITIES: Record<string, string> = {
 	amp: "&",
 	lt: "<",
 	gt: ">",
 	quot: '"',
 	apos: "'",
-	nbsp: " ",
-	aelig: "æ",
-	AElig: "Æ",
 	oelig: "œ",
 	OElig: "Œ",
-	szlig: "ß",
 };
 
-// Accented Latin letters: `&eacute;`, `&Egrave;`, `&ccedil;`, `&ocirc;`, ...
-const ACCENT_MARKS: Record<string, string> = {
-	grave: "̀",
-	acute: "́",
-	circ: "̂",
-	tilde: "̃",
-	uml: "̈",
-	ring: "̊",
-	cedil: "̧",
-};
-
-for (const letter of "aceinouyAEINOUYC") {
-	for (const [name, mark] of Object.entries(ACCENT_MARKS)) {
-		const composed = (letter + mark).normalize("NFC");
-		if (composed.length === 1) NAMED_ENTITIES[letter + name] = composed;
-	}
-}
+LATIN1_NAMES.forEach((name, i) => {
+	NAMED_ENTITIES[name] = String.fromCharCode(0xa0 + i);
+});
 
 const ENTITY_RE = /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z]+));/g;
 
@@ -36,7 +28,7 @@ function fromCodePoint(cp: number, fallback: string): string {
 	return Number.isInteger(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : fallback;
 }
 
-/** Decodes HTML entities (named, accented Latin-1, decimal and hex numeric). */
+/** Decodes HTML entities (basic, Latin-1, oelig/OElig, decimal and hex numeric). */
 export function decodeEntities(s: string): string {
 	return s.replace(ENTITY_RE, (match, dec?: string, hex?: string, name?: string) => {
 		if (dec !== undefined) return fromCodePoint(Number.parseInt(dec, 10), match);
@@ -58,9 +50,10 @@ const UNIT_RULES: Array<[RegExp, string]> = [
 
 /** Normalizes a medicine name or free text for matching and full-text search. */
 export function normalize(s: string): string {
-	let t = decodeEntities(s.replace(/<[^>]*>/g, " "));
+	let t = decodeEntities(s.replace(/<[^>]*>/g, ""));
 	t = t.replace(/[’‘]/g, "'").replace(/[–—]/g, "-");
 	t = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+	t = t.replace(/Œ/g, "OE").replace(/Æ/g, "AE");
 	t = t.replace(/\bPRE ?-(?=[A-Z])/g, "PRE");
 	for (const [re, to] of UNIT_RULES) t = t.replace(re, to);
 	t = t.replace(/(\d),(?=\d)/g, "$1.");

@@ -10,6 +10,9 @@ describe("normalize", () => {
 		["Winrevair 60mg", "WINREVAIR 60 MG"],
 		["seringue pré-remplie", "SERINGUE PREREMPLIE"],
 		["1,5 M.U.I.", "1.5 MUI"],
+		["<b>Para</b>cétamol", "PARACETAMOL"],
+		["&micro;g", "MCG"],
+		["cœur", "COEUR"],
 	])("%s", (input, expected) => {
 		expect(normalize(input)).toBe(expected);
 	});
@@ -18,6 +21,18 @@ describe("normalize", () => {
 		expect(normalize("chlorhydrate d&#039;amiodarone")).toBe("CHLORHYDRATE D AMIODARONE");
 		expect(normalize("<p>Nif&eacute;dipine</p>")).toBe("NIFEDIPINE");
 		expect(normalize("a&nbsp;b &amp; c")).toBe("A B C");
+	});
+
+	it("decodes Latin-1 and oelig entities", () => {
+		expect(decodeEntities("&micro;")).toBe("µ");
+		expect(decodeEntities("&deg;")).toBe("°");
+		expect(decodeEntities("&oslash;")).toBe("ø");
+		expect(decodeEntities("&oelig;&OElig;&aelig;&AElig;&szlig;")).toBe("œŒæÆß");
+	});
+
+	it("maps the Œ and Æ ligatures", () => {
+		expect(normalize("Œuf ex æquo")).toBe("OEUF EX AEQUO");
+		expect(normalize("c&oelig;ur")).toBe("COEUR");
 	});
 
 	it("handles typographic apostrophes and dashes", () => {
