@@ -2,16 +2,14 @@ import { runIngest } from "./ingest/run";
 
 const json = (body: unknown, status: number): Response => Response.json(body, { status });
 
-async function digest(s: string): Promise<Uint8Array> {
-	return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+async function digest(s: string): Promise<ArrayBuffer> {
+	return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
 }
 
 /** Constant-time comparison of the SHA-256 digests of `a` and `b`. */
 async function safeEqual(a: string, b: string): Promise<boolean> {
 	const [da, db] = await Promise.all([digest(a), digest(b)]);
-	let diff = 0;
-	for (let i = 0; i < da.length; i++) diff |= (da[i] as number) ^ (db[i] as number);
-	return diff === 0;
+	return crypto.subtle.timingSafeEqual(da, db);
 }
 
 /** `POST /admin/ingest`: runs an ANSM ingest and responds with its summary. */

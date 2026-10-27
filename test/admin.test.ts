@@ -53,6 +53,7 @@ describe("POST /admin/ingest", () => {
 	});
 
 	it("401 on a missing or bad token, for any method", async () => {
+		const tse = vi.spyOn(crypto.subtle, "timingSafeEqual");
 		for (const method of ["POST", "GET"]) {
 			for (const headers of [{}, { Authorization: "Bearer wrong" }, { Authorization: TOKEN }] as Record<string, string>[]) {
 				const res = await call({ method, headers });
@@ -60,6 +61,8 @@ describe("POST /admin/ingest", () => {
 				expect(await res.json()).toEqual({ error: "unauthorized" });
 			}
 		}
+		expect(tse).toHaveBeenCalledTimes(6);
+		for (const [a, b] of tse.mock.calls) expect([(a as ArrayBuffer).byteLength, (b as ArrayBuffer).byteLength]).toEqual([32, 32]);
 		expect(fake.calls).toEqual([]);
 	});
 
