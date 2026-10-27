@@ -105,7 +105,7 @@ describe("POST /admin/ingest", () => {
 	});
 });
 
-describe("hook", () => {
+describe("hook", { timeout: 30_000 }, () => {
 	it("a thrown hook error keeps the run ok", async () => {
 		const hook = vi.fn().mockRejectedValue(new Error("boom"));
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});

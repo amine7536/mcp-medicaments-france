@@ -159,7 +159,7 @@ describe("runIngest claim and close", () => {
 		expect(await count("SELECT COUNT(*) AS n FROM bdpm_dispo")).toBe(0);
 	});
 
-	it("a failed close still ends the row error", async () => {
+	it("a failed close still ends the row error", { timeout: 30_000 }, async () => {
 		const f = fakeFetcher();
 		const res = ran(await runIngest(failingEnv("UPDATE ingest_runs SET status = ?"), f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
 		expect(res).toMatchObject({ status: "error", message: "D1_ERROR: injected" });

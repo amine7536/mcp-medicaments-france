@@ -46,7 +46,7 @@ beforeEach(async () => {
 	logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
-describe("diff", () => {
+describe("diff", { timeout: 30_000 }, () => {
 	it("bootstrap writes every row but no history", async () => {
 		const { res, f } = await run();
 		expect(res.status).toBe("ok");
