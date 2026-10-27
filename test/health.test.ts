@@ -28,9 +28,9 @@ async function addShortage(id: string, status: string, scope: string, raw: strin
 		.run();
 }
 
-async function get(testEnv: Env = env): Promise<Response> {
+async function get(testEnv: Env = env, url = URL, method = "GET"): Promise<Response> {
 	const ctx = createExecutionContext();
-	const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL), testEnv, ctx);
+	const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>(url, { method }), testEnv, ctx);
 	await waitOnExecutionContext(ctx);
 	return res;
 }
@@ -133,6 +133,17 @@ describe("GET /health", () => {
 		// Served from the cache: a later failed run is not visible yet.
 		await addRun("error", new Date().toISOString(), new Date().toISOString());
 		const again = await get();
+		expect(again.status).toBe(200);
+		expect((await again.json<Health>()).generated_at).toBe(body.generated_at);
+	});
+
+	it("ignores the query string in the cache key", async () => {
+		await clearRuns();
+		const now = new Date().toISOString();
+		await addRun("ok", now, now);
+		const body = await (await get()).json<Health>();
+		await addRun("error", new Date().toISOString(), new Date().toISOString());
+		const again = await get(env, `${URL}?x=1`);
 		expect(again.status).toBe(200);
 		expect((await again.json<Health>()).generated_at).toBe(body.generated_at);
 	});

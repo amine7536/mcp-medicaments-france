@@ -93,7 +93,8 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 
 /** `GET /health`: served from `caches.default` when present, else computed and cached for 5 minutes (503s included). */
 export async function handleHealth(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-	const key = new Request(request.url);
+	const { origin, pathname } = new URL(request.url);
+	const key = new Request(origin + pathname);
 	const cache = caches.default;
 	const cached = await cache.match(key);
 	if (cached) return cached;
