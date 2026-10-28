@@ -176,7 +176,7 @@ const CLAUDE_CODE = `claude mcp add --transport http medicaments-france ${MCP_EN
 const VERBATIM: Record<Lang, readonly string[]> = {
 	fr: [
 		"Attention : information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.",
-		"Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures et tensions d'approvisionnement de médicaments publiées par l'ANSM, avec les codes officiels de la base publique des médicaments (BDPM).",
+		"Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures de médicaments publiées par l'ANSM et la base publique des médicaments (BDPM) : boîtes, prix, taux de remboursement, conditions de prescription et informations de sécurité.",
 		"Adresse du serveur MCP",
 		"Exemples",
 		"Réponses réelles",
@@ -200,7 +200,7 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 	],
 	en: [
 		"Warning: information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
-		"A free, read-only MCP server that lets AI assistants look up the medicine shortages and supply problems published by the French medicines agency (ANSM), with the official codes from the French public medicines database (BDPM).",
+		"A free, read-only MCP server that lets AI assistants look up medicine shortages published by the French medicines agency (ANSM) and the French public medicines database (BDPM): boxes, prices, reimbursement rates, prescription conditions and safety information.",
 		"MCP server address",
 		"Examples",
 		"Real answers",
@@ -286,6 +286,8 @@ const EXAMPLES_EN: readonly [string, string][] = [
 	['"Which cardiology medicines are under supply tension?"', "The ANSM list of supply tensions in cardiology, with announced return dates."],
 	['"What changed this week?"', "New shortages, returns and changed return dates detected by the service."],
 	['"Is amoxicillin a medicine of major therapeutic interest?"', "Whether the medicine is on the BDPM list of medicines of major therapeutic interest (MITM)."],
+	['"I have a box with the code 3400931922766: what is it and how much does it cost?"', "The medicine's name, the box's public price and reimbursement rate from the BDPM."],
+	['"Does Depakine need a special prescription?"', "The BDPM prescription and dispensing conditions, quoted verbatim, and current ANSM safety information with its links."],
 	["\"My medicine isn't listed, so it's available?\"", "No: not being listed does not mean it is available; ask your pharmacist."],
 	['"What can I take instead of Brevibloc?"', "Refusal: no replacement is suggested; only a doctor or pharmacist can choose an alternative."],
 ];
@@ -459,10 +461,10 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		}
 	});
 
-	it("lists the six examples and the three real answers of the language", () => {
+	it("lists the eight examples and the three real answers of the language", () => {
 		const examples = lang === "fr" ? EXAMPLES.map((e) => [e.question, e.behaviour] as const) : EXAMPLES_EN;
 		const answers = lang === "fr" ? REAL_ANSWERS.map((a) => [a.question, a.answer] as const) : REAL_ANSWERS_EN;
-		expect(examples).toHaveLength(6);
+		expect(examples).toHaveLength(8);
 		expect(answers).toHaveLength(3);
 		const dl = one(tree, is("dl"));
 		expect(elements(dl).map((e) => [e.tag, text(e)])).toEqual(examples.flatMap(([q, b]) => [
@@ -1035,4 +1037,25 @@ describe.each(LANGS)("favicon (%s)", (lang) => {
 			expect(icon.attrs).toEqual({ rel: "icon", type: "image/svg+xml", href: "/icon.svg" });
 		});
 	}
+});
+
+describe("BDPM examples", () => {
+	it("follow the MITM example in both languages", () => {
+		expect(EXAMPLES.slice(4, 6)).toEqual([
+			{
+				question: "« J'ai une boîte avec le code 3400931922766, qu'est-ce que c'est et combien elle coûte ? »",
+				behaviour: "Nom du médicament, prix public et taux de remboursement de la boîte selon la BDPM.",
+			},
+			{
+				question: "« La Dépakine nécessite-t-elle une ordonnance particulière ? »",
+				behaviour: "Conditions de prescription et de délivrance de la BDPM, citées mot pour mot, et informations de sécurité en cours de l'ANSM avec leurs liens.",
+			},
+		]);
+		expect(EXAMPLES[3].question).toContain("MITM");
+		expect(COPY.en.examples.slice(3, 6).map((e) => e.question)).toEqual([
+			'"Is amoxicillin a medicine of major therapeutic interest?"',
+			'"I have a box with the code 3400931922766: what is it and how much does it cost?"',
+			'"Does Depakine need a special prescription?"',
+		]);
+	});
 });

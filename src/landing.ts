@@ -25,6 +25,14 @@ export const EXAMPLES: readonly { question: string; behaviour: string }[] = [
 		behaviour: "Indique si le médicament figure sur la liste des médicaments d'intérêt thérapeutique majeur de la BDPM.",
 	},
 	{
+		question: "« J'ai une boîte avec le code 3400931922766, qu'est-ce que c'est et combien elle coûte ? »",
+		behaviour: "Nom du médicament, prix public et taux de remboursement de la boîte selon la BDPM.",
+	},
+	{
+		question: "« La Dépakine nécessite-t-elle une ordonnance particulière ? »",
+		behaviour: "Conditions de prescription et de délivrance de la BDPM, citées mot pour mot, et informations de sécurité en cours de l'ANSM avec leurs liens.",
+	},
+	{
 		question: "« Mon médicament n'est pas listé, il est donc disponible ? »",
 		behaviour: "Non : l'absence de la liste ne garantit pas la disponibilité ; demandez à votre pharmacien.",
 	},
@@ -119,7 +127,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		noticeLead: "Attention :",
 		notice:
 			"information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.",
-		lead: "Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures et tensions d'approvisionnement de médicaments publiées par l'ANSM, avec les codes officiels de la base publique des médicaments (BDPM).",
+		lead: "Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures de médicaments publiées par l'ANSM et la base publique des médicaments (BDPM) : boîtes, prix, taux de remboursement, conditions de prescription et informations de sécurité.",
 		endpointLabel: "Adresse du serveur MCP",
 		copy: "Copier",
 		copied: "Copié",
@@ -179,7 +187,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		noticeLead: "Warning:",
 		notice:
 			"information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
-		lead: "A free, read-only MCP server that lets AI assistants look up the medicine shortages and supply problems published by the French medicines agency (ANSM), with the official codes from the French public medicines database (BDPM).",
+		lead: "A free, read-only MCP server that lets AI assistants look up medicine shortages published by the French medicines agency (ANSM) and the French public medicines database (BDPM): boxes, prices, reimbursement rates, prescription conditions and safety information.",
 		endpointLabel: "MCP server address",
 		copy: "Copy",
 		copied: "Copied",
@@ -204,6 +212,14 @@ export const COPY: Record<Lang, LandingCopy> = {
 			{
 				question: '"Is amoxicillin a medicine of major therapeutic interest?"',
 				behaviour: "Whether the medicine is on the BDPM list of medicines of major therapeutic interest (MITM).",
+			},
+			{
+				question: '"I have a box with the code 3400931922766: what is it and how much does it cost?"',
+				behaviour: "The medicine's name, the box's public price and reimbursement rate from the BDPM.",
+			},
+			{
+				question: '"Does Depakine need a special prescription?"',
+				behaviour: "The BDPM prescription and dispensing conditions, quoted verbatim, and current ANSM safety information with its links.",
 			},
 			{
 				question: "\"My medicine isn't listed, so it's available?\"",
