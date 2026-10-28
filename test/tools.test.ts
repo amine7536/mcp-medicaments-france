@@ -9,12 +9,12 @@ import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, S
 import { Medicine, Presentation } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
-import { getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
+import { Data, getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
-import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESENTATIONS, SHORTAGES, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SHORTAGES, seed } from "./seed";
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown).";
@@ -478,7 +478,7 @@ describe("get_medicine_info", () => {
 
 	it("has the description and the info-only suffix", () => {
 		expect(getMedicineInfo.description).toBe(
-			"Boxes of a medicine in the French public medicines database (BDPM), given exactly one of its CIS code, a CIP13 barcode or its name: CIP13, marketing status, price and reimbursement rate. " +
+			"Boxes of a medicine in the French public medicines database (BDPM) and its prescription and dispensing conditions, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. " +
 				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
 		);
 	});
@@ -552,6 +552,33 @@ describe("get_medicine_info", () => {
 		} finally {
 			await env.DB.prepare("UPDATE medicines SET routes = NULL, holder = NULL, marketing_status = NULL WHERE cis = ?").bind(cis).run();
 		}
+	});
+
+	it("returns the BDPM prescription and dispensing conditions verbatim, in source order", async () => {
+		const conditions = PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis];
+		for (const args of [{ cis: MEDICINES.amoxicilline.cis }, { name: "amoxicilline" }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data.prescription_conditions).toEqual(["liste I", "médicament nécessitant une surveillance particulière pendant le traitement"]);
+			expect(data.prescription_conditions).toEqual(conditions);
+			expect(summary(result).split("\n")).toContain(
+				"Prescription and dispensing conditions (BDPM): liste I; médicament nécessitant une surveillance particulière pendant le traitement",
+			);
+			expect(summary(result)).not.toContain("No prescription or dispensing condition");
+			expect(Data.safeParse(data).success).toBe(true);
+		}
+	});
+
+	it("has an empty conditions list and says so when the BDPM lists none", async () => {
+		for (const args of [{ cis: MEDICINES.dolipraneTablet.cis }, { cip13: PRESENTATIONS.dolipraneBoxOf8.cip13 }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data.prescription_conditions).toEqual([]);
+			expect(summary(result).split("\n")).toContain("No prescription or dispensing condition listed in the BDPM.");
+			expect(summary(result)).not.toContain("Prescription and dispensing conditions (BDPM)");
+			expect(Data.safeParse(data).success).toBe(true);
+		}
+		const { data } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+		expect(Data.safeParse({ ...data, prescription_conditions: undefined }).success).toBe(false);
+		expect(Data.safeParse({ ...data, prescription_conditions: [1] }).success).toBe(false);
 	});
 
 	it("caps the summary at 10 presentations and keeps the full list in structuredContent", async () => {

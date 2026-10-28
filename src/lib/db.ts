@@ -231,6 +231,12 @@ export async function recentChanges(
 /** The `marketing_status` of a presentation that is on the market. */
 export const MARKETED = "Déclaration de commercialisation";
 
+/** The BDPM prescription and dispensing conditions of a CIS, verbatim, in source order. */
+export async function getPrescriptionConditions(db: D1Database, cis: string): Promise<string[]> {
+	const rows = await all<{ condition: string }>(db.prepare("SELECT condition FROM prescription_conditions WHERE cis = ? ORDER BY position").bind(cis));
+	return rows.map((r) => r.condition);
+}
+
 /** The CIS of the presentation with this CIP13, or null. */
 export async function cisByCip13(db: D1Database, cip13: string): Promise<string | null> {
 	return db.prepare("SELECT cis FROM presentations WHERE cip13 = ?").bind(cip13).first<string>("cis");

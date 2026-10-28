@@ -85,6 +85,11 @@ export const PRESENTATIONS = {
 	),
 } satisfies Record<string, Presentation>;
 
+/** BDPM prescription and dispensing conditions by CIS, in source order (inserted in reverse to check the ordering). */
+export const PRESCRIPTION_CONDITIONS: Record<string, readonly string[]> = {
+	"60000003": ["liste I", "médicament nécessitant une surveillance particulière pendant le traitement"],
+};
+
 interface Shortage {
 	id: string;
 	name: string;
@@ -214,7 +219,7 @@ const HISTORY: Array<[shortage: string, type: string, old_status: string | null,
 export async function seed(): Promise<void> {
 	await resetDb();
 	const db = env.DB;
-	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "presentations"].map((t) => db.prepare(`DELETE FROM ${t}`));
+	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "presentations", "prescription_conditions"].map((t) => db.prepare(`DELETE FROM ${t}`));
 	for (const m of Object.values(MEDICINES) as Med[]) {
 		stmts.push(
 			db
@@ -243,6 +248,11 @@ export async function seed(): Promise<void> {
 				)
 				.bind(p.cip13, p.cip13.slice(5, 12), p.cis, p.label, p.marketing_status, p.reimbursement_rates, p.public_price_eur),
 		);
+	}
+	for (const [cis, conditions] of Object.entries(PRESCRIPTION_CONDITIONS)) {
+		for (let i = conditions.length - 1; i >= 0; i--) {
+			stmts.push(db.prepare("INSERT INTO prescription_conditions (cis, condition, position) VALUES (?, ?, ?)").bind(cis, conditions[i], i + 1));
+		}
 	}
 	for (const s of Object.values(SHORTAGES) as Shortage[]) {
 		stmts.push(
