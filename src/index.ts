@@ -36,7 +36,7 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
 	return createMcpHandler(() => createServer(env, ctx), { route: "/mcp" })(request, env, ctx);
 }
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env }>({ getPath: (req) => new URL(req.url).pathname });
 
 app.use(
 	methodNotAllowed({

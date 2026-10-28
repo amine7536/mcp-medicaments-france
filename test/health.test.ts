@@ -221,4 +221,10 @@ describe("unknown paths", () => {
 		expect(res.status).toBe(404);
 		expect(await res.json()).toEqual({ error: "not_found" });
 	});
+
+	it("does not percent-decode the path", async () => {
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://ruptures-medicaments.a3e.dev/%68ealth"), env, createExecutionContext());
+		expect(res.status).toBe(404);
+		expect(await res.json()).toEqual({ error: "not_found" });
+	});
 });
