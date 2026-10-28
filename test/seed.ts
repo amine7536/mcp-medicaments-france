@@ -7,6 +7,8 @@ import { resetDb } from "./db";
 export const NOW = new Date("2026-10-27T12:00:00.000Z");
 export const ANSM_LAST_INGEST = "2026-10-27T05:10:00.000Z";
 export const BDPM_RELEASE = "2026-10-05";
+/** `started_at` of the seeded successful BDPM import. */
+export const BDPM_IMPORTED_AT = "2026-10-05T06:00:00.000Z";
 
 interface Med {
 	cis: string;
@@ -334,7 +336,7 @@ export async function seed(): Promise<void> {
 			.bind("2026-10-27T05:00:00.000Z", ANSM_LAST_INGEST),
 		db
 			.prepare("INSERT INTO ingest_runs (source, started_at, finished_at, status, bdpm_release) VALUES ('bdpm', ?, ?, 'ok', ?)")
-			.bind("2026-10-05T06:00:00.000Z", "2026-10-05T06:10:00.000Z", BDPM_RELEASE),
+			.bind(BDPM_IMPORTED_AT, "2026-10-05T06:10:00.000Z", BDPM_RELEASE),
 	);
 	await db.batch(stmts);
 }

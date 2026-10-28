@@ -5,7 +5,7 @@ import type * as z from "zod";
 import { log } from "../src/ingest/http";
 import { getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
-import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
+import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
 import { Medicine, Presentation, SafetyInformation } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
@@ -14,10 +14,10 @@ import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/is
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
-import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
 
-const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}).`;
-const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown).";
+const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}, imported 2026-10-05).`;
+const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown, imported unknown).";
 const SAFETY_LINE = `Safety: ${SAFETY}`;
 
 const ctx: ToolContext = { db: env.DB, now: NOW };
@@ -55,9 +55,13 @@ async function call<I extends z.ZodObject, O extends z.ZodType>(tool: Tool<I, O>
 	expect(sc.source).toMatchObject({ ansm: ANSM_SOURCE_URL, bdpm: BDPM_SOURCE_URL });
 	expect(sc.coverage_note).toBe(COVERAGE_NOTE);
 	expect(sc.disclaimer).toBe(DISCLAIMER);
-	const { ansm_last_ingest, bdpm_release } = sc.source as { ansm_last_ingest: string | null; bdpm_release: string | null };
+	const { ansm_last_ingest, bdpm_release, bdpm_imported_at } = sc.source as {
+		ansm_last_ingest: string | null;
+		bdpm_release: string | null;
+		bdpm_imported_at: string | null;
+	};
 	expect(sc.safety).toBe(SAFETY);
-	expect(summary(result).endsWith(`\n${SAFETY_LINE}\nSource: ANSM (updated ${ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${bdpm_release ?? "unknown"}).`)).toBe(true);
+	expect(summary(result).endsWith(`\n${SAFETY_LINE}\nSource: ANSM (updated ${ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${bdpm_release ?? "unknown"}, imported ${bdpm_imported_at?.slice(0, 10) ?? "unknown"}).`)).toBe(true);
 	expect(text(result)).toBe(`${summary(result)}\n\n${JSON.stringify(sc)}`);
 	return { result, data: sc.data as any, sc };
 }
@@ -89,8 +93,31 @@ describe("envelope", () => {
 
 	it("carries the source dates and no warning when fresh", async () => {
 		const { sc } = await call(searchMedicine, { query: "kardegic" });
-		expect(sc.source).toEqual({ ansm: ANSM_SOURCE_URL, bdpm: BDPM_SOURCE_URL, ansm_last_ingest: ANSM_LAST_INGEST, bdpm_release: BDPM_RELEASE });
+		expect(sc.source).toEqual({
+			ansm: ANSM_SOURCE_URL,
+			bdpm: BDPM_SOURCE_URL,
+			ansm_last_ingest: ANSM_LAST_INGEST,
+			bdpm_release: BDPM_RELEASE,
+			bdpm_imported_at: BDPM_IMPORTED_AT,
+		});
 		expect(sc.warning).toBeUndefined();
+	});
+
+	it("sourceLine: prints the BDPM release and import dates", () => {
+		expect(sourceLine({ ansm_last_ingest: ANSM_LAST_INGEST, bdpm_release: "2026-09-29", bdpm_imported_at: "2026-11-02T04:00:00.000Z" })).toBe(
+			"Source: ANSM (updated 2026-10-27), BDPM (release 2026-09-29, imported 2026-11-02).",
+		);
+	});
+
+	it("reads unknown BDPM dates when no BDPM import succeeded", async () => {
+		await env.DB.prepare("UPDATE ingest_runs SET status = 'error' WHERE source = 'bdpm'").run();
+		try {
+			const { sc } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+			expect(sc.source.bdpm_release).toBeNull();
+			expect(sc.source.bdpm_imported_at).toBeNull();
+		} finally {
+			await env.DB.prepare("UPDATE ingest_runs SET status = 'ok' WHERE source = 'bdpm'").run();
+		}
 	});
 
 	it("warns when the last ANSM ingest is older than 72 h", async () => {
@@ -106,7 +133,7 @@ describe("envelope", () => {
 			const { sc, result } = await call(searchMedicine, { query: "kardegic" });
 			expect(sc.source.ansm_last_ingest).toBeNull();
 			expect(sc.warning).toBe("Data may be outdated, last update unknown.");
-			expect(summary(result)).toContain(`Source: ANSM (updated unknown), BDPM (release ${BDPM_RELEASE}).`);
+			expect(summary(result)).toContain(`Source: ANSM (updated unknown), BDPM (release ${BDPM_RELEASE}, imported 2026-10-05).`);
 		} finally {
 			await env.DB.prepare("UPDATE ingest_runs SET status = 'ok' WHERE source = 'ansm'").run();
 		}
