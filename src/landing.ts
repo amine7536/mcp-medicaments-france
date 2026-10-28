@@ -97,6 +97,7 @@ export interface LandingCopy {
 	lastUpdate: string;
 	licence: string;
 	privacy: string;
+	privacyLink: string;
 	maintainer: string;
 	nonEndorsement: string;
 	linkSource: string;
@@ -166,7 +167,8 @@ export const COPY: Record<Lang, LandingCopy> = {
 		licence:
 			"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
 		privacy:
-			"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS s'il y en a un et la date sont enregistrés. Ni adresse IP, ni texte des questions.",
+			"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat, la durée, le code CIS et la date sont enregistrés.",
+		privacyLink: "Politique de confidentialité",
 		maintainer: "Service indépendant.",
 		nonEndorsement: NON_ENDORSEMENT,
 		linkSource: "Code source",
@@ -265,12 +267,91 @@ export const COPY: Record<Lang, LandingCopy> = {
 		lastUpdate: "Exact date of the last update:",
 		licence: "Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
 		privacy:
-			"No accounts, no cookies. For each call, only the tool name, the result (success or error), the duration, the CIS code when there is one and the date are stored. No IP address, no question text.",
+			"No accounts, no cookies. For each call, only the tool name, the result, the duration, the CIS code and the date are stored.",
+		privacyLink: "Privacy policy",
 		maintainer: "Independent service.",
 		nonEndorsement: "This service is not approved or endorsed by ANSM, HAS or UNCAM.",
 		linkSource: "Source code",
 		linkIssues: "Report a problem",
 		linkStatus: "Service status",
+	},
+};
+
+const CLOUDFLARE_PRIVACY_URL = "https://www.cloudflare.com/privacypolicy/";
+
+/** One section of the privacy page: a heading, a paragraph and an optional link at its end. */
+export interface PrivacySection {
+	heading: string;
+	text: string;
+	link?: { href: string; label: string };
+}
+
+/** Every visible text of the privacy page, for one language. */
+export interface PrivacyCopy {
+	title: string;
+	heading: string;
+	sections: readonly PrivacySection[];
+	updated: string;
+}
+
+export const PRIVACY_COPY: Record<Lang, PrivacyCopy> = {
+	fr: {
+		title: "Confidentialité · Médicaments en France",
+		heading: "Confidentialité",
+		sections: [
+			{
+				heading: "Ce que le service enregistre",
+				text: "Pour chaque appel d'outil : le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS du médicament quand il y en a un, et la date. Ces données servent à mesurer l'usage et la fiabilité du service. Elles sont conservées trois mois dans Cloudflare Workers Analytics Engine.",
+			},
+			{
+				heading: "Ce que le service n'enregistre pas",
+				text: "Ni compte, ni cookie, ni adresse IP, ni user agent, ni texte des questions. La page web ne charge aucun script de suivi.",
+			},
+			{
+				heading: "Hébergement",
+				text: "Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels (60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes.",
+				link: { href: CLOUDFLARE_PRIVACY_URL, label: "Politique de confidentialité de Cloudflare" },
+			},
+			{
+				heading: "Partage",
+				text: "Aucune donnée n'est vendue ni partagée avec des tiers, en dehors de l'hébergement par Cloudflare.",
+			},
+			{
+				heading: "Contact",
+				text: "Pour toute question ou demande, ouvrez un ticket sur GitHub (les tickets sont publics).",
+				link: { href: `${REPO_URL}/issues`, label: `${REPO_URL}/issues` },
+			},
+		],
+		updated: "Dernière mise à jour : 2026-10-29",
+	},
+	en: {
+		title: "Privacy · Médicaments en France",
+		heading: "Privacy",
+		sections: [
+			{
+				heading: "What the service stores",
+				text: "For each tool call: the tool name, the result (success or error), the duration, the medicine's CIS code when there is one, and the date. This data is used to measure the service's usage and reliability. It is kept for three months in Cloudflare Workers Analytics Engine.",
+			},
+			{
+				heading: "What the service does not store",
+				text: "No account, no cookie, no IP address, no user agent, no question text. The web page loads no tracking script.",
+			},
+			{
+				heading: "Hosting",
+				text: "The service is hosted by Cloudflare. To serve each request and limit the number of calls (60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details.",
+				link: { href: CLOUDFLARE_PRIVACY_URL, label: "Cloudflare privacy policy" },
+			},
+			{
+				heading: "Sharing",
+				text: "No data is sold or shared with third parties, apart from hosting by Cloudflare.",
+			},
+			{
+				heading: "Contact",
+				text: "For any question or request, open an issue on GitHub (issues are public).",
+				link: { href: `${REPO_URL}/issues`, label: `${REPO_URL}/issues` },
+			},
+		],
+		updated: "Last updated: 2026-10-29",
 	},
 };
 
@@ -458,9 +539,54 @@ function installTabs(c: LandingCopy, t: (s: string) => string): string {
 	return `<div class="tabs">\n<div class="tabbar">\n<div role="tablist" aria-label="${escapeAttribute(c.clientsLabel)}" hidden>\n${tabs}\n</div>\n${copy}\n</div>\n${body}\n</div>`;
 }
 
-function langLink(lang: Lang, current: Lang): string {
+function langLink(path: string, lang: Lang, current: Lang): string {
 	const aria = lang === current ? ` aria-current="true"` : "";
-	return `<a href="/?lang=${lang}" hreflang="${lang}" lang="${lang}"${aria}>${lang.toUpperCase()}</a>`;
+	return `<a href="${path}?lang=${lang}" hreflang="${lang}" lang="${lang}"${aria}>${lang.toUpperCase()}</a>`;
+}
+
+/** The `<head>` of a page served at `path`: title, optional description, hreflang links and the shared styles. */
+function pageHead(path: string, title: string, description?: string): string {
+	const meta = description === undefined ? "" : `\n<meta name="description" content="${escapeAttribute(description)}">`;
+	return `<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeText(title)}</title>${meta}
+<link rel="alternate" hreflang="fr" href="${SITE_URL}${path}?lang=fr">
+<link rel="alternate" hreflang="en" href="${SITE_URL}${path}?lang=en">
+<link rel="alternate" hreflang="x-default" href="${SITE_URL}${path}">
+<style>
+${CSS}
+</style>
+</head>`;
+}
+
+/** The header's top row: the site name, then the FR/EN switch pointing at `path`. */
+function pageTop(path: string, lang: Lang): string {
+	const fr = lang === "fr" ? "" : ` lang="fr"`;
+	return `<div class="top">
+<a class="site" href="/?lang=${lang}"${fr}>Médicaments en France</a>
+<nav class="lang" aria-label="Langue / Language">${langLink(path, "fr", lang)} | ${langLink(path, "en", lang)}</nav>
+</div>`;
+}
+
+/** The footer band shared by every page. */
+function pageFooter(lang: Lang): string {
+	const c = COPY[lang];
+	const t = formatText(lang);
+	return `<footer>
+<div class="wrap">
+<div>
+<p>${t(c.privacy)} <a href="/privacy?lang=${lang}">${t(c.privacyLink)}</a></p>
+<p>${t(c.maintainer)}</p>
+<p>${t(c.nonEndorsement)}</p>
+</div>
+<ul class="links">
+<li><a href="${REPO_URL}">${t(c.linkSource)}</a></li>
+<li><a href="${REPO_URL}/issues">${t(c.linkIssues)}</a></li>
+<li><a href="/health">${t(c.linkStatus)}</a></li>
+</ul>
+</div>
+</footer>`;
 }
 
 /** The landing page served at `GET /`, in one language. */
@@ -470,28 +596,14 @@ export function renderLanding(lang: Lang): string {
 	const fr = lang === "fr" ? "" : ` lang="fr"`;
 	return `<!doctype html>
 <html lang="${lang}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Médicaments en France</title>
-<meta name="description" content="${escapeAttribute(c.lead)}">
-<link rel="alternate" hreflang="fr" href="${SITE_URL}/?lang=fr">
-<link rel="alternate" hreflang="en" href="${SITE_URL}/?lang=en">
-<link rel="alternate" hreflang="x-default" href="${SITE_URL}/">
-<style>
-${CSS}
-</style>
-</head>
+${pageHead("/", "Médicaments en France", c.lead)}
 <body>
 <div class="notice" role="note">
 <div class="wrap"><p><strong>${t(c.noticeLead)}</strong> ${t(c.notice)}</p></div>
 </div>
 <header>
 <div class="wrap">
-<div class="top">
-<a class="site" href="/?lang=${lang}"${fr}>Médicaments en France</a>
-<nav class="lang" aria-label="Langue / Language">${langLink("fr", lang)} | ${langLink("en", lang)}</nav>
-</div>
+${pageTop("/", lang)}
 <h1${fr}>Médicaments en France</h1>
 <p class="lead">${t(c.lead)}</p>
 <div class="endpoint">
@@ -567,24 +679,41 @@ ${c.dataRows.map((r) => `<tr><td><a href="${escapeAttribute(r.url)}">${t(r.sourc
 </div>
 </section>
 </main>
-<footer>
-<div class="wrap">
-<div>
-<p>${t(c.privacy)}</p>
-<p>${t(c.maintainer)}</p>
-<p>${t(c.nonEndorsement)}</p>
-</div>
-<ul class="links">
-<li><a href="${REPO_URL}">${t(c.linkSource)}</a></li>
-<li><a href="${REPO_URL}/issues">${t(c.linkIssues)}</a></li>
-<li><a href="/health">${t(c.linkStatus)}</a></li>
-</ul>
-</div>
-</footer>
+${pageFooter(lang)}
 <p class="sr-only" aria-live="polite"></p>
 <script>
 ${SCRIPT}
 </script>
+</body>
+</html>
+`;
+}
+
+/** The privacy page served at `GET /privacy`, in one language. */
+export function renderPrivacy(lang: Lang): string {
+	const p = PRIVACY_COPY[lang];
+	const t = formatText(lang);
+	const sections = p.sections
+		.map(({ heading, text, link }) => {
+			const a = link ? ` <a href="${escapeAttribute(link.href)}">${t(link.label)}</a>` : "";
+			return `<section>\n<h2>${t(heading)}</h2>\n<p>${t(text)}${a}</p>\n</section>`;
+		})
+		.join("\n");
+	return `<!doctype html>
+<html lang="${lang}">
+${pageHead("/privacy", p.title)}
+<body>
+<header>
+<div class="wrap">
+${pageTop("/privacy", lang)}
+<h1>${t(p.heading)}</h1>
+</div>
+</header>
+<main class="wrap">
+${sections}
+<p class="small">${t(p.updated)}</p>
+</main>
+${pageFooter(lang)}
 </body>
 </html>
 `;

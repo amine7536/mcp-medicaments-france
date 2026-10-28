@@ -5,15 +5,15 @@ import { handleAdminIngest } from "./admin";
 import { handleHealth } from "./health";
 import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
-import { renderLanding, resolveLang } from "./landing";
+import { type Lang, renderLanding, renderPrivacy, resolveLang } from "./landing";
 import { createServer } from "./mcp/server";
 
 const RETRY_AFTER_SECONDS = 60;
 
-/** `GET /`: the landing page in the language picked from `?lang` or `Accept-Language`. */
-function handleLanding(request: Request, url: URL): Response {
+/** An HTML page in the language picked from `?lang` or `Accept-Language`. */
+function handlePage(request: Request, url: URL, render: (lang: Lang) => string): Response {
 	const lang = resolveLang(url, request.headers.get("Accept-Language"));
-	return new Response(renderLanding(lang), {
+	return new Response(render(lang), {
 		headers: {
 			"content-type": "text/html; charset=utf-8",
 			"Cache-Control": "public, max-age=3600",
@@ -45,7 +45,8 @@ app.use(
 			c.json({ error: "method_not_allowed" }, 405, { Allow: methods.join(", ") }),
 	}),
 );
-app.get("/", (c) => handleLanding(c.req.raw, new URL(c.req.url)));
+app.get("/", (c) => handlePage(c.req.raw, new URL(c.req.url), renderLanding));
+app.get("/privacy", (c) => handlePage(c.req.raw, new URL(c.req.url), renderPrivacy));
 // Hono types executionCtx narrowly; at runtime it is the Worker's ExecutionContext passed through app.fetch.
 app.get("/health", (c) => handleHealth(c.req.raw, c.env, c.executionCtx as ExecutionContext));
 app.all("/admin/ingest", (c) => handleAdminIngest(c.req.raw, c.env, c.executionCtx as ExecutionContext));

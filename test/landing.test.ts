@@ -15,6 +15,7 @@ import {
 	REPO_URL,
 	renderExamples,
 	renderLanding,
+	renderPrivacy,
 	renderRealAnswers,
 	resolveLang,
 } from "../src/landing";
@@ -108,6 +109,60 @@ const text = (n: El) => norm(rawText(n));
 /** Visible text of our own copy: no head, script, style, code, or Claude's real answers. */
 const ownText = (n: El) => norm(rawText(n, (e) => ["head", "script", "style", "pre", "code"].includes(e.tag) || is("div", "msg")(e)));
 
+/** The copy and asset guards every page passes; `scripts` is its number of inline scripts. */
+function slopGuards(html: string, tree: El, scripts: number): void {
+	describe("slop guards", () => {
+		const body = one(tree, is("body"));
+		it("(a) uses none of the banned words in our own copy", () => {
+			const visible = ownText(body);
+			for (const word of [
+				"unlock",
+				"seamless",
+				"seamlessly",
+				"effortless",
+				"effortlessly",
+				"supercharge",
+				"empower",
+				"robust",
+				"leverage",
+				"streamline",
+				"cutting-edge",
+				"revolutionize",
+				"game-changer",
+				"elevate",
+				"harness",
+				"révolutionner",
+				"révolutionnaire",
+				"sans effort",
+				"booster",
+				"optimisez",
+				"incontournable",
+				"en toute simplicité",
+			]) {
+				expect(visible, word).not.toMatch(new RegExp(`(?<![\\p{L}\\p{N}-])${word}(?![\\p{L}\\p{N}-])`, "iu"));
+			}
+		});
+
+		it("(b) has no em dash in our own copy", () => {
+			expect(ownText(body)).not.toContain("—");
+		});
+
+		it("(c) has no emoji", () => {
+			expect(html).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+		});
+
+		it("(e) loads no asset and only its inline scripts", () => {
+			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
+			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
+			expect(html).not.toMatch(/@import|url\(/i);
+			const found = all(tree, is("script"));
+			expect(found).toHaveLength(scripts);
+			for (const script of found) expect(script.attrs).toEqual({});
+			expect(all(tree, is("style"))).toHaveLength(1);
+		});
+	});
+}
+
 const CURSOR_JSON = `{
   "mcpServers": {
     "medicaments-france": {
@@ -138,7 +193,7 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Données",
 		"Date exacte de la dernière mise à jour : /health",
 		"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
-		"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS s'il y en a un et la date sont enregistrés. Ni adresse IP, ni texte des questions.",
+		"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat, la durée, le code CIS et la date sont enregistrés. Politique de confidentialité",
 		"Service indépendant.",
 		NON_ENDORSEMENT,
 	],
@@ -162,7 +217,7 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Data",
 		"Exact date of the last update: /health",
 		"Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
-		"No accounts, no cookies. For each call, only the tool name, the result (success or error), the duration, the CIS code when there is one and the date are stored. No IP address, no question text.",
+		"No accounts, no cookies. For each call, only the tool name, the result, the duration, the CIS code and the date are stored. Privacy policy",
 		"Independent service.",
 		"This service is not approved or endorsed by ANSM, HAS or UNCAM.",
 	],
@@ -487,6 +542,8 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(hasClass(wrap, "wrap")).toBe(true);
 		const [texts, links] = elements(wrap);
 		expect(elements(texts).map((p) => [p.tag, text(p)])).toEqual(VERBATIM[lang].slice(-3).map((s) => ["p", s]));
+		const privacy = one(elements(texts)[0], is("a"));
+		expect([privacy.attrs.href, text(privacy)]).toEqual([`/privacy?lang=${lang}`, lang === "fr" ? "Politique de confidentialité" : "Privacy policy"]);
 		expect(links.tag).toBe("ul");
 		expect(links.attrs.class).toBe("links");
 		expect(elements(links).map((li) => [li.tag, text(li), one(li, is("a")).attrs.href])).toEqual(FOOTER_LINKS[lang].map(([t, h]) => ["li", t, h]));
@@ -561,55 +618,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(live[0].children).toEqual([]);
 	});
 
-	describe("slop guards", () => {
-		it("(a) uses none of the banned words in our own copy", () => {
-			const visible = ownText(body);
-			for (const word of [
-				"unlock",
-				"seamless",
-				"seamlessly",
-				"effortless",
-				"effortlessly",
-				"supercharge",
-				"empower",
-				"robust",
-				"leverage",
-				"streamline",
-				"cutting-edge",
-				"revolutionize",
-				"game-changer",
-				"elevate",
-				"harness",
-				"révolutionner",
-				"révolutionnaire",
-				"sans effort",
-				"booster",
-				"optimisez",
-				"incontournable",
-				"en toute simplicité",
-			]) {
-				expect(visible, word).not.toMatch(new RegExp(`(?<![\\p{L}\\p{N}-])${word}(?![\\p{L}\\p{N}-])`, "iu"));
-			}
-		});
-
-		it("(b) has no em dash in our own copy", () => {
-			expect(ownText(body)).not.toContain("—");
-		});
-
-		it("(c) has no emoji", () => {
-			expect(html).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
-		});
-
-		it("(e) loads no asset and has exactly one inline script", () => {
-			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
-			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
-			expect(html).not.toMatch(/@import|url\(/i);
-			const scripts = all(tree, is("script"));
-			expect(scripts).toHaveLength(1);
-			expect(scripts[0].attrs).toEqual({});
-			expect(all(tree, is("style"))).toHaveLength(1);
-		});
-	});
+	slopGuards(html, tree, 1);
 });
 
 /** CSS rules, top level and inside `@media` blocks. */
@@ -876,4 +885,141 @@ describe("renderers", () => {
 		expect(formatText("fr")("« <b> ? »")).toBe("« &lt;b&gt; ? »");
 		expect(formatText("en")("A : B")).toBe("A : B");
 	});
+});
+
+const PRIVACY_PAGES: Record<Lang, string> = { fr: renderPrivacy("fr"), en: renderPrivacy("en") };
+const PRIVACY_TREES: Record<Lang, El> = { fr: await parse(PRIVACY_PAGES.fr), en: await parse(PRIVACY_PAGES.en) };
+
+const PRIVACY: Record<Lang, { title: string; h1: string; sections: readonly [string, string][]; updated: string }> = {
+	fr: {
+		title: "Confidentialité · Médicaments en France",
+		h1: "Confidentialité",
+		sections: [
+			[
+				"Ce que le service enregistre",
+				"Pour chaque appel d'outil : le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS du médicament quand il y en a un, et la date. Ces données servent à mesurer l'usage et la fiabilité du service. Elles sont conservées trois mois dans Cloudflare Workers Analytics Engine.",
+			],
+			["Ce que le service n'enregistre pas", "Ni compte, ni cookie, ni adresse IP, ni user agent, ni texte des questions. La page web ne charge aucun script de suivi."],
+			[
+				"Hébergement",
+				"Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels (60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes. Politique de confidentialité de Cloudflare",
+			],
+			["Partage", "Aucune donnée n'est vendue ni partagée avec des tiers, en dehors de l'hébergement par Cloudflare."],
+			["Contact", `Pour toute question ou demande, ouvrez un ticket sur GitHub (les tickets sont publics). ${REPO_URL}/issues`],
+		],
+		updated: "Dernière mise à jour : 2026-10-29",
+	},
+	en: {
+		title: "Privacy · Médicaments en France",
+		h1: "Privacy",
+		sections: [
+			[
+				"What the service stores",
+				"For each tool call: the tool name, the result (success or error), the duration, the medicine's CIS code when there is one, and the date. This data is used to measure the service's usage and reliability. It is kept for three months in Cloudflare Workers Analytics Engine.",
+			],
+			["What the service does not store", "No account, no cookie, no IP address, no user agent, no question text. The web page loads no tracking script."],
+			[
+				"Hosting",
+				"The service is hosted by Cloudflare. To serve each request and limit the number of calls (60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details. Cloudflare privacy policy",
+			],
+			["Sharing", "No data is sold or shared with third parties, apart from hosting by Cloudflare."],
+			["Contact", `For any question or request, open an issue on GitHub (issues are public). ${REPO_URL}/issues`],
+		],
+		updated: "Last updated: 2026-10-29",
+	},
+};
+
+/** French typography as rendered: narrow no-break spaces, collapsed back to plain spaces for comparison. */
+const plain = (s: string) => norm(s.replace(/\u202F/g, " "));
+
+describe("GET /privacy", () => {
+	const branches: readonly [string, Record<string, string> | undefined, Lang][] = [
+		["/privacy?lang=en", { "Accept-Language": "fr-FR" }, "en"],
+		["/privacy?lang=fr", { "Accept-Language": "en-GB,en;q=0.9" }, "fr"],
+		["/privacy", { "Accept-Language": "en-GB,en;q=0.9" }, "en"],
+		["/privacy", { "Accept-Language": "fr-FR" }, "fr"],
+		["/privacy", undefined, "fr"],
+	];
+	for (const [path, headers, lang] of branches) {
+		it(`serves ${lang} for ${path} with ${JSON.stringify(headers ?? {})}`, async () => {
+			const res = await get(path, headers);
+			expect(res.status).toBe(200);
+			expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+			expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+			expect(res.headers.get("vary")).toBe("Accept-Language");
+			expect(res.headers.get("content-language")).toBe(lang);
+			expect(res.headers.get("set-cookie")).toBeNull();
+			expect(await res.text()).toBe(PRIVACY_PAGES[lang]);
+		});
+	}
+
+	it("answers HEAD with 200 and an empty body", async () => {
+		const res = await exports.default.fetch(`${ORIGIN}/privacy`, { method: "HEAD" });
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+		expect(await res.text()).toBe("");
+	});
+
+	it("rejects POST with 405", async () => {
+		const res = await exports.default.fetch(`${ORIGIN}/privacy`, { method: "POST" });
+		expect(res.status).toBe(405);
+		expect(res.headers.get("allow")).toBe("GET, HEAD");
+		expect(await res.json()).toEqual({ error: "method_not_allowed" });
+	});
+});
+
+describe.each(LANGS)("privacy page (%s)", (lang) => {
+	const html = PRIVACY_PAGES[lang];
+	const tree = PRIVACY_TREES[lang];
+	const expected = PRIVACY[lang];
+	const header = one(tree, is("header"));
+	const main = one(tree, is("main"));
+
+	it("sets html lang, title and hreflang links", () => {
+		expect(one(tree, is("html")).attrs.lang).toBe(lang);
+		expect(text(one(tree, is("title")))).toBe(expected.title);
+		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
+		expect(alternates).toEqual([
+			["fr", `${ORIGIN}/privacy?lang=fr`],
+			["en", `${ORIGIN}/privacy?lang=en`],
+			["x-default", `${ORIGIN}/privacy`],
+		]);
+		expect(html).toContain(`<style>\n${CSS}\n</style>`);
+	});
+
+	it("shares the landing header and footer", () => {
+		const wrap = elements(header)[0];
+		expect(elements(wrap).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.top", "h1."]);
+		const [site, nav] = elements(elements(wrap)[0]);
+		expect([site.attrs.class, site.attrs.href, site.attrs.lang, text(site)]).toEqual(["site", `/?lang=${lang}`, lang === "en" ? "fr" : undefined, "Médicaments en France"]);
+		const links = all(nav, is("a"));
+		expect(links.map((a) => [a.attrs.href, a.attrs.hreflang, a.attrs["aria-current"], text(a)])).toEqual([
+			["/privacy?lang=fr", "fr", lang === "fr" ? "true" : undefined, "FR"],
+			["/privacy?lang=en", "en", lang === "en" ? "true" : undefined, "EN"],
+		]);
+		const landingFooter = PAGES[lang].slice(PAGES[lang].indexOf("<footer>"), PAGES[lang].indexOf("</footer>") + 9);
+		expect(html).toContain(landingFooter);
+		expect(elements(one(tree, is("body"))).map((e) => e.tag)).toEqual(["header", "main", "footer"]);
+	});
+
+	it("shows every section verbatim, with its links", () => {
+		expect(text(one(header, is("h1")))).toBe(expected.h1);
+		const sections = all(main, is("section"));
+		expect(sections.map((s) => elements(s).map((e) => e.tag))).toEqual(expected.sections.map(() => ["h2", "p"]));
+		expect(sections.map((s) => elements(s).map((e) => plain(text(e))))).toEqual(expected.sections.map(([h, p]) => [plain(h), plain(p)]));
+		expect(all(main, is("a")).map((a) => a.attrs.href)).toEqual(["https://www.cloudflare.com/privacypolicy/", `${REPO_URL}/issues`]);
+		const last = elements(main).at(-1) as El;
+		expect([last.tag, last.attrs.class, plain(text(last))]).toEqual(["p", "small", plain(expected.updated)]);
+	});
+
+	it("applies French typography on the French page only", () => {
+		if (lang === "fr") {
+			expect(html).toContain("Dernière mise à jour\u202F: 2026-10-29");
+			expect(rawText(one(tree, is("body")), (e) => ["script", "style"].includes(e.tag))).not.toMatch(/ [:;?!»]|« /);
+		} else {
+			expect(html).not.toContain("\u202F");
+		}
+	});
+
+	slopGuards(html, tree, 0);
 });
