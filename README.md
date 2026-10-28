@@ -40,7 +40,7 @@ Streamable HTTP, read-only, no authentication. Status and data dates: <https://m
 | `list_current_shortages` | Current shortages with filters. | `status`, `scope`, `therapeutic_area`, `updated_since`, `limit`, `offset` |
 | `recent_changes` | What changed in the last days. | `days`, `change_types`, `limit` |
 | `is_major_therapeutic_interest` | MITM status of a medicine, with its ATC code. | exactly one of `cis`, `name` |
-| `get_medicine_info` | Boxes of a medicine (CIP13 code, marketing status, price, reimbursement rate) and its prescription and dispensing conditions. | exactly one of `cis`, `cip13`, `name` |
+| `get_medicine_info` | Boxes of a medicine (CIP13 code, marketing status, price, reimbursement rate), its prescription and dispensing conditions, and current ANSM safety information. | exactly one of `cis`, `cip13`, `name` |
 
 Every result carries the sources, their update dates, the coverage note, the disclaimer and a safety notice.
 
@@ -64,7 +64,7 @@ Every result carries the sources, their update dates, the coverage note, the dis
 ## Data sources and licence
 
 - **ANSM**, list of medicine shortages: <https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments>. Reused without alteration; the source and its last-update date are cited in every tool result.
-- **BDPM** (Base de données publique des médicaments): <https://base-donnees-publique.medicaments.gouv.fr>, under the Licence Ouverte. Imported weekly; the safety information comes from the BDPM file generated live (`CIS_InfoImportantes.txt`), the other files from the monthly release. Reused without alteration; the source and its release date are cited in every tool result.
+- **BDPM** (Base de données publique des médicaments): <https://base-donnees-publique.medicaments.gouv.fr>, under the Licence Ouverte. Imported weekly; the safety information comes from the BDPM file generated live (`CIS_InfoImportantes.txt`), the other files from the monthly release. Reused without alteration; the source and its monthly release date are cited in every tool result. The safety information is as of the last weekly import, which can be more recent than that date.
 - Ce service n'est ni approuvé ni soutenu par l'ANSM, la HAS ou l'UNCAM.
 
 ## Privacy
