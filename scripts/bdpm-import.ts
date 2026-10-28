@@ -25,6 +25,8 @@ async function main(): Promise<void> {
 	const mitmBytes = await download(`${BASE}/download/file/${FILES.mitm.name}`, FILES.mitm.name);
 	const presentationsBytes = await download(`${BASE}/download/file/${FILES.presentations.name}`, FILES.presentations.name);
 	const conditionsBytes = await download(`${BASE}/download/file/${FILES.prescriptionConditions.name}`, FILES.prescriptionConditions.name);
+	// Generated at request time, outside the monthly `/download/file/` release.
+	const safetyBytes = await download(`${BASE}/download/${FILES.safetyInformation.name}`, FILES.safetyInformation.name);
 	const pageBytes = await download(`${BASE}/telechargement`, "telechargement.html");
 
 	const bannerDate = parseBanner(new TextDecoder().decode(pageBytes));
@@ -36,6 +38,7 @@ async function main(): Promise<void> {
 		prescriptionConditions: parseTsv(decodeCp1252(conditionsBytes), FILES.prescriptionConditions.cols, FILES.prescriptionConditions.name, {
 			skipEmptyLines: true,
 		}),
+		safetyInformation: parseTsv(decodeUtf8(safetyBytes), FILES.safetyInformation.cols, FILES.safetyInformation.name),
 		bannerDate,
 	});
 	// validateAndMap throws when the banner date is missing.
@@ -47,7 +50,7 @@ async function main(): Promise<void> {
 	const { skipped } = mapped;
 	console.log(`BDPM release ${release}`);
 	console.log(
-		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length} presentations=${mapped.presentations.length} prescription_conditions=${mapped.prescription_conditions.length}`,
+		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length} presentations=${mapped.presentations.length} prescription_conditions=${mapped.prescription_conditions.length} safety_information=${mapped.safety_information.length}`,
 	);
 	console.log(`skipped medicines=${skipped.medicines} substances=${skipped.substances} mitm=${skipped.mitm}`);
 	console.log(`wrote ${SQL_PATH}`);

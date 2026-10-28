@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fetchBytes } from "../scripts/bdpm/download";
-import { parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
+import { parseAnchor, parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
 import { decodeCp1252, decodeUtf8, parseBanner, parseTsv } from "../scripts/bdpm/parse";
 import { buildImportSql, insertStatements, sqlLiteral } from "../scripts/bdpm/sql";
 import { USER_AGENT } from "../src/ingest/http";
@@ -36,13 +36,21 @@ function presentationRow(i: number): string[] {
 	];
 }
 
+const anchor = (href: string, text: string, quote = "'"): string =>
+	`<a target='_blank'  title="Lien direct vers l'information importante sur le site de l'ANSM - Nouvelle fen&ecirc;tre" href=${quote}${href}${quote}>${text}</a>`;
+
+function safetyRow(i: number): string[] {
+	return [cis(i), "2026-01-15", "2027-01-15", anchor("https://ansm.sante.fr/actualites/protoxyde-dazote-des-intoxications-en-hausse", "Protoxyde d'azote : des intoxications en hausse")];
+}
+
 function input(overrides: Partial<BdpmInput> = {}): BdpmInput {
 	const cisBdpm = Array.from({ length: 12_000 }, (_, i) => medicineRow(i));
 	const compo = Array.from({ length: 25_000 }, (_, i) => compoRow(i % 12_000, `SUBSTANCE ${i % 12_000}`));
 	const mitm = Array.from({ length: 6_000 }, (_, i) => [cis(i), "N02BE01", "X", "LABO", "LABO", "01/01/2024", "https://x"]);
 	const presentations = Array.from({ length: 15_000 }, (_, i) => presentationRow(i));
 	const prescriptionConditions = Array.from({ length: 20_000 }, (_, i) => [cis(Math.floor(i / 2)), i % 2 === 0 ? "liste I" : "prescription hospitalière"]);
-	return { cisBdpm, compo, mitm, presentations, prescriptionConditions, bannerDate: "2026-09-29", ...overrides };
+	const safetyInformation = Array.from({ length: 5_000 }, (_, i) => safetyRow(i));
+	return { cisBdpm, compo, mitm, presentations, prescriptionConditions, safetyInformation, bannerDate: "2026-09-29", ...overrides };
 }
 
 describe("decodeCp1252", () => {
@@ -318,6 +326,67 @@ describe("prescription conditions", () => {
 	});
 });
 
+describe("safety information", () => {
+	it("decodes the UTF-8 live file into 4 columns", () => {
+		const bytes = new TextEncoder().encode(`60000001\t2026-01-15\t2027-01-15\t${anchor("https://ansm.sante.fr/x", "Irinotécan")}\n`);
+		expect(parseTsv(decodeUtf8(bytes), 4, "CIS_InfoImportantes.txt")).toEqual([["60000001", "2026-01-15", "2027-01-15", anchor("https://ansm.sante.fr/x", "Irinotécan")]]);
+		expect(() => parseTsv("60000001\t2026-01-15\t2027-01-15\n", 4, "CIS_InfoImportantes.txt")).toThrow("CIS_InfoImportantes.txt: line 1 has 3 columns, expected 4");
+	});
+
+	it("parses the href in single or double quotes and the decoded inner text, not the title attribute", () => {
+		for (const quote of ["'", '"']) {
+			expect(parseAnchor(anchor("https://www.ansm.sante.fr/a", "Valproate &amp; grossesse : d&eacute;marches", quote))).toEqual({
+				url: "https://www.ansm.sante.fr/a",
+				title: "Valproate & grossesse : démarches",
+			});
+		}
+		expect(parseAnchor(anchor("https://ansm.sante.fr/a", " dose d'irinotécan > 180 mg/m² "))).toEqual({ url: "https://ansm.sante.fr/a", title: "dose d'irinotécan > 180 mg/m²" });
+		expect(parseAnchor(anchor("https://ansm.sante.fr/a", "x"))?.title).not.toContain("fenêtre");
+		expect(parseAnchor("Protoxyde d'azote")).toBeNull();
+		expect(parseAnchor("<a target='_blank'>sans lien</a>")).toBeNull();
+	});
+
+	it("maps rows and keeps an http:// ANSM URL as published", () => {
+		const rows = input().safetyInformation;
+		rows[1] = [cis(1), "2026-02-01", "2026-12-31", anchor("http://ansm.sante.fr/Activites/RTU/GYMISO", "RTU de Gymiso et Misoone")];
+		const { safety_information: out } = validateAndMap(input({ safetyInformation: rows }));
+		expect(out).toHaveLength(5_000);
+		expect(out[0]).toEqual({
+			cis: cis(0),
+			title: "Protoxyde d'azote : des intoxications en hausse",
+			url: "https://ansm.sante.fr/actualites/protoxyde-dazote-des-intoxications-en-hausse",
+			starts_on: "2026-01-15",
+			ends_on: "2027-01-15",
+		});
+		expect(out[1]).toEqual({ cis: cis(1), title: "RTU de Gymiso et Misoone", url: "http://ansm.sante.fr/Activites/RTU/GYMISO", starts_on: "2026-02-01", ends_on: "2026-12-31" });
+	});
+
+	it("rejects a file below 5,000 rows", () => {
+		expect(() => validateAndMap(input({ safetyInformation: input().safetyInformation.slice(1) }))).toThrow(
+			"CIS_InfoImportantes.txt: 4999 rows, below the floor of 5000",
+		);
+	});
+
+	it("rejects an invalid CIS, a non-ISO date, a missing anchor, a non-ANSM URL or an empty title", () => {
+		const bad = (i: number, row: string[]): BdpmInput => {
+			const rows = input().safetyInformation;
+			rows[i] = row;
+			return input({ safetyInformation: rows });
+		};
+		const ok = safetyRow(0);
+		expect(() => validateAndMap(bad(2, ["6000001", ok[1], ok[2], ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 3 has invalid CIS "6000001"');
+		expect(() => validateAndMap(bad(3, [cis(3), "15/01/2026", ok[2], ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 4 has invalid start date "15/01/2026", expected YYYY-MM-DD');
+		expect(() => validateAndMap(bad(4, [cis(4), ok[1], "", ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 5 has invalid end date "", expected YYYY-MM-DD');
+		expect(() => validateAndMap(bad(5, [cis(5), ok[1], ok[2], "Protoxyde d'azote"]))).toThrow("CIS_InfoImportantes.txt: line 6 has no anchor with an href");
+		for (const url of ["https://example.com/ansm.sante.fr/", "https://ansm.sante.fr.evil.com/x", "ftp://ansm.sante.fr/x", "https://sante.fr/x"]) {
+			expect(() => validateAndMap(bad(6, [cis(6), ok[1], ok[2], anchor(url, "titre")]))).toThrow(`CIS_InfoImportantes.txt: line 7 has a non-ANSM URL "${url}"`);
+		}
+		expect(() => validateAndMap(bad(7, [cis(7), ok[1], ok[2], anchor("https://ansm.sante.fr/x", " <b> </b> ")]))).toThrow(
+			"CIS_InfoImportantes.txt: line 8 has an empty title",
+		);
+	});
+});
+
 describe("sql", () => {
 	it("escapes literals", () => {
 		expect(sqlLiteral("traitement d'initiation")).toBe("'traitement d''initiation'");
@@ -344,14 +413,18 @@ describe("sql", () => {
 		});
 		expect(sql).not.toMatch(/\b(BEGIN|COMMIT)\b/i);
 		const lines = sql.trimEnd().split("\n");
-		expect(lines.slice(0, 6)).toEqual([
+		expect(lines.slice(0, 7)).toEqual([
 			"DELETE FROM medicines_fts;",
 			"DELETE FROM mitm;",
 			"DELETE FROM substances;",
 			"DELETE FROM medicines;",
 			"DELETE FROM presentations;",
 			"DELETE FROM prescription_conditions;",
+			"DELETE FROM safety_information;",
 		]);
+		expect(sql).toContain(
+			"INSERT INTO safety_information (cis, title, url, starts_on, ends_on) VALUES ('60000000','Protoxyde d''azote : des intoxications en hausse','https://ansm.sante.fr/actualites/protoxyde-dazote-des-intoxications-en-hausse','2026-01-15','2027-01-15'),",
+		);
 		expect(sql).toContain("INSERT INTO prescription_conditions (cis, condition, position) VALUES ('60000000','liste I',1),('60000000','prescription hospitalière',2),");
 		expect(sql).toContain(
 			"INSERT INTO presentations (cip13, cip7, cis, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, price_eur, public_price_eur, dispensing_fee_eur, reimbursement_indications) VALUES " +
@@ -359,7 +432,7 @@ describe("sql", () => {
 		);
 		expect(lines.at(-1)).toBe(
 			"INSERT INTO ingest_runs (source, started_at, finished_at, status, entries_seen, bdpm_release, message) VALUES " +
-				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 mitm=6000 presentations=15000 prescription_conditions=20000 skipped=0');",
+				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 mitm=6000 presentations=15000 prescription_conditions=20000 safety_information=5000 skipped=0');",
 		);
 	});
 });
