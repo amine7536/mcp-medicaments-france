@@ -1,11 +1,12 @@
 import { exports } from "cloudflare:workers";
-import { decodeHTML } from "entities/decode";
-import { escapeAttribute, escapeText } from "entities/escape";
+import { decodeHTML, decodeHTMLAttribute } from "entities/decode";
 import { describe, expect, it } from "vitest";
 import {
 	COPY,
 	CSS,
 	EXAMPLES,
+	formatText,
+	frenchSpacing,
 	type Lang,
 	MCP_ENDPOINT,
 	NON_ENDORSEMENT,
@@ -17,27 +18,95 @@ import {
 	renderRealAnswers,
 	resolveLang,
 } from "../src/landing";
+import { consume } from "../src/lib/html";
 
 const ORIGIN = "https://ruptures-medicaments.a3e.dev";
 const LANGS: readonly Lang[] = ["fr", "en"];
 const PAGES: Record<Lang, string> = { fr: renderLanding("fr"), en: renderLanding("en") };
 
-const text = (html: string) => decodeHTML(html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
-/** Visible text of our own copy: no head, script, code, or Claude's real answers. */
-const ownText = (html: string) =>
-	text(
-		html
-			.replace(/<head>[\s\S]*?<\/head>/, "")
-			.replace(/<script>[\s\S]*?<\/script>/g, "")
-			.replace(/<pre>[\s\S]*?<\/pre>/g, "")
-			.replace(/<code>[\s\S]*?<\/code>/g, "")
-			.replace(/<div class="exchange">[\s\S]*?<\/div>/g, ""),
+/** A minimal element tree built with HTMLRewriter: raw text chunks are kept as strings. */
+interface El {
+	tag: string;
+	attrs: Record<string, string>;
+	children: (El | string)[];
+	parent: El | null;
+}
+
+const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+
+async function parse(html: string): Promise<El> {
+	const root: El = { tag: "#document", attrs: {}, children: [], parent: null };
+	let current = root;
+	await consume(
+		new HTMLRewriter()
+			.on("*", {
+				element(el) {
+					const node: El = { tag: el.tagName, attrs: Object.fromEntries([...el.attributes].map(([k, v]) => [k, decodeHTMLAttribute(v)])), children: [], parent: current };
+					current.children.push(node);
+					if (VOID.has(el.tagName)) return;
+					current = node;
+					el.onEndTag(() => {
+						current = node.parent ?? root;
+					});
+				},
+			})
+			.onDocument({
+				text(chunk) {
+					if (chunk.text) current.children.push(chunk.text);
+				},
+			}),
+		html,
 	);
-const between = (html: string, start: string, end: string) => {
-	const i = html.indexOf(start);
-	expect(i).toBeGreaterThanOrEqual(0);
-	return html.slice(i, html.indexOf(end, i) + end.length);
-};
+	return root;
+}
+
+const TREES: Record<Lang, El> = { fr: await parse(PAGES.fr), en: await parse(PAGES.en) };
+
+const hasClass = (n: El, cls: string) => (n.attrs.class ?? "").split(" ").includes(cls);
+const is =
+	(tag: string, cls?: string) =>
+	(n: El): boolean =>
+		n.tag === tag && (cls === undefined || hasClass(n, cls));
+const elements = (n: El): El[] => n.children.filter((c): c is El => typeof c !== "string");
+function all(n: El, pred: (e: El) => boolean): El[] {
+	const out: El[] = [];
+	const walk = (e: El) => {
+		for (const c of elements(e)) {
+			if (pred(c)) out.push(c);
+			walk(c);
+		}
+	};
+	walk(n);
+	return out;
+}
+function one(n: El, pred: (e: El) => boolean): El {
+	const found = all(n, pred);
+	expect(found).toHaveLength(1);
+	return found[0];
+}
+/** Decoded text of a subtree, skipping the subtrees matched by `skip`. */
+function rawText(n: El, skip: (e: El) => boolean = () => false): string {
+	let out = "";
+	const walk = (e: El) => {
+		let chunk = "";
+		for (const c of e.children) {
+			if (typeof c === "string") chunk += c;
+			else {
+				out += decodeHTML(chunk);
+				chunk = "";
+				if (!skip(c)) walk(c);
+				out += " ";
+			}
+		}
+		out += decodeHTML(chunk);
+	};
+	walk(n);
+	return out;
+}
+const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+const text = (n: El) => norm(rawText(n));
+/** Visible text of our own copy: no head, script, style, code, or Claude's real answers. */
+const ownText = (n: El) => norm(rawText(n, (e) => ["head", "script", "style", "pre", "code"].includes(e.tag) || is("div", "exchange")(e)));
 
 const CURSOR_JSON = `{
   "mcpServers": {
@@ -56,33 +125,22 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Exemples",
 		"Réponses réelles",
 		REAL_ANSWERS_NOTE,
-		"Se connecter",
+		"Ajouter le serveur",
 		"Dans Claude, ouvrez Customize > Connectors, choisissez Add custom connector, collez l'adresse ci-dessus et sélectionnez No sign-in.",
 		"Dans un terminal :",
 		"Dans le fichier mcp.json :",
 		"Tout autre client MCP compatible Streamable HTTP fonctionne avec l'adresse ci-dessus.",
 		"Outils",
-		"Outil",
-		"Ce qu'il répond",
-		"search_medicine Trouve un médicament par son nom ou sa substance et indique s'il est en rupture.",
-		"get_availability Donne le statut d'un médicament : rupture ou tension, date de retour annoncée, historique.",
-		"list_current_shortages Liste les ruptures et tensions en cours, par statut, ville ou hôpital, ou domaine médical.",
-		"recent_changes Montre ce qui a changé ces derniers jours.",
-		"is_major_therapeutic_interest Indique si un médicament est d'intérêt thérapeutique majeur (MITM).",
 		"Ce que ce service ne fait pas",
 		"Il ne donne aucun conseil médical : pas de remplacement, pas de changement de dose, pas d'arrêt de traitement.",
 		"Il ne connaît pas le stock des pharmacies : les données de l'ANSM sont nationales.",
 		"Un médicament absent de la liste n'est pas forcément disponible : l'ANSM publie surtout les ruptures de médicaments d'intérêt thérapeutique majeur déclarées par les fabricants.",
 		"Données",
-		"Source Contenu Mise à jour",
-		"ANSM Ruptures, tensions, remises à disposition Chaque jour",
-		"BDPM Médicaments, substances, liste MITM Chaque mois",
 		"Date exacte de la dernière mise à jour : /health",
 		"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
 		"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS s'il y en a un et la date sont enregistrés. Ni adresse IP, ni texte des questions.",
 		"Service indépendant, maintenu par Amine Benseddik.",
 		NON_ENDORSEMENT,
-		"Code source · Signaler un problème · État du service",
 	],
 	en: [
 		"Warning: information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
@@ -91,34 +149,78 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Examples",
 		"Real answers",
 		"Answers from Claude through this server, captured on 28 October 2026 with an instruction to answer in a few sentences. The data may have changed since.",
-		"Connect",
+		"Add the server",
 		"In Claude, open Customize > Connectors, choose Add custom connector, paste the address above and select No sign-in.",
 		"In a terminal:",
 		"In mcp.json:",
 		"Any other MCP client that supports Streamable HTTP works with the address above.",
 		"Tools",
-		"Tool",
-		"What it answers",
-		"search_medicine Finds a medicine by name or active substance and shows whether it is in shortage.",
-		"get_availability Gives a medicine's status: shortage or tension, announced return date, history.",
-		"list_current_shortages Lists current shortages and tensions, by status, pharmacy or hospital, or medical area.",
-		"recent_changes Shows what changed in the last days.",
-		"is_major_therapeutic_interest Tells whether a medicine is of major therapeutic interest (MITM).",
 		"What this service does not do",
 		"It gives no medical advice: no replacement, no dose change, no stopping a treatment.",
 		"It does not know pharmacy stock: ANSM data is national.",
 		"A medicine missing from the list is not necessarily available: ANSM mainly publishes shortages of medicines of major therapeutic interest declared by manufacturers.",
 		"Data",
-		"Source Content Updated",
-		"ANSM Shortages, tensions, returns Daily",
-		"BDPM Medicines, substances, MITM list Monthly",
 		"Exact date of the last update: /health",
 		"Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
 		"No accounts, no cookies. For each call, only the tool name, the result (success or error), the duration, the CIS code when there is one and the date are stored. No IP address, no question text.",
 		"Independent service, maintained by Amine Benseddik.",
 		"This service is not approved or endorsed by ANSM, HAS or UNCAM.",
-		"Source code · Report a problem · Service status",
 	],
+};
+
+const HEADINGS: Record<Lang, readonly string[]> = {
+	fr: ["Exemples", "Ajouter le serveur", "Outils", "Ce que ce service ne fait pas", "Données"],
+	en: ["Examples", "Add the server", "Tools", "What this service does not do", "Data"],
+};
+
+const TOOLS: Record<Lang, readonly [string, string][]> = {
+	fr: [
+		["Outil", "Ce qu'il répond"],
+		["search_medicine", "Trouve un médicament par son nom ou sa substance et indique s'il est en rupture."],
+		["get_availability", "Donne le statut d'un médicament : rupture ou tension, date de retour annoncée, historique."],
+		["list_current_shortages", "Liste les ruptures et tensions en cours, par statut, ville ou hôpital, ou domaine médical."],
+		["recent_changes", "Montre ce qui a changé ces derniers jours."],
+		["is_major_therapeutic_interest", "Indique si un médicament est d'intérêt thérapeutique majeur (MITM)."],
+	],
+	en: [
+		["Tool", "What it answers"],
+		["search_medicine", "Finds a medicine by name or active substance and shows whether it is in shortage."],
+		["get_availability", "Gives a medicine's status: shortage or supply problem, announced return date, history."],
+		["list_current_shortages", "Lists current shortages and supply problems, by status, pharmacy or hospital, or medical area."],
+		["recent_changes", "Shows what changed in the last few days."],
+		["is_major_therapeutic_interest", "Tells whether a medicine is of major therapeutic interest (MITM)."],
+	],
+};
+
+const DATA_ROWS: Record<Lang, readonly string[][]> = {
+	fr: [
+		["Source", "Contenu", "Mise à jour"],
+		["ANSM", "Ruptures, tensions, remises à disposition", "Chaque jour"],
+		["BDPM", "Médicaments, substances, liste MITM", "Chaque mois"],
+	],
+	en: [
+		["Source", "Content", "Updated"],
+		["ANSM", "Shortages, supply problems, returns", "Daily"],
+		["BDPM", "Medicines, substances, MITM list", "Monthly"],
+	],
+};
+
+const FOOTER_LINKS: Record<Lang, readonly [string, string][]> = {
+	fr: [
+		["Code source", REPO_URL],
+		["Signaler un problème", `${REPO_URL}/issues`],
+		["État du service", "/health"],
+	],
+	en: [
+		["Source code", REPO_URL],
+		["Report a problem", `${REPO_URL}/issues`],
+		["Service status", "/health"],
+	],
+};
+
+const BUTTON_LABELS: Record<Lang, readonly string[]> = {
+	fr: ["Copier l'adresse du serveur", "Copier la commande", "Copier la configuration"],
+	en: ["Copy the server address", "Copy the command", "Copy the configuration"],
 };
 
 const EXAMPLES_EN: readonly [string, string][] = [
@@ -204,38 +306,88 @@ describe("GET /", () => {
 
 describe.each(LANGS)("landing page (%s)", (lang) => {
 	const html = PAGES[lang];
+	const tree = TREES[lang];
 	const c = COPY[lang];
 	const other = lang === "fr" ? "en" : "fr";
+	const body = one(tree, is("body"));
+	const header = one(tree, is("header"));
+	const main = one(tree, is("main"));
+	const footer = one(tree, is("footer"));
+	const sections = all(main, is("section"));
+	const sectionByHeading = (heading: string) => {
+		const s = sections.find((x) => text(elements(x)[0]) === heading);
+		expect(s, heading).toBeDefined();
+		return s as El;
+	};
 
 	it("sets html lang, title, description and hreflang links", () => {
-		expect(html).toContain(`<html lang="${lang}">`);
-		expect(html).toContain("<title>Ruptures de médicaments (France)</title>");
-		expect(html).toContain(`<meta name="description" content="${escapeAttribute(VERBATIM[lang][1])}">`);
-		expect(html).toContain(`<link rel="alternate" hreflang="fr" href="${ORIGIN}/?lang=fr">`);
-		expect(html).toContain(`<link rel="alternate" hreflang="en" href="${ORIGIN}/?lang=en">`);
-		expect(html).toContain(`<link rel="alternate" hreflang="x-default" href="${ORIGIN}/">`);
+		expect(one(tree, is("html")).attrs.lang).toBe(lang);
+		expect(text(one(tree, is("title")))).toBe("Ruptures de médicaments (France)");
+		expect(one(tree, (e) => e.tag === "meta" && e.attrs.name === "description").attrs.content).toBe(VERBATIM[lang][1]);
+		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
+		expect(alternates).toEqual([
+			["fr", `${ORIGIN}/?lang=fr`],
+			["en", `${ORIGIN}/?lang=en`],
+			["x-default", `${ORIGIN}/`],
+		]);
 	});
 
-	it("has a plain-link language switch marking the current language", () => {
-		const nav = between(html, '<nav class="lang" aria-label="Langue / Language">', "</nav>");
-		expect(text(nav).trim()).toBe("FR | EN");
-		expect(nav).toContain(`<a href="/?lang=${lang}" hreflang="${lang}" lang="${lang}" aria-current="true">${lang.toUpperCase()}</a>`);
-		expect(nav).toContain(`<a href="/?lang=${other}" hreflang="${other}" lang="${other}">${other.toUpperCase()}</a>`);
-		expect(nav.match(/aria-current/g)).toHaveLength(1);
+	it("opens the header with the site name, then the language switch", () => {
+		const wrap = elements(header)[0];
+		expect(hasClass(wrap, "wrap")).toBe(true);
+		expect(elements(wrap).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.top", "h1.", "p.lead", "div.endpoint"]);
+		const [site, nav] = elements(elements(wrap)[0]);
+		expect(site.tag).toBe("a");
+		expect(site.attrs.class).toBe("site");
+		expect(site.attrs.href).toBe(`/?lang=${lang}`);
+		expect(text(site)).toBe("Ruptures de médicaments");
+		expect(nav.tag).toBe("nav");
+		expect(nav.attrs.class).toBe("lang");
+		expect(nav.attrs["aria-label"]).toBe("Langue / Language");
+		expect(text(nav)).toBe("FR | EN");
+		const links = all(nav, is("a"));
+		expect(links.map((a) => [a.attrs.href, a.attrs.hreflang, a.attrs.lang, text(a)])).toEqual([
+			["/?lang=fr", "fr", "fr", "FR"],
+			["/?lang=en", "en", "en", "EN"],
+		]);
+		expect(links.filter((a) => a.attrs["aria-current"] === "true").map((a) => a.attrs.lang)).toEqual([lang]);
+		expect(links.find((a) => a.attrs.lang === other)?.attrs["aria-current"]).toBeUndefined();
+	});
+
+	it("marks the French title as French on the English page", () => {
+		const h1 = one(tree, is("h1"));
+		const site = one(tree, is("a", "site"));
+		expect(text(h1)).toBe("Ruptures de médicaments (France)");
+		expect(h1.attrs.lang).toBe(lang === "en" ? "fr" : undefined);
+		expect(site.attrs.lang).toBe(lang === "en" ? "fr" : undefined);
 	});
 
 	it("shows every text verbatim", () => {
-		const visible = text(html);
+		const visible = text(body);
 		for (const s of VERBATIM[lang]) expect(visible).toContain(s);
-		expect(html).toContain(`<strong>${escapeText(VERBATIM[lang][0].slice(0, VERBATIM[lang][0].indexOf(":") + 1))}</strong>`);
-		expect(html).toContain(`<h1>Ruptures de médicaments (France)</h1>`);
-		for (const client of ["Claude", "Claude Code", "Cursor"]) expect(html).toContain(`<h3>${client}</h3>`);
-		const footer = between(html, "<footer>", "</footer>");
-		expect(footer).toContain(`<a href="${REPO_URL}">`);
-		expect(footer).toContain(`<a href="${REPO_URL}/issues">`);
-		expect(footer).toContain(`<a href="/health">`);
-		expect(html).toContain('<a href="https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments">ANSM</a>');
-		expect(html).toContain('<a href="https://base-donnees-publique.medicaments.gouv.fr">BDPM</a>');
+		const notice = one(tree, is("div", "notice"));
+		expect(notice.attrs.role).toBe("note");
+		expect(hasClass(elements(notice)[0], "wrap")).toBe(true);
+		const lead = VERBATIM[lang][0];
+		expect(text(one(notice, is("strong")))).toBe(lead.slice(0, lead.indexOf(":") + 1));
+		expect(text(notice)).toBe(lead);
+		expect(text(one(header, is("p", "lead")))).toBe(VERBATIM[lang][1]);
+		expect(all(tree, is("a")).filter((a) => a.attrs.href?.startsWith("https://ansm.") || a.attrs.href?.startsWith("https://base-")).map((a) => [a.attrs.href, text(a)])).toEqual([
+			["https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments", "ANSM"],
+			["https://base-donnees-publique.medicaments.gouv.fr", "BDPM"],
+		]);
+	});
+
+	it("applies French typography on the French page only", () => {
+		if (lang === "fr") {
+			expect(html).toContain("Attention :");
+			expect(html).not.toContain("Attention :");
+			expect(html).toContain("« L'Aspirine est-elle en rupture ? »");
+			const raw = rawText(body, (e) => ["script", "style", "pre", "code"].includes(e.tag));
+			expect(raw).not.toMatch(/ [:;?!»]|« /);
+		} else {
+			expect(html).not.toContain(" ");
+		}
 	});
 
 	it("lists the six examples and the three real answers of the language", () => {
@@ -243,83 +395,135 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		const answers = lang === "fr" ? REAL_ANSWERS.map((a) => [a.question, a.answer] as const) : REAL_ANSWERS_EN;
 		expect(examples).toHaveLength(6);
 		expect(answers).toHaveLength(3);
-		for (const [q, b] of examples) {
-			expect(html).toContain(`<dt>${escapeText(q)}</dt>\n<dd>${escapeText(b)}</dd>`);
-		}
-		for (const [q, a] of answers) {
-			expect(html).toContain(`<div class="exchange">\n<p class="q">${escapeText(q)}</p>\n<blockquote class="a">${escapeText(a)}</blockquote>\n</div>`);
-			expect(a).not.toMatch(/\*\*|\]\(/);
-		}
-		expect(html.match(/<div class="exchange">/g)).toHaveLength(3);
-		expect(html).toContain(renderExamples(c.examples));
-		expect(html).toContain(renderRealAnswers(c.realAnswers));
+		const dl = one(tree, is("dl"));
+		expect(elements(dl).map((e) => [e.tag, text(e)])).toEqual(examples.flatMap(([q, b]) => [
+			["dt", norm(q)],
+			["dd", norm(b)],
+		]));
+		const exchanges = all(tree, is("div", "exchange"));
+		expect(exchanges).toHaveLength(3);
+		exchanges.forEach((ex, i) => {
+			const [q, a] = elements(ex);
+			expect(q.tag).toBe("p");
+			expect(q.attrs.class).toBe("q");
+			expect(text(q)).toBe(norm(answers[i][0]));
+			expect(a.tag).toBe("blockquote");
+			expect(a.attrs.class).toBe("a");
+			const who = elements(a)[0];
+			expect(who.tag).toBe("span");
+			expect(who.attrs.class).toBe("who");
+			expect(text(who)).toBe("Claude");
+			expect(norm(rawText(a, (e) => e === who))).toBe(norm(answers[i][1]));
+			expect(answers[i][1]).not.toMatch(/\*\*|\]\(/);
+		});
+		const t = formatText(lang);
+		expect(html).toContain(renderExamples(c.examples, t));
+		expect(html).toContain(renderRealAnswers(c.realAnswers, t));
 		expect(html).not.toContain("**");
-		expect(html).not.toMatch(/<a [^>]*href="https:\/\/ansm\.sante\.fr\/disponibilites-des-produits-de-sante\/medicaments\/(acide|brevibloc)/);
-		expect(html.indexOf(`<p class="note">${escapeText(c.realAnswersNote)}</p>`)).toBeLessThan(html.indexOf('<div class="exchange">'));
+		expect(all(tree, (e) => e.tag === "a" && /\/medicaments\/(acide|brevibloc)/.test(e.attrs.href ?? ""))).toHaveLength(0);
+		const examplesBody = elements(sections[0])[1];
+		expect(elements(examplesBody).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["dl.", "h3.", "p.note", "div.exchange", "div.exchange", "div.exchange"]);
+		expect(text(elements(examplesBody)[1])).toBe(c.realAnswersHeading);
+		expect(text(elements(examplesBody)[2])).toBe(norm(c.realAnswersNote));
 	});
 
-	it("keeps the section order", () => {
-		const order = [
-			'<div class="notice" role="note">',
-			"<main>",
-			"<header>",
-			"<h1>",
-			"<p>",
-			'<div class="endpoint">',
-			'<nav class="lang"',
-			"</header>",
-			`<section id="${lang === "fr" ? "exemples" : "examples"}">`,
-			"<dl>",
-			"<h3>",
-			'<p class="note">',
-			'<div class="exchange">',
-		];
-		let at = -1;
-		for (const marker of order) {
-			const i = html.indexOf(marker, at + 1);
-			expect(i, marker).toBeGreaterThan(at);
-			at = i;
-		}
-		const headings = [...html.matchAll(/<section[^>]*>\n<h2>([^<]+)<\/h2>/g)].map((m) => decodeHTML(m[1]));
-		expect(headings).toEqual(
-			lang === "fr"
-				? ["Exemples", "Se connecter", "Outils", "Ce que ce service ne fait pas", "Données"]
-				: ["Examples", "Connect", "Tools", "What this service does not do", "Data"],
-		);
-		expect(html.indexOf("</section>\n\n<footer>")).toBeGreaterThan(html.lastIndexOf("<section"));
-		expect(html.indexOf("<footer>")).toBeLessThan(html.indexOf("</main>"));
-		const footer = text(between(html, "<footer>", "</footer>"));
-		const parts = VERBATIM[lang].slice(-4);
-		for (let i = 1; i < parts.length; i++) expect(footer.indexOf(parts[i - 1])).toBeLessThan(footer.indexOf(parts[i]));
-		const tools = between(html, `<h2>${escapeText(c.toolsHeading)}</h2>`, "</section>");
-		expect(tools).toContain('<div class="table-wrap">\n<table>');
-		expect(tools.match(/<tr>/g)).toHaveLength(6);
-		const limits = between(html, `<h2>${escapeText(c.limitsHeading)}</h2>`, "</section>");
-		expect(limits.match(/<li>/g)).toHaveLength(3);
-		const data = between(html, `<h2>${escapeText(c.dataHeading)}</h2>`, "</section>");
-		expect(data.match(/<tr>/g)).toHaveLength(3);
-		expect(data.indexOf("</table>")).toBeLessThan(data.indexOf(escapeText(c.licence)));
+	it("keeps the page order and the two-column section structure", () => {
+		expect(elements(body).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.notice", "header.", "main.wrap", "footer.", "p.sr-only", "script."]);
+		expect(sections.map((s) => elements(s).map((e) => `${e.tag}.${e.attrs.class ?? ""}`))).toEqual(sections.map(() => ["h2.", "div.body"]));
+		expect(sections.map((s) => text(elements(s)[0]))).toEqual(HEADINGS[lang]);
+		expect(sections[0].attrs.id).toBe(lang === "fr" ? "exemples" : "examples");
+		const limits = sectionByHeading(c.limitsHeading);
+		expect(all(limits, is("li")).map(text)).toEqual(c.limits.map(norm));
 	});
 
-	it("renders the endpoint bar and hidden copy buttons", () => {
-		const bar = between(html, '<div class="endpoint">', "</div>");
-		expect(bar).toContain(`<span class="visually-hidden">${escapeText(c.endpointLabel)}</span>`);
-		expect(bar).toContain('<span class="pill">MCP</span>');
-		expect(bar).toContain(`<code>${MCP_ENDPOINT}</code>`);
-		const button = (value: string) =>
-			`<button type="button" class="copy" data-copy="${escapeAttribute(value)}" data-done="${lang === "fr" ? "Copié" : "Copied"}" hidden>${lang === "fr" ? "Copier" : "Copy"}</button>`;
-		expect(bar).toContain(button(MCP_ENDPOINT));
-		for (const code of [CLAUDE_CODE, CURSOR_JSON]) {
-			expect(html).toContain(`<div class="snippet">\n${button(code)}\n<pre><code>${escapeText(code)}</code></pre>\n</div>`);
+	it("renders the tools table with the tool names in code", () => {
+		const tools = sectionByHeading(c.toolsHeading);
+		const wrap = elements(elements(tools)[1])[0];
+		expect(hasClass(wrap, "table-wrap")).toBe(true);
+		expect(elements(wrap)[0].tag).toBe("table");
+		const rows = all(tools, is("tr"));
+		expect(rows.map((r) => elements(r).map(text))).toEqual(TOOLS[lang].map(([a, b]) => [a, norm(b)]));
+		for (const r of rows.slice(1)) {
+			const cell = elements(r)[0];
+			expect(elements(cell).map((e) => e.tag)).toEqual(["code"]);
+			expect(text(cell)).toBe(text(elements(cell)[0]));
 		}
-		const buttons = [...html.matchAll(/<button[^>]*>/g)].map((m) => m[0]);
-		expect(buttons).toHaveLength(3);
-		for (const b of buttons) expect(b).toMatch(/ hidden>$/);
+		expect(all(elements(rows[0])[0], is("code"))).toHaveLength(0);
+	});
+
+	it("renders the data table, then the update note and the licence", () => {
+		const data = sectionByHeading(c.dataHeading);
+		const parts = elements(elements(data)[1]);
+		expect(parts.map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.table-wrap", "p.small", "p.small"]);
+		expect(all(parts[0], is("tr")).map((r) => elements(r).map(text))).toEqual(DATA_ROWS[lang]);
+		expect(all(parts[0], is("th"))).toHaveLength(3);
+		expect(text(parts[1])).toBe(norm(`${c.lastUpdate} /health`));
+		expect(one(parts[1], is("a")).attrs.href).toBe("/health");
+		expect(text(parts[2])).toBe(norm(c.licence));
+	});
+
+	it("renders the footer band with the texts on the left and the links on the right", () => {
+		const wrap = elements(footer)[0];
+		expect(hasClass(wrap, "wrap")).toBe(true);
+		const [texts, links] = elements(wrap);
+		expect(elements(texts).map((p) => [p.tag, text(p)])).toEqual(VERBATIM[lang].slice(-3).map((s) => ["p", s]));
+		expect(links.tag).toBe("ul");
+		expect(links.attrs.class).toBe("links");
+		expect(elements(links).map((li) => [li.tag, text(li), one(li, is("a")).attrs.href])).toEqual(FOOTER_LINKS[lang].map(([t, h]) => ["li", t, h]));
+	});
+
+	it("renders the endpoint bar and the snippets with hidden, labelled copy buttons", () => {
+		const bar = one(header, is("div", "endpoint"));
+		expect(elements(bar).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["span.sr-only", "span.pill", "code.", "button.copy primary"]);
+		const [label, pill, code] = elements(bar);
+		expect(text(label)).toBe(c.endpointLabel);
+		expect(text(pill)).toBe("MCP");
+		expect(text(code)).toBe(MCP_ENDPOINT);
+
+		const snippets = all(tree, is("div", "snippet"));
+		expect(snippets).toHaveLength(3);
+		expect(snippets.map((s) => text(one(s, is("h3"))))).toEqual(["Claude", "Claude Code", "Cursor"]);
+		const [claude, claudeCode, cursor] = snippets;
+		expect(elements(claude).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.snippet-head", "p."]);
+		expect(text(elements(claude)[1])).toBe(norm(c.connectClaude));
+		for (const [s, sentence, value] of [
+			[claudeCode, c.connectClaudeCode, CLAUDE_CODE],
+			[cursor, c.connectCursor, CURSOR_JSON],
+		] as const) {
+			expect(elements(s).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.snippet-head", "p.", "pre."]);
+			expect(elements(elements(s)[0]).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["h3.", "button.copy secondary"]);
+			expect(text(elements(s)[1])).toBe(norm(sentence));
+			const pre = elements(s)[2];
+			expect(elements(pre).map((e) => e.tag)).toEqual(["code"]);
+			expect(rawText(elements(pre)[0])).toBe(value);
+		}
+
+		const buttons = all(tree, is("button"));
+		expect(buttons.map((b) => [b.attrs.class, b.attrs["data-copy"], b.attrs["aria-label"]])).toEqual([
+			["copy primary", MCP_ENDPOINT, BUTTON_LABELS[lang][0]],
+			["copy secondary", CLAUDE_CODE, BUTTON_LABELS[lang][1]],
+			["copy secondary", CURSOR_JSON, BUTTON_LABELS[lang][2]],
+		]);
+		for (const b of buttons) {
+			expect(b.attrs.type).toBe("button");
+			expect(b.attrs.hidden).toBe("");
+			expect(b.attrs["data-done"]).toBe(lang === "fr" ? "Copié" : "Copied");
+			expect(text(b)).toBe(lang === "fr" ? "Copier" : "Copy");
+		}
+	});
+
+	it("has one empty polite live region", () => {
+		const live = all(tree, (e) => e.attrs["aria-live"] !== undefined);
+		expect(live).toHaveLength(1);
+		expect(live[0].tag).toBe("p");
+		expect(live[0].attrs.class).toBe("sr-only");
+		expect(live[0].attrs["aria-live"]).toBe("polite");
+		expect(live[0].children).toEqual([]);
 	});
 
 	describe("slop guards", () => {
 		it("(a) uses none of the banned words in our own copy", () => {
-			const visible = ownText(html);
+			const visible = ownText(body);
 			for (const word of [
 				"unlock",
 				"seamless",
@@ -349,7 +553,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		});
 
 		it("(b) has no em dash in our own copy", () => {
-			expect(ownText(html)).not.toContain("—");
+			expect(ownText(body)).not.toContain("—");
 		});
 
 		it("(c) has no emoji", () => {
@@ -357,127 +561,166 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		});
 
 		it("(e) loads no asset and has exactly one inline script", () => {
-			expect(html).not.toMatch(/<img|<svg|<link rel="stylesheet"|<script src=|@import|url\(/i);
-			expect(html.match(/<script/g)).toHaveLength(1);
-			expect(html).toContain("<script>\n");
-			expect(html.match(/<style>/g)).toHaveLength(1);
+			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
+			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
+			expect(html).not.toMatch(/@import|url\(/i);
+			const scripts = all(tree, is("script"));
+			expect(scripts).toHaveLength(1);
+			expect(scripts[0].attrs).toEqual({});
+			expect(all(tree, is("style"))).toHaveLength(1);
 		});
 	});
 });
 
+/** CSS rules, top level and inside `@media` blocks. */
+interface Rule {
+	media: string | null;
+	selector: string;
+	body: string;
+}
+
+function parseCss(css: string): Rule[] {
+	const out: Rule[] = [];
+	const flat = (src: string, media: string | null) => {
+		for (const m of src.matchAll(/([^{}]+)\{([^{}]*)\}/g)) out.push({ media, selector: m[1].trim(), body: m[2] });
+	};
+	const top = css.replace(/@media ([^{]+)\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g, (_, query: string, inner: string) => {
+		flat(inner, query.trim());
+		return "";
+	});
+	flat(top, null);
+	return out;
+}
+
 describe("styles", () => {
-	const rules = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
-	const rule = (selector: string) => {
-		const found = rules.filter((r) => r.selector === selector);
-		expect(found, selector).toHaveLength(1);
+	const rules = parseCss(CSS);
+	const rule = (selector: string, media: string | null = null) => {
+		const found = rules.filter((r) => r.selector === selector && r.media === media);
+		expect(found, `${media ?? ""} ${selector}`).toHaveLength(1);
 		return found[0].body;
 	};
-	const expectDecls = (selector: string, decls: readonly string[]) => {
-		const body = rule(selector);
-		for (const d of decls) expect(body, `${selector} ${d}`).toContain(`${d};`);
+	const expectDecls = (selector: string, decls: readonly string[], media: string | null = null) => {
+		const body = rule(selector, media);
+		for (const d of decls) expect(body, `${selector} ${d}`).toContain(` ${d};`);
 	};
+	const text = `Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif`;
+	const ui = `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+	const mono = `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
 
 	it("is the single style block of both pages", () => {
 		for (const lang of LANGS) expect(PAGES[lang]).toContain(`<style>\n${CSS}\n</style>`);
 	});
 
-	it("defines every colour token in both palettes", () => {
-		const light = CSS.match(/^:root \{([^}]*)\}/m)![1];
-		const dark = CSS.match(/@media \(prefers-color-scheme: dark\) \{ :root \{([^}]*)\} \}/)![1];
-		const tokens: readonly [string, string, string][] = [
-			["--bg", "#FBFAF7", "#141413"],
-			["--surface", "#FFFFFF", "#1C1B19"],
-			["--fg", "#1C1B19", "#ECEAE4"],
-			["--muted", "#6B6862", "#9C988F"],
-			["--border", "#E4E1DA", "#2E2C28"],
-			["--accent", "#0F5E57", "#5FB3A8"],
-			["--code-bg", "#F3F1EC", "#1F1E1B"],
-			["--notice-bg", "#FFF4DB", "#2E2610"],
-			["--notice-border", "#E8C66A", "#6B5420"],
-			["--notice-fg", "#5C4300", "#F0D58A"],
+	it("is light only and defines every colour token", () => {
+		expect(CSS).not.toMatch(/prefers-color-scheme/);
+		expectDecls(":root", ["color-scheme: light"]);
+		expect(rule(":root")).not.toMatch(/color-scheme: light dark/);
+		const tokens: readonly [string, string][] = [
+			["--bg", "#FBFAF7"],
+			["--surface", "#FFFFFF"],
+			["--fg", "#1C1B19"],
+			["--muted", "#5F5C56"],
+			["--border", "#E4E1DA"],
+			["--accent", "#0F5E57"],
+			["--accent-soft", "#E6F0EE"],
+			["--code-bg", "#F3F1EC"],
+			["--notice-bg", "#FFF4DB"],
+			["--notice-border", "#E8C66A"],
+			["--notice-fg", "#5C4300"],
 		];
-		for (const [name, l, d] of tokens) {
-			expect(light).toContain(`${name}: ${l};`);
-			expect(dark).toContain(`${name}: ${d};`);
-		}
-		const allowed = new Set(tokens.flatMap(([, l, d]) => [l, d]));
+		expectDecls(
+			":root",
+			tokens.map(([name, value]) => `${name}: ${value}`),
+		);
+		const allowed = new Set(tokens.map(([, v]) => v));
 		for (const hex of CSS.match(/#[0-9A-Fa-f]{3,8}\b/g) ?? []) expect(allowed.has(hex), hex).toBe(true);
 		expect(CSS).not.toMatch(/rgba?\(|hsla?\(/);
 	});
 
 	it("sets the type stacks and sizes", () => {
-		const text = `Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif`;
-		const ui = `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
-		const mono = `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
 		expectDecls("body", [`font-family: ${text}`, "font-size: 17px", "line-height: 1.6", "background: var(--bg)", "color: var(--fg)"]);
-		expectDecls("h1, h2, h3", [`font-family: ${text}`, "font-weight: 600", "letter-spacing: -0.01em"]);
-		expectDecls("h1", ["font-size: 30px"]);
-		expectDecls("h2", ["font-size: 21px"]);
-		expectDecls("h3", ["font-size: 17px"]);
+		expectDecls("h1, h2, h3", [`font-family: ${ui}`, "font-weight: 600"]);
+		expectDecls("h1", ["font-size: 34px", "letter-spacing: -0.02em", "line-height: 1.15"]);
+		expectDecls("h2", ["font-size: 22px", "letter-spacing: -0.01em"]);
+		expectDecls("h3", ["font-size: 16px"]);
+		expectDecls(".lead", ["font-size: 19px", "color: var(--muted)", "max-width: 640px"]);
+		expect(rule(".lead")).not.toMatch(/font-family/);
 		expectDecls("code, pre", [`font-family: ${mono}`, "font-size: 14px"]);
+		expectDecls(".site", [`font-family: ${ui}`, "font-size: 15px", "font-weight: 600", "color: var(--fg)"]);
 		expectDecls(".lang", [`font-family: ${ui}`, "font-size: 14px"]);
-		expectDecls("th", [`font-family: ${ui}`, "font-size: 14px"]);
-		expectDecls("footer", [`font-family: ${ui}`, "font-size: 14px"]);
-		for (const m of CSS.matchAll(/font-size: (\d+)px/g)) expect(Number(m[1])).toBeLessThanOrEqual(30);
+		expectDecls(".pill", [`font-family: ${ui}`, "font-size: 12px", "font-weight: 600"]);
+		expectDecls(".copy", [`font-family: ${ui}`]);
+		expectDecls("th", [`font-family: ${ui}`, "font-size: 14px", "font-weight: 600"]);
+		expectDecls("footer", [`font-family: ${ui}`, "font-size: 14px", "color: var(--muted)"]);
+		expectDecls(".notice", [`font-family: ${ui}`, "font-size: 15px"]);
+		expectDecls("dt", [`font-family: ${ui}`, "font-size: 16px", "font-weight: 600", "margin-top: 16px"]);
+		expectDecls("dd", ["font-size: 16px", "color: var(--muted)", "margin: 4px 0 0 0"]);
+		expectDecls(".note", ["font-size: 15px"]);
+		expectDecls(".small", ["font-size: 15px"]);
+		for (const m of CSS.matchAll(/font-size: (\d+)px/g)) expect(Number(m[1])).toBeLessThanOrEqual(34);
 	});
 
-	it("sets the layout, notice, endpoint bar, pill and copy buttons", () => {
-		expectDecls("main", ["max-width: 720px", "margin: 0 auto", "padding: 0 16px 48px"]);
+	it("sets the container, header band, sections and footer band", () => {
+		expectDecls(".wrap", ["max-width: 960px", "margin: 0 auto", "padding: 0 24px"]);
+		expectDecls(".wrap", ["padding: 0 16px"], "(max-width: 599px)");
+		expectDecls("header", ["background: var(--surface)", "border-bottom: 1px solid var(--border)", "padding: 32px 0 40px"]);
+		expectDecls(".top", ["display: flex", "justify-content: space-between"]);
 		expectDecls("section", ["margin-top: 48px", "border-top: 1px solid var(--border)"]);
-		expectDecls(".notice", ["background: var(--notice-bg)", "color: var(--notice-fg)", "border-bottom: 1px solid var(--notice-border)", "padding: 12px 16px"]);
-		expectDecls(".notice p", ["max-width: 720px"]);
+		expectDecls("section", ["display: grid", "grid-template-columns: 220px 1fr", "column-gap: 48px", "margin-top: 64px"], "(min-width: 900px)");
+		expectDecls("footer", ["background: var(--surface)", "border-top: 1px solid var(--border)", "margin-top: 64px", "padding: 32px 0"]);
+		expectDecls("footer .wrap", ["display: grid", "grid-template-columns: 1fr auto"], "(min-width: 900px)");
+		expectDecls(".links", ["list-style: none"]);
+		expectDecls(".notice", ["background: var(--notice-bg)", "color: var(--notice-fg)", "border-bottom: 1px solid var(--notice-border)"]);
 		expect(rule(".notice")).not.toMatch(/border(-left|-top|-right)?:/);
-		expectDecls(".endpoint", [
-			"background: var(--code-bg)",
-			"border: 1px solid var(--border)",
-			"border-radius: 6px",
-			"padding: 8px 12px",
-			"display: flex",
-			"gap: 8px",
-			"align-items: center",
-			"flex-wrap: wrap",
-		]);
-		expectDecls(".endpoint code", ["overflow-wrap: anywhere"]);
-		expectDecls(".pill", [
-			"font-size: 12px",
-			"font-weight: 600",
-			"color: var(--accent)",
-			"background: var(--surface)",
-			"border: 1px solid var(--accent)",
-			"border-radius: 4px",
-			"padding: 1px 6px",
-		]);
-		expectDecls(".copy", [
-			"height: 28px",
-			"border-radius: 6px",
-			"border: 1px solid var(--border)",
-			"background: transparent",
-			"color: var(--fg)",
-			"font-size: 13px",
-			"cursor: pointer",
-		]);
-		expect(rule(".copy")).not.toMatch(/display:/);
-		expectDecls(".copy:hover", ["border-color: var(--accent)"]);
-		expectDecls(".copy:focus-visible", ["outline: 2px solid var(--accent)", "outline-offset: 2px"]);
 	});
 
-	it("sets code blocks, exchanges, tables, links and the switch", () => {
-		expectDecls("pre", ["background: var(--code-bg)", "border: 1px solid var(--border)", "border-radius: 6px", "padding: 12px", "overflow-x: auto"]);
-		expectDecls(".snippet", ["text-align: right"]);
-		expectDecls(".q", ["max-width: 85%", "margin-left: auto", "background: var(--code-bg)", "border-radius: 12px", "padding: 8px 12px"]);
-		expectDecls(".a", [
+	it("sets the endpoint bar, pill and copy buttons", () => {
+		expectDecls(".endpoint", [
 			"background: var(--surface)",
 			"border: 1px solid var(--border)",
 			"border-radius: 8px",
-			"padding: 12px 16px",
-			"margin: 8px 0 24px 0",
-			"overflow-wrap: anywhere",
+			"min-height: 48px",
+			"padding: 6px 6px 6px 12px",
+			"display: flex",
+			"align-items: center",
 		]);
-		expectDecls(".table-wrap", ["overflow-x: auto"]);
-		expectDecls("table", ["width: 100%"]);
-		expectDecls("th, td", ["border: 1px solid var(--border)", "background: var(--surface)"]);
+		expectDecls(".endpoint code", ["font-size: 15px", "flex: 1", "overflow-wrap: anywhere"]);
+		expectDecls(".pill", ["color: var(--accent)", "background: var(--surface)", "border: 1px solid var(--accent)", "border-radius: 4px", "padding: 1px 6px"]);
+		expectDecls(".copy", ["border-radius: 6px", "cursor: pointer"]);
+		expectDecls(".copy:focus-visible", ["outline: 2px solid var(--accent)", "outline-offset: 2px"]);
+		expectDecls(".primary", ["height: 36px", "padding: 0 14px", "background: var(--accent)", "color: #FFFFFF", "border: none", "font-size: 14px", "font-weight: 600"]);
+		expectDecls(".primary:hover", ["filter: brightness(1.1)"]);
+		expectDecls(".secondary", ["height: 30px", "padding: 0 10px", "background: transparent", "border: 1px solid var(--muted)", "color: var(--fg)", "font-size: 13px"]);
+		expectDecls(".secondary:hover", ["border-color: var(--accent)"]);
+		for (const s of [".copy", ".primary", ".secondary"]) expect(rule(s)).not.toMatch(/display:/);
+	});
+
+	it("sets code blocks, snippets, exchanges, tables, links and the switch", () => {
+		expectDecls("pre", ["background: var(--code-bg)", "border: 1px solid var(--border)", "border-radius: 8px", "padding: 14px 16px", "overflow-x: auto"]);
+		expectDecls(".snippet-head", ["display: flex", "justify-content: space-between", "align-items: center"]);
+		expectDecls(".q", [
+			"background: var(--accent-soft)",
+			"color: var(--fg)",
+			"border-radius: 12px 12px 4px 12px",
+			"padding: 10px 14px",
+			"margin: 0 0 0 auto",
+			"width: fit-content",
+			"max-width: 85%",
+			`font-family: ${text}`,
+			"font-size: 16px",
+		]);
+		expectDecls(".a", ["background: var(--surface)", "border: 1px solid var(--border)", "border-radius: 8px", "padding: 14px 18px", "margin: 8px 0 28px", "overflow-wrap: anywhere"]);
+		expectDecls(".who", ["display: block", `font-family: ${ui}`, "font-size: 13px", "font-weight: 600", "color: var(--muted)", "margin-bottom: 6px"]);
+		expectDecls(".table-wrap", ["border: 1px solid var(--border)", "border-radius: 8px", "overflow-x: auto"]);
+		expectDecls("table", ["border-collapse: collapse", "width: 100%"]);
+		expectDecls("th, td", ["padding: 10px 14px", "border-bottom: 1px solid var(--border)", "text-align: left"]);
+		expectDecls("th", ["background: var(--code-bg)"]);
+		expectDecls("td", ["background: var(--surface)"]);
+		expectDecls("tbody tr:last-child td", ["border-bottom: none"]);
+		expectDecls("td code", ["overflow-wrap: anywhere"]);
 		expectDecls("a", ["color: var(--accent)", "text-decoration: underline", "text-underline-offset: 2px"]);
 		expectDecls('.lang a[aria-current="true"]', ["font-weight: 700", "text-decoration: none"]);
+		expectDecls(".sr-only", ["position: absolute", "width: 1px", "height: 1px", "overflow: hidden"]);
 	});
 
 	it("(d) uses none of the rejected CSS patterns", () => {
@@ -487,8 +730,11 @@ describe("styles", () => {
 		expect(CSS).not.toMatch(/text-transform:\s*uppercase/i);
 		expect(CSS).not.toMatch(/border-left/i);
 		const withTop = rules.filter((r) => /border-top/i.test(r.body));
-		expect(withTop.map((r) => r.selector)).toEqual(["section"]);
-		expect(withTop[0].body.match(/border-top[^;]*;/g)).toEqual(["border-top: 1px solid var(--border);"]);
+		expect(withTop.map((r) => [r.media, r.selector])).toEqual([
+			[null, "section"],
+			[null, "footer"],
+		]);
+		for (const r of withTop) expect(r.body.match(/border-top[^;]*;/g)).toEqual(["border-top: 1px solid var(--border);"]);
 	});
 });
 
@@ -498,10 +744,13 @@ describe("copy script", () => {
 	it("is the same in both languages and holds no text of its own", () => {
 		expect(PAGES.en).toContain(`<script>${script}</script>`);
 		expect(script).toContain('addEventListener("DOMContentLoaded"');
+		expect(script).toContain("if (!(navigator.clipboard && navigator.clipboard.writeText)) return;");
+		expect(script.indexOf("navigator.clipboard && navigator.clipboard.writeText")).toBeLessThan(script.indexOf("b.hidden = false"));
 		expect(script).toContain('querySelectorAll("button.copy")');
-		expect(script).toContain("b.hidden = false");
+		expect(script).toContain('document.querySelector("p[aria-live]")');
 		expect(script).toContain("navigator.clipboard.writeText(b.dataset.copy)");
-		expect(script).toContain("b.dataset.done");
+		expect(script).toContain("b.textContent = b.dataset.done");
+		expect(script).toContain("live.textContent = b.dataset.done");
 		expect(script).toContain("1500");
 		expect(script).not.toMatch(/Copi|Copy|fetch\(|import|https?:/);
 	});
@@ -509,14 +758,20 @@ describe("copy script", () => {
 
 describe("renderers", () => {
 	it("escapes markup, ampersands and non-breaking spaces in the rendered texts", () => {
-		const raw = "<b>A</b> & B C";
+		const raw = "<b>A</b> & B\u00A0C";
 		const outputs = [renderExamples([{ question: raw, behaviour: raw }]), renderRealAnswers([{ question: raw, answer: raw }])];
 		for (const out of outputs) {
 			expect(out).toContain("&lt;b&gt;A&lt;/b&gt;");
 			expect(out).toContain("&amp;");
 			expect(out).toContain("&nbsp;");
 			expect(out).not.toContain("<b>");
-			expect(out).not.toContain(" ");
+			expect(out).not.toContain("\u00A0");
 		}
+	});
+
+	it("puts narrow no-break spaces around French punctuation after escaping", () => {
+		expect(frenchSpacing("« A ? » B : C ; D ! E")).toBe("« A ? » B : C ; D ! E");
+		expect(formatText("fr")("« <b> ? »")).toBe("« &lt;b&gt; ? »");
+		expect(formatText("en")("A : B")).toBe("A : B");
 	});
 });

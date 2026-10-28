@@ -69,6 +69,9 @@ export interface LandingCopy {
 	endpointLabel: string;
 	copy: string;
 	copied: string;
+	copyEndpointLabel: string;
+	copyCommandLabel: string;
+	copyConfigLabel: string;
 	examplesId: string;
 	examplesHeading: string;
 	examples: readonly Example[];
@@ -109,13 +112,16 @@ export const COPY: Record<Lang, LandingCopy> = {
 		endpointLabel: "Adresse du serveur MCP",
 		copy: "Copier",
 		copied: "Copié",
+		copyEndpointLabel: "Copier l'adresse du serveur",
+		copyCommandLabel: "Copier la commande",
+		copyConfigLabel: "Copier la configuration",
 		examplesId: "exemples",
 		examplesHeading: "Exemples",
 		examples: EXAMPLES,
 		realAnswersHeading: "Réponses réelles",
 		realAnswersNote: REAL_ANSWERS_NOTE,
 		realAnswers: REAL_ANSWERS,
-		connectHeading: "Se connecter",
+		connectHeading: "Ajouter le serveur",
 		connectClaude:
 			"Dans Claude, ouvrez Customize > Connectors, choisissez Add custom connector, collez l'adresse ci-dessus et sélectionnez No sign-in.",
 		connectClaudeCode: "Dans un terminal :",
@@ -161,6 +167,9 @@ export const COPY: Record<Lang, LandingCopy> = {
 		endpointLabel: "MCP server address",
 		copy: "Copy",
 		copied: "Copied",
+		copyEndpointLabel: "Copy the server address",
+		copyCommandLabel: "Copy the command",
+		copyConfigLabel: "Copy the configuration",
 		examplesId: "examples",
 		examplesHeading: "Examples",
 		examples: [
@@ -209,7 +218,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 					"I can't suggest a replacement for Brevibloc; only your doctor or the hospital pharmacist can choose one. ANSM lists Brevibloc 100 mg/10 ml injectable solution as out of stock in hospitals, with supply expected back sometime in 2027 (ANSM, updated 2026-10-26: https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments/brevibloc-100-mg-10-ml-solution-injectable-en-flacon-esmolol-chlorhydrate-d). Brevibloc 10 mg/ml infusion solution has no shortage listed, but ANSM mainly lists shortages reported by manufacturers, so that doesn't guarantee it's available. Source: ANSM data retrieved 2026-10-28 and BDPM release 2026-09-29.",
 			},
 		],
-		connectHeading: "Connect",
+		connectHeading: "Add the server",
 		connectClaude: "In Claude, open Customize > Connectors, choose Add custom connector, paste the address above and select No sign-in.",
 		connectClaudeCode: "In a terminal:",
 		connectCursor: "In mcp.json:",
@@ -218,9 +227,9 @@ export const COPY: Record<Lang, LandingCopy> = {
 		toolsHeaders: ["Tool", "What it answers"],
 		tools: [
 			"Finds a medicine by name or active substance and shows whether it is in shortage.",
-			"Gives a medicine's status: shortage or tension, announced return date, history.",
-			"Lists current shortages and tensions, by status, pharmacy or hospital, or medical area.",
-			"Shows what changed in the last days.",
+			"Gives a medicine's status: shortage or supply problem, announced return date, history.",
+			"Lists current shortages and supply problems, by status, pharmacy or hospital, or medical area.",
+			"Shows what changed in the last few days.",
 			"Tells whether a medicine is of major therapeutic interest (MITM).",
 		].map((description, i) => ({ name: TOOL_NAMES[i], description })),
 		limitsHeading: "What this service does not do",
@@ -232,7 +241,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		dataHeading: "Data",
 		dataHeaders: ["Source", "Content", "Updated"],
 		dataRows: [
-			{ source: "ANSM", url: ANSM_SOURCE_URL, content: "Shortages, tensions, returns", updated: "Daily" },
+			{ source: "ANSM", url: ANSM_SOURCE_URL, content: "Shortages, supply problems, returns", updated: "Daily" },
 			{ source: "BDPM", url: BDPM_SOURCE_URL, content: "Medicines, substances, MITM list", updated: "Monthly" },
 		],
 		lastUpdate: "Exact date of the last update:",
@@ -255,15 +264,29 @@ export function resolveLang(url: URL, acceptLanguage: string | null): Lang {
 	return first.startsWith("en") ? "en" : "fr";
 }
 
+
+/** French typography: a narrow no-break space (U+202F) before `: ; ? ! »` and after `«`, applied to escaped text. */
+export function frenchSpacing(escaped: string): string {
+	return escaped.replace(/ (?=[:;?!»])/g, " ").replace(/« /g, "« ");
+}
+
+/** Escapes a text for the page of `lang`, with French typography on the French page. */
+export function formatText(lang: Lang): (s: string) => string {
+	return lang === "fr" ? (s) => frenchSpacing(escapeText(s)) : escapeText;
+}
+
 /** Renders the example questions as `<dt>`/`<dd>` pairs, every text escaped. */
-export function renderExamples(examples: readonly Example[]): string {
-	return examples.map((e) => `<dt>${escapeText(e.question)}</dt>\n<dd>${escapeText(e.behaviour)}</dd>`).join("\n");
+export function renderExamples(examples: readonly Example[], format: (s: string) => string = escapeText): string {
+	return examples.map((e) => `<dt>${format(e.question)}</dt>\n<dd>${format(e.behaviour)}</dd>`).join("\n");
 }
 
 /** Renders the real answers as question/answer exchanges, every text escaped. */
-export function renderRealAnswers(answers: readonly RealAnswer[]): string {
+export function renderRealAnswers(answers: readonly RealAnswer[], format: (s: string) => string = escapeText): string {
 	return answers
-		.map((a) => `<div class="exchange">\n<p class="q">${escapeText(a.question)}</p>\n<blockquote class="a">${escapeText(a.answer)}</blockquote>\n</div>`)
+		.map(
+			(a) =>
+				`<div class="exchange">\n<p class="q">${format(a.question)}</p>\n<blockquote class="a"><span class="who">Claude</span>${format(a.answer)}</blockquote>\n</div>`,
+		)
 		.join("\n");
 }
 
@@ -274,69 +297,89 @@ const UI_FONT = `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
 const TEXT_FONT = `Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif`;
 const CODE_FONT = `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
 
-export const CSS = `:root { color-scheme: light dark; --bg: #FBFAF7; --surface: #FFFFFF; --fg: #1C1B19; --muted: #6B6862; --border: #E4E1DA; --accent: #0F5E57; --code-bg: #F3F1EC; --notice-bg: #FFF4DB; --notice-border: #E8C66A; --notice-fg: #5C4300; }
-@media (prefers-color-scheme: dark) { :root { --bg: #141413; --surface: #1C1B19; --fg: #ECEAE4; --muted: #9C988F; --border: #2E2C28; --accent: #5FB3A8; --code-bg: #1F1E1B; --notice-bg: #2E2610; --notice-border: #6B5420; --notice-fg: #F0D58A; } }
+export const CSS = `:root { color-scheme: light; --bg: #FBFAF7; --surface: #FFFFFF; --fg: #1C1B19; --muted: #5F5C56; --border: #E4E1DA; --accent: #0F5E57; --accent-soft: #E6F0EE; --code-bg: #F3F1EC; --notice-bg: #FFF4DB; --notice-border: #E8C66A; --notice-fg: #5C4300; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: ${TEXT_FONT}; font-size: 17px; line-height: 1.6; }
-main { max-width: 720px; margin: 0 auto; padding: 0 16px 48px; }
-h1, h2, h3 { font-family: ${TEXT_FONT}; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
-h1 { font-size: 30px; margin: 0; }
-h2 { font-size: 21px; margin: 24px 0 12px; }
-h3 { font-size: 17px; margin: 24px 0 8px; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+h1, h2, h3 { font-family: ${UI_FONT}; font-weight: 600; }
+h1 { font-size: 34px; letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 16px; }
+h2 { font-size: 22px; letter-spacing: -0.01em; line-height: 1.3; margin: 0 0 16px; }
+h3 { font-size: 16px; line-height: 1.4; margin: 32px 0 8px; }
 a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 code, pre { font-family: ${CODE_FONT}; font-size: 14px; }
 code { background: var(--code-bg); border-radius: 4px; padding: 1px 4px; }
-pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 0; overflow-x: auto; text-align: left; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 0; overflow-x: auto; line-height: 1.5; }
 pre code { background: none; padding: 0; border-radius: 0; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.notice { background: var(--notice-bg); color: var(--notice-fg); border-bottom: 1px solid var(--notice-border); padding: 12px 16px; }
-.notice p { max-width: 720px; margin: 0 auto; }
-header { display: grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items: baseline; padding-top: 32px; }
-header > * { grid-column: 1 / -1; }
-header h1 { grid-column: 1; grid-row: 1; }
-header nav { grid-column: 2; grid-row: 1; }
-.lang { font-family: ${UI_FONT}; font-size: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.notice { background: var(--notice-bg); color: var(--notice-fg); border-bottom: 1px solid var(--notice-border); padding: 12px 0; font-family: ${UI_FONT}; font-size: 15px; line-height: 1.5; }
+.notice p { margin: 0; }
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 32px 0 40px; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 40px; }
+.site { font-family: ${UI_FONT}; font-size: 15px; font-weight: 600; color: var(--fg); text-decoration: none; }
+.lang { font-family: ${UI_FONT}; font-size: 14px; color: var(--muted); }
 .lang a[aria-current="true"] { font-weight: 700; text-decoration: none; }
-.endpoint { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.endpoint code { background: none; padding: 0; overflow-wrap: anywhere; }
-.pill { font-family: ${UI_FONT}; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--surface); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 6px; }
-.copy { height: 28px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--fg); font-family: ${UI_FONT}; font-size: 13px; padding: 0 10px; cursor: pointer; }
-.copy:hover { border-color: var(--accent); }
+.lead { font-size: 19px; color: var(--muted); max-width: 640px; margin: 0 0 24px; }
+.endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-height: 48px; padding: 6px 6px 6px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 640px; box-sizing: border-box; }
+.endpoint code { font-size: 15px; flex: 1; overflow-wrap: anywhere; background: none; padding: 0; }
+.pill { font-family: ${UI_FONT}; font-size: 12px; font-weight: 600; line-height: 1.5; color: var(--accent); background: var(--surface); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 6px; }
+.copy { font-family: ${UI_FONT}; border-radius: 6px; cursor: pointer; }
 .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.snippet { text-align: right; }
-.snippet .copy { margin-bottom: 8px; }
-section { margin-top: 48px; border-top: 1px solid var(--border); }
-dt { font-weight: 600; }
-dd { margin: 0 0 12px; }
-.note { color: var(--muted); }
-.q { max-width: 85%; margin-left: auto; margin-right: 0; background: var(--code-bg); border-radius: 12px; padding: 8px 12px; width: fit-content; }
-.a { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 8px 0 24px 0; overflow-wrap: anywhere; }
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-th, td { border: 1px solid var(--border); background: var(--surface); padding: 8px 12px; text-align: left; vertical-align: top; }
-th { font-family: ${UI_FONT}; font-size: 14px; font-weight: 600; }
-footer { margin-top: 48px; font-family: ${UI_FONT}; font-size: 14px; color: var(--muted); }`;
+.primary { height: 36px; padding: 0 14px; background: var(--accent); color: #FFFFFF; border: none; font-size: 14px; font-weight: 600; }
+.primary:hover { filter: brightness(1.1); }
+.secondary { height: 30px; padding: 0 10px; background: transparent; border: 1px solid var(--muted); color: var(--fg); font-size: 13px; }
+.secondary:hover { border-color: var(--accent); }
+section { margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--border); }
+.body > :first-child { margin-top: 0; }
+dl { margin: 0; }
+dt { font-family: ${UI_FONT}; font-size: 16px; font-weight: 600; margin-top: 16px; }
+dd { font-size: 16px; color: var(--muted); margin: 4px 0 0 0; }
+.note { color: var(--muted); font-size: 15px; }
+.small { font-size: 15px; }
+.q { background: var(--accent-soft); color: var(--fg); border-radius: 12px 12px 4px 12px; padding: 10px 14px; margin: 0 0 0 auto; width: fit-content; max-width: 85%; font-family: ${TEXT_FONT}; font-size: 16px; }
+.a { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin: 8px 0 28px; overflow-wrap: anywhere; }
+.who { display: block; font-family: ${UI_FONT}; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.snippet { margin-top: 32px; }
+.snippet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.snippet h3 { margin: 0; }
+.snippet p { margin: 8px 0 12px; }
+li + li { margin-top: 8px; }
+.table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 10px 14px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+th { background: var(--code-bg); font-family: ${UI_FONT}; font-size: 14px; font-weight: 600; }
+td { background: var(--surface); }
+tbody tr:last-child td { border-bottom: none; }
+td code { overflow-wrap: anywhere; }
+footer { background: var(--surface); border-top: 1px solid var(--border); margin-top: 64px; padding: 32px 0; font-family: ${UI_FONT}; font-size: 14px; color: var(--muted); }
+footer p { margin: 0 0 8px; max-width: 560px; }
+.links { list-style: none; margin: 0; padding: 0; }
+.links li + li { margin-top: 6px; }
+@media (max-width: 599px) { .wrap { padding: 0 16px; } }
+@media (min-width: 900px) { section { display: grid; grid-template-columns: 220px 1fr; column-gap: 48px; margin-top: 64px; } footer .wrap { display: grid; grid-template-columns: 1fr auto; column-gap: 48px; } }`;
 
 const SCRIPT = `document.addEventListener("DOMContentLoaded", function () {
+	if (!(navigator.clipboard && navigator.clipboard.writeText)) return;
+	var live = document.querySelector("p[aria-live]");
 	document.querySelectorAll("button.copy").forEach(function (b) {
 		b.hidden = false;
 		var label = b.textContent;
 		b.addEventListener("click", function () {
-			try {
-				navigator.clipboard.writeText(b.dataset.copy).then(function () {
-					b.textContent = b.dataset.done;
-					setTimeout(function () { b.textContent = label; }, 1500);
-				}, function () {});
-			} catch (e) {}
+			navigator.clipboard.writeText(b.dataset.copy).then(function () {
+				b.textContent = b.dataset.done;
+				live.textContent = b.dataset.done;
+				setTimeout(function () { b.textContent = label; }, 1500);
+			}, function () {});
 		});
 	});
 });`;
 
-function copyButton(c: LandingCopy, value: string): string {
-	return `<button type="button" class="copy" data-copy="${escapeAttribute(value)}" data-done="${escapeAttribute(c.copied)}" hidden>${escapeText(c.copy)}</button>`;
+function copyButton(c: LandingCopy, kind: "primary" | "secondary", value: string, label: string): string {
+	return `<button type="button" class="copy ${kind}" data-copy="${escapeAttribute(value)}" data-done="${escapeAttribute(c.copied)}" aria-label="${escapeAttribute(label)}" hidden>${escapeText(c.copy)}</button>`;
 }
 
-function snippet(c: LandingCopy, code: string): string {
-	return `<div class="snippet">\n${copyButton(c, code)}\n<pre><code>${escapeText(code)}</code></pre>\n</div>`;
+function snippet(c: LandingCopy, t: (s: string) => string, client: string, sentence: string, code?: { value: string; label: string }): string {
+	const button = code ? `\n${copyButton(c, "secondary", code.value, code.label)}` : "";
+	const pre = code ? `\n<pre><code>${escapeText(code.value)}</code></pre>` : "";
+	return `<div class="snippet">\n<div class="snippet-head">\n<h3>${client}</h3>${button}\n</div>\n<p>${t(sentence)}</p>${pre}\n</div>`;
 }
 
 function langLink(lang: Lang, current: Lang): string {
@@ -347,7 +390,8 @@ function langLink(lang: Lang, current: Lang): string {
 /** The landing page served at `GET /`, in one language. */
 export function renderLanding(lang: Lang): string {
 	const c = COPY[lang];
-	const t = escapeText;
+	const t = formatText(lang);
+	const fr = lang === "fr" ? "" : ` lang="fr"`;
 	return `<!doctype html>
 <html lang="${lang}">
 <head>
@@ -364,46 +408,50 @@ ${CSS}
 </head>
 <body>
 <div class="notice" role="note">
-<p><strong>${t(c.noticeLead)}</strong> ${t(c.notice)}</p>
+<div class="wrap"><p><strong>${t(c.noticeLead)}</strong> ${t(c.notice)}</p></div>
 </div>
-<main>
 <header>
-<h1>Ruptures de médicaments (France)</h1>
-<p>${t(c.lead)}</p>
-<div class="endpoint">
-<span class="visually-hidden">${t(c.endpointLabel)}</span>
-<span class="pill">MCP</span>
-<code>${t(MCP_ENDPOINT)}</code>
-${copyButton(c, MCP_ENDPOINT)}
-</div>
+<div class="wrap">
+<div class="top">
+<a class="site" href="/?lang=${lang}"${fr}>Ruptures de médicaments</a>
 <nav class="lang" aria-label="Langue / Language">${langLink("fr", lang)} | ${langLink("en", lang)}</nav>
+</div>
+<h1${fr}>Ruptures de médicaments (France)</h1>
+<p class="lead">${t(c.lead)}</p>
+<div class="endpoint">
+<span class="sr-only">${t(c.endpointLabel)}</span>
+<span class="pill">MCP</span>
+<code>${escapeText(MCP_ENDPOINT)}</code>
+${copyButton(c, "primary", MCP_ENDPOINT, c.copyEndpointLabel)}
+</div>
+</div>
 </header>
-
+<main class="wrap">
 <section id="${c.examplesId}">
 <h2>${t(c.examplesHeading)}</h2>
+<div class="body">
 <dl>
-${renderExamples(c.examples)}
+${renderExamples(c.examples, t)}
 </dl>
 <h3>${t(c.realAnswersHeading)}</h3>
 <p class="note">${t(c.realAnswersNote)}</p>
-${renderRealAnswers(c.realAnswers)}
+${renderRealAnswers(c.realAnswers, t)}
+</div>
 </section>
 
 <section>
 <h2>${t(c.connectHeading)}</h2>
-<h3>Claude</h3>
-<p>${t(c.connectClaude)}</p>
-<h3>Claude Code</h3>
-<p>${t(c.connectClaudeCode)}</p>
-${snippet(c, CLAUDE_CODE_COMMAND)}
-<h3>Cursor</h3>
-<p>${t(c.connectCursor)}</p>
-${snippet(c, CURSOR_CONFIG)}
+<div class="body">
+${snippet(c, t, "Claude", c.connectClaude)}
+${snippet(c, t, "Claude Code", c.connectClaudeCode, { value: CLAUDE_CODE_COMMAND, label: c.copyCommandLabel })}
+${snippet(c, t, "Cursor", c.connectCursor, { value: CURSOR_CONFIG, label: c.copyConfigLabel })}
 <p>${t(c.connectOther)}</p>
+</div>
 </section>
 
 <section>
 <h2>${t(c.toolsHeading)}</h2>
+<div class="body">
 <div class="table-wrap">
 <table>
 <thead><tr><th>${t(c.toolsHeaders[0])}</th><th>${t(c.toolsHeaders[1])}</th></tr></thead>
@@ -412,17 +460,21 @@ ${c.tools.map((tool) => `<tr><td><code>${tool.name}</code></td><td>${t(tool.desc
 </tbody>
 </table>
 </div>
+</div>
 </section>
 
 <section>
 <h2>${t(c.limitsHeading)}</h2>
+<div class="body">
 <ul>
 ${c.limits.map((item) => `<li>${t(item)}</li>`).join("\n")}
 </ul>
+</div>
 </section>
 
 <section>
 <h2>${t(c.dataHeading)}</h2>
+<div class="body">
 <div class="table-wrap">
 <table>
 <thead><tr>${c.dataHeaders.map((h) => `<th>${t(h)}</th>`).join("")}</tr></thead>
@@ -431,17 +483,26 @@ ${c.dataRows.map((r) => `<tr><td><a href="${escapeAttribute(r.url)}">${t(r.sourc
 </tbody>
 </table>
 </div>
-<p>${t(c.lastUpdate)} <a href="/health">/health</a></p>
-<p>${t(c.licence)}</p>
+<p class="small">${t(c.lastUpdate)} <a href="/health">/health</a></p>
+<p class="small">${t(c.licence)}</p>
+</div>
 </section>
-
+</main>
 <footer>
+<div class="wrap">
+<div>
 <p>${t(c.privacy)}</p>
 <p>${t(c.maintainer)}</p>
 <p>${t(c.nonEndorsement)}</p>
-<p><a href="${REPO_URL}">${t(c.linkSource)}</a> · <a href="${REPO_URL}/issues">${t(c.linkIssues)}</a> · <a href="/health">${t(c.linkStatus)}</a></p>
+</div>
+<ul class="links">
+<li><a href="${REPO_URL}">${t(c.linkSource)}</a></li>
+<li><a href="${REPO_URL}/issues">${t(c.linkIssues)}</a></li>
+<li><a href="/health">${t(c.linkStatus)}</a></li>
+</ul>
+</div>
 </footer>
-</main>
+<p class="sr-only" aria-live="polite"></p>
 <script>
 ${SCRIPT}
 </script>
