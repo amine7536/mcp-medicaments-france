@@ -236,19 +236,31 @@ export async function cisByCip13(db: D1Database, cip13: string): Promise<string 
 	return db.prepare("SELECT cis FROM presentations WHERE cip13 = ?").bind(cip13).first<string>("cis");
 }
 
-/** Every presentation of a CIS: the one with `cip13` first (when given), then marketed ones, then by label. */
-export async function getMedicineInfo(db: D1Database, cis: string, cip13: string | null): Promise<Presentation[]> {
+export interface MedicineInfo {
+	presentations: Presentation[];
+	prescription_conditions: string[];
+}
+
+/**
+ * Every presentation of a CIS (the one with `cip13` first when given, then marketed ones, then by label)
+ * and its BDPM prescription and dispensing conditions, verbatim, in source order.
+ */
+export async function getMedicineInfo(db: D1Database, cis: string, cip13: string | null): Promise<MedicineInfo> {
 	type Raw = Omit<Presentation, "hospital_approval" | "reimbursement_rates"> & { hospital_approval: number | null; reimbursement_rates: string | null };
-	const rows = await all<Raw>(
+	const [presentations, conditions] = await db.batch([
 		db
 			.prepare(
 				"SELECT cip13, cip7, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, price_eur, public_price_eur, dispensing_fee_eur, reimbursement_indications FROM presentations WHERE cis = ? ORDER BY cip13 IS NOT ?, marketing_status IS NOT ?, label, cip13",
 			)
 			.bind(cis, cip13, MARKETED),
-	);
-	return rows.map((p) => ({
-		...p,
-		hospital_approval: p.hospital_approval === null ? null : p.hospital_approval === 1,
-		reimbursement_rates: p.reimbursement_rates === null ? [] : (JSON.parse(p.reimbursement_rates) as number[]),
-	}));
+		db.prepare("SELECT condition FROM prescription_conditions WHERE cis = ? ORDER BY position").bind(cis),
+	]);
+	return {
+		presentations: ((presentations?.results ?? []) as Raw[]).map((p) => ({
+			...p,
+			hospital_approval: p.hospital_approval === null ? null : p.hospital_approval === 1,
+			reimbursement_rates: p.reimbursement_rates === null ? [] : (JSON.parse(p.reimbursement_rates) as number[]),
+		})),
+		prescription_conditions: ((conditions?.results ?? []) as Array<{ condition: string }>).map((r) => r.condition),
+	};
 }

@@ -41,7 +41,8 @@ function input(overrides: Partial<BdpmInput> = {}): BdpmInput {
 	const compo = Array.from({ length: 25_000 }, (_, i) => compoRow(i % 12_000, `SUBSTANCE ${i % 12_000}`));
 	const mitm = Array.from({ length: 6_000 }, (_, i) => [cis(i), "N02BE01", "X", "LABO", "LABO", "01/01/2024", "https://x"]);
 	const presentations = Array.from({ length: 15_000 }, (_, i) => presentationRow(i));
-	return { cisBdpm, compo, mitm, presentations, bannerDate: "2026-09-29", ...overrides };
+	const prescriptionConditions = Array.from({ length: 20_000 }, (_, i) => [cis(Math.floor(i / 2)), i % 2 === 0 ? "liste I" : "prescription hospitalière"]);
+	return { cisBdpm, compo, mitm, presentations, prescriptionConditions, bannerDate: "2026-09-29", ...overrides };
 }
 
 describe("decodeCp1252", () => {
@@ -263,6 +264,60 @@ describe("presentations", () => {
 	});
 });
 
+describe("prescription conditions", () => {
+	it("decodes a windows-1252 condition", () => {
+		const bytes = new Uint8Array([
+			...new TextEncoder().encode("60000001\tr"),
+			0xe9,
+			...new TextEncoder().encode("serv"),
+			0xe9,
+			0x20,
+			0xe0,
+			...new TextEncoder().encode(" l'usage HOSPITALIER\r\n"),
+		]);
+		expect(parseTsv(decodeCp1252(bytes), 2, "CIS_CPD_bdpm.txt")).toEqual([["60000001", "réservé à l'usage HOSPITALIER"]]);
+	});
+
+	it("rejects a line without 2 columns", () => {
+		expect(() => parseTsv("60000001\tliste I\textra\n", 2, "CIS_CPD_bdpm.txt")).toThrow("CIS_CPD_bdpm.txt: line 1 has 3 columns, expected 2");
+		expect(() => parseTsv("60000001\n", 2, "CIS_CPD_bdpm.txt")).toThrow("CIS_CPD_bdpm.txt: line 1 has 1 columns, expected 2");
+	});
+
+	it("rejects a file below 20,000 rows", () => {
+		expect(() => validateAndMap(input({ prescriptionConditions: input().prescriptionConditions.slice(1) }))).toThrow(
+			"CIS_CPD_bdpm.txt: 19999 rows, below the floor of 20000",
+		);
+	});
+
+	it("rejects an invalid CIS or an empty condition", () => {
+		const badCis = input().prescriptionConditions;
+		badCis[2] = ["6000001", "liste I"];
+		expect(() => validateAndMap(input({ prescriptionConditions: badCis }))).toThrow('CIS_CPD_bdpm.txt: line 3 has invalid CIS "6000001"');
+		const empty = input().prescriptionConditions;
+		empty[6] = [cis(3), ""];
+		expect(() => validateAndMap(input({ prescriptionConditions: empty }))).toThrow("CIS_CPD_bdpm.txt: line 7 has an empty condition");
+	});
+
+	it("keeps verbatim conditions in source order per CIS and drops repeated pairs", () => {
+		const rows = input().prescriptionConditions;
+		rows[0] = [cis(0), "prescription hospitalière"];
+		rows[1] = [cis(0), "liste I"];
+		rows[2] = [cis(0), "prescription hospitalière"];
+		rows[3] = [cis(0), "réservé à l'usage HOSPITALIER"];
+		const { prescription_conditions: out } = validateAndMap(input({ prescriptionConditions: rows }));
+		expect(out).toHaveLength(19_999);
+		expect(out.filter((r) => r.cis === cis(0))).toEqual([
+			{ cis: cis(0), condition: "prescription hospitalière", position: 1 },
+			{ cis: cis(0), condition: "liste I", position: 2 },
+			{ cis: cis(0), condition: "réservé à l'usage HOSPITALIER", position: 3 },
+		]);
+		expect(out.filter((r) => r.cis === cis(2))).toEqual([
+			{ cis: cis(2), condition: "liste I", position: 1 },
+			{ cis: cis(2), condition: "prescription hospitalière", position: 2 },
+		]);
+	});
+});
+
 describe("sql", () => {
 	it("escapes literals", () => {
 		expect(sqlLiteral("traitement d'initiation")).toBe("'traitement d''initiation'");
@@ -289,20 +344,22 @@ describe("sql", () => {
 		});
 		expect(sql).not.toMatch(/\b(BEGIN|COMMIT)\b/i);
 		const lines = sql.trimEnd().split("\n");
-		expect(lines.slice(0, 5)).toEqual([
+		expect(lines.slice(0, 6)).toEqual([
 			"DELETE FROM medicines_fts;",
 			"DELETE FROM mitm;",
 			"DELETE FROM substances;",
 			"DELETE FROM medicines;",
 			"DELETE FROM presentations;",
+			"DELETE FROM prescription_conditions;",
 		]);
+		expect(sql).toContain("INSERT INTO prescription_conditions (cis, condition, position) VALUES ('60000000','liste I',1),('60000000','prescription hospitalière',2),");
 		expect(sql).toContain(
 			"INSERT INTO presentations (cip13, cip7, cis, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, price_eur, public_price_eur, dispensing_fee_eur, reimbursement_indications) VALUES " +
 				"('3400900000000','4900000','60000000','plaquette(s) PVC PVDC aluminium de 30 comprimé(s)','Présentation active','Déclaration de commercialisation','2011-03-16',1,'[100]',24.34,25.36,1.02,NULL),",
 		);
 		expect(lines.at(-1)).toBe(
 			"INSERT INTO ingest_runs (source, started_at, finished_at, status, entries_seen, bdpm_release, message) VALUES " +
-				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 mitm=6000 presentations=15000 skipped=0');",
+				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 mitm=6000 presentations=15000 prescription_conditions=20000 skipped=0');",
 		);
 	});
 });

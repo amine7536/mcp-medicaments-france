@@ -77,6 +77,7 @@ const COLS = {
 		"dispensing_fee_eur",
 		"reimbursement_indications",
 	],
+	prescription_conditions: ["cis", "condition", "position"],
 } as const;
 
 function values<T extends object>(rows: readonly T[], cols: readonly (keyof T & string)[]): Value[][] {
@@ -91,20 +92,22 @@ export interface ImportSqlInput extends Mapped {
 
 /** Full import file: deletes, size-capped inserts, then the ingest_runs row. No BEGIN/COMMIT. */
 export function buildImportSql(input: ImportSqlInput): string {
-	const { medicines, substances, mitm, fts, presentations, skipped, release, startedAt, finishedAt } = input;
+	const { medicines, substances, mitm, fts, presentations, prescription_conditions, skipped, release, startedAt, finishedAt } = input;
 	const skippedTotal = skipped.medicines + skipped.substances + skipped.mitm;
-	const message = `medicines=${medicines.length} substances=${substances.length} mitm=${mitm.length} presentations=${presentations.length} skipped=${skippedTotal}`;
+	const message = `medicines=${medicines.length} substances=${substances.length} mitm=${mitm.length} presentations=${presentations.length} prescription_conditions=${prescription_conditions.length} skipped=${skippedTotal}`;
 	const statements = [
 		"DELETE FROM medicines_fts;",
 		"DELETE FROM mitm;",
 		"DELETE FROM substances;",
 		"DELETE FROM medicines;",
 		"DELETE FROM presentations;",
+		"DELETE FROM prescription_conditions;",
 		...insertStatements("medicines", COLS.medicines, values(medicines, COLS.medicines)),
 		...insertStatements("substances", COLS.substances, values(substances, COLS.substances)),
 		...insertStatements("mitm", COLS.mitm, values(mitm, COLS.mitm)),
 		...insertStatements("medicines_fts", COLS.medicines_fts, values(fts, COLS.medicines_fts)),
 		...insertStatements("presentations", COLS.presentations, values(presentations, COLS.presentations)),
+		...insertStatements("prescription_conditions", COLS.prescription_conditions, values(prescription_conditions, COLS.prescription_conditions)),
 		"INSERT INTO ingest_runs (source, started_at, finished_at, status, entries_seen, bdpm_release, message) VALUES " +
 			`('bdpm', ${sqlLiteral(startedAt)}, ${sqlLiteral(finishedAt)}, 'ok', ${medicines.length}, ${sqlLiteral(release)}, ${sqlLiteral(message)});`,
 	];

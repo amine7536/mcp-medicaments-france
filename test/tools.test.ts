@@ -3,18 +3,18 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
-import { getMedicineInfo as loadPresentations } from "../src/lib/db";
+import { getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
 import { Medicine, Presentation } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
-import { getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
+import { Data, getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
-import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESENTATIONS, SHORTAGES, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SHORTAGES, seed } from "./seed";
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown).";
@@ -478,7 +478,7 @@ describe("get_medicine_info", () => {
 
 	it("has the description and the info-only suffix", () => {
 		expect(getMedicineInfo.description).toBe(
-			"Boxes of a medicine in the French public medicines database (BDPM), given exactly one of its CIS code, a CIP13 barcode or its name: CIP13, marketing status, price and reimbursement rate. " +
+			"Boxes of a medicine in the French public medicines database (BDPM) and its prescription and dispensing conditions, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. " +
 				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
 		);
 	});
@@ -528,7 +528,7 @@ describe("get_medicine_info", () => {
 		expect(data.medicine.cis).toBe(MEDICINES.dolipraneTablet.cis);
 		expect(cips(data)).toEqual([second, ...cips(byCis).filter((c: string) => c !== second)]);
 		expect(cips((await call(getMedicineInfo, { cip13: stopped.cip13 })).data)[0]).toBe(stopped.cip13);
-		const ordered = (code: string | null) => loadPresentations(env.DB, MEDICINES.dolipraneTablet.cis, code).then((ps) => ps.map((p) => p.cip13));
+		const ordered = (code: string | null) => loadInfo(env.DB, MEDICINES.dolipraneTablet.cis, code).then((i) => i.presentations.map((p) => p.cip13));
 		expect(await ordered(null)).toEqual(cips(byCis));
 		expect(await ordered(stopped.cip13)).toEqual([stopped.cip13, box100.cip13, box8.cip13]);
 		const { result: raw } = await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }));
@@ -551,6 +551,43 @@ describe("get_medicine_info", () => {
 			expect((await call(getMedicineInfo, { cis: MEDICINES.kardegic.cis })).data.medicine.is_mitm).toBe(false);
 		} finally {
 			await env.DB.prepare("UPDATE medicines SET routes = NULL, holder = NULL, marketing_status = NULL WHERE cis = ?").bind(cis).run();
+		}
+	});
+
+	it("returns the BDPM prescription and dispensing conditions verbatim, in source order", async () => {
+		const conditions = PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis];
+		for (const args of [{ cis: MEDICINES.amoxicilline.cis }, { name: "amoxicilline" }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data.prescription_conditions).toEqual(conditions);
+			expect(summary(result).split("\n")).toContain(
+				"Prescription and dispensing conditions (BDPM): liste I; médicament nécessitant une surveillance particulière pendant le traitement",
+			);
+			expect(summary(result)).not.toContain("No prescription or dispensing condition");
+			expect(Data.safeParse(data).success).toBe(true);
+		}
+	});
+
+	it("has an empty conditions list and says so when the BDPM lists none", async () => {
+		for (const args of [{ cis: MEDICINES.dolipraneTablet.cis }, { cip13: PRESENTATIONS.dolipraneBoxOf8.cip13 }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data.prescription_conditions).toEqual([]);
+			expect(summary(result).split("\n")).toContain("No prescription or dispensing condition listed in the BDPM.");
+			expect(summary(result)).not.toContain("Prescription and dispensing conditions (BDPM)");
+			expect(Data.safeParse(data).success).toBe(true);
+			expect(Data.safeParse({ ...data, prescription_conditions: undefined }).success).toBe(false);
+			expect(Data.safeParse({ ...data, prescription_conditions: [1] }).success).toBe(false);
+		}
+	});
+
+	it("reads presentations and conditions in a single D1 batch", async () => {
+		const batch = vi.spyOn(env.DB, "batch");
+		try {
+			const info = await loadInfo(env.DB, MEDICINES.amoxicilline.cis, null);
+			expect(info).toEqual({ presentations: [], prescription_conditions: PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis] });
+			expect(batch).toHaveBeenCalledTimes(1);
+			expect(batch.mock.calls[0][0]).toHaveLength(2);
+		} finally {
+			batch.mockRestore();
 		}
 	});
 

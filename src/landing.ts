@@ -148,7 +148,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 			"Liste les ruptures et tensions en cours, par statut, ville ou hôpital, ou domaine médical.",
 			"Montre ce qui a changé ces derniers jours.",
 			"Indique si un médicament est d'intérêt thérapeutique majeur (MITM).",
-			"Donne les boîtes d'un médicament : code CIP13, commercialisation, prix et taux de remboursement.",
+			"Donne les boîtes d'un médicament (code CIP13, commercialisation, prix, taux de remboursement) et ses conditions de prescription et de délivrance.",
 		].map((description, i) => ({ name: TOOL_NAMES[i], description })),
 		limitsHeading: "Ce que ce service ne fait pas",
 		limits: [
@@ -248,7 +248,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 			"Lists current shortages and supply problems, by status, pharmacy or hospital, or medical area.",
 			"Shows what changed in the last few days.",
 			"Tells whether a medicine is of major therapeutic interest (MITM).",
-			"Gives a medicine's boxes: CIP13 code, marketing status, price and reimbursement rate.",
+			"Gives a medicine's boxes (CIP13 code, marketing status, price, reimbursement rate) and its prescription and dispensing conditions.",
 		].map((description, i) => ({ name: TOOL_NAMES[i], description })),
 		limitsHeading: "What this service does not do",
 		limits: [
