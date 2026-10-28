@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { resetDb } from "./db";
 
@@ -42,8 +43,6 @@ interface Presentation {
 	public_price_eur: number | null;
 	reimbursement_rates: string | null;
 }
-
-const MARKETED = "Déclaration de commercialisation";
 
 export const PRESENTATIONS = {
 	/** DOLIPRANE 1000 mg: two marketed boxes and one stopped; the default order is boxOf8, boxOf100, stopped. */
