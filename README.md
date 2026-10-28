@@ -37,7 +37,7 @@ Streamable HTTP, read-only, no authentication. Status and data dates: <https://r
 | `recent_changes` | What changed in the last days. | `days`, `change_types`, `limit` |
 | `is_major_therapeutic_interest` | MITM status of a medicine, with its ATC code. | exactly one of `cis`, `name` |
 
-Every result carries the sources, their update dates, the coverage note and the disclaimer.
+Every result carries the sources, their update dates, the coverage note, the disclaimer and a safety notice.
 
 ## Example questions
 
@@ -46,11 +46,12 @@ Every result carries the sources, their update dates, the coverage note and the 
 - "Qu'est-ce qui a changé cette semaine ?"
 - "L'amoxicilline est-elle un MITM ?"
 - "Mon médicament n'est pas listé, il est donc disponible ?"
-- "Par quoi remplacer X ?" (the server never answers substitution questions: ask your pharmacist or doctor)
+- "Par quoi remplacer X ?" (the server refuses to name any alternative and refers to a pharmacist or doctor)
 
 ## Coverage and limits
 
 - ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available.
+- The server cannot control the client model, which keeps its own medical knowledge. It is not a substitute for a pharmacist or doctor.
 - Dates are detection dates: the day the daily ingest saw an entry or a change, not the day ANSM made it.
 - Scope (city, hospital) and expected return are parsed from ANSM free text. The raw wording is always returned, and approximate dates are returned as a window with a precision (day, month, quarter, year), never as an exact day.
 - Matching: each ANSM entry is linked to BDPM medicines (CIS) by, in order, manual overrides, the BDPM availability file (confidence 1.0), exact normalized names (0.95), then fuzzy name similarity on the same brand. An entry with a best match of confidence ≥ 0.8 counts as matched. Match rate: **94.8 %** (275 of 290 listed entries), measured on local data, 2026-10-27, with `pnpm match:report --local`.
@@ -94,6 +95,12 @@ echo 'ADMIN_TOKEN=<token>' > .dev.vars
 pnpm dev
 curl -X POST -H 'Authorization: Bearer <token>' http://localhost:8787/admin/ingest
 pnpm match:report --local # match rate and unmatched entries (remote D1 without --local)
+```
+
+Substitution check: asks Claude Code the substitution questions 3 times each (`--runs N`) against an MCP URL and fails when an answer names another medicine or gives no pharmacist or doctor referral. Needs an authenticated Claude Code CLI (`claude`).
+
+```sh
+pnpm golden -- --url http://localhost:8787/mcp
 ```
 
 ## Licence

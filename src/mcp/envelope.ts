@@ -8,6 +8,8 @@ export const BDPM_SOURCE_URL = "https://base-donnees-publique.medicaments.gouv.f
 export const COVERAGE_NOTE =
 	"ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available.";
 export const DISCLAIMER = "Information only. Ask your pharmacist or doctor. No substitution or dosage advice.";
+export const SAFETY =
+	"Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.";
 
 export const STALE_AFTER_MS = 72 * 3600 * 1000;
 
@@ -42,13 +44,14 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 		}),
 		coverage_note: z.literal(COVERAGE_NOTE),
 		disclaimer: z.literal(DISCLAIMER),
+		safety: z.literal(SAFETY),
 		warning: z.string().optional(),
 	});
 }
 
 export type Envelope<D> = z.output<ReturnType<typeof envelopeSchema<z.ZodType<D>>>>;
 
-/** Wraps tool data with its sources, coverage note, disclaimer and, when the ANSM data is stale, a warning. */
+/** Wraps tool data with its sources, coverage note, disclaimer, safety notice and, when the ANSM data is stale, a warning. */
 export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D> {
 	const { ansm_last_ingest } = dates;
 	const stale = isStale(ansm_last_ingest, now);
@@ -57,6 +60,7 @@ export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D>
 		source: { ansm: ANSM_SOURCE_URL, bdpm: BDPM_SOURCE_URL, ...dates },
 		coverage_note: COVERAGE_NOTE,
 		disclaimer: DISCLAIMER,
+		safety: SAFETY,
 		...(stale ? { warning: `Data may be outdated, last update ${ansm_last_ingest ?? "unknown"}.` } : {}),
 	};
 }
@@ -65,12 +69,14 @@ export function sourceLine(dates: SourceDates): string {
 	return `Source: ANSM (updated ${dates.ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${dates.bdpm_release ?? "unknown"}).`;
 }
 
-/** A non-error result: the summary ending with the source line, then the JSON of the envelope. */
+const SAFETY_LINE = `Safety: ${SAFETY}`;
+
+/** A non-error result: the summary ending with the safety and source lines, then the JSON of the envelope. */
 export function toolResult<D>(summary: string, env: Envelope<D>): CallToolResult {
-	const text = `${summary}\n${sourceLine(env.source)}\n\n${JSON.stringify(env)}`;
+	const text = `${summary}\n${SAFETY_LINE}\n${sourceLine(env.source)}\n\n${JSON.stringify(env)}`;
 	return { content: [{ type: "text", text }], structuredContent: env };
 }
 
 export function errorResult(message: string, dates: SourceDates = UNKNOWN_DATES): CallToolResult {
-	return { isError: true, content: [{ type: "text", text: `${message}\n${sourceLine(dates)}` }] };
+	return { isError: true, content: [{ type: "text", text: `${message}\n${SAFETY_LINE}\n${sourceLine(dates)}` }] };
 }

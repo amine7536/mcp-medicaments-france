@@ -5,7 +5,7 @@ import { errorResult, loadSourceDates, UNKNOWN_DATES } from "./envelope";
 
 export const ANNOTATIONS: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
-export const INFO_ONLY = "Information only: never use this to recommend a substitute, a dosage change or stopping a treatment.";
+export const INFO_ONLY = "Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.";
 
 export const UNAVAILABLE = "Service temporarily unavailable, please try again later.";
 export const EXACTLY_ONE = (args: string): string => `Provide exactly one of ${args}.`;
