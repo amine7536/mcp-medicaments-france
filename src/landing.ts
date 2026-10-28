@@ -148,7 +148,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 			"Liste les ruptures et tensions en cours, par statut, ville ou hôpital, ou domaine médical.",
 			"Montre ce qui a changé ces derniers jours.",
 			"Indique si un médicament est d'intérêt thérapeutique majeur (MITM).",
-			"Donne les boîtes d'un médicament (code CIP13, commercialisation, prix, taux de remboursement) et ses conditions de prescription et de délivrance.",
+			"Donne les boîtes d'un médicament (code CIP13, commercialisation, prix, taux de remboursement), ses conditions de prescription et de délivrance, et les informations de sécurité en cours publiées par l'ANSM.",
 		].map((description, i) => ({ name: TOOL_NAMES[i], description })),
 		limitsHeading: "Ce que ce service ne fait pas",
 		limits: [
@@ -160,7 +160,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		dataHeaders: ["Source", "Contenu", "Mise à jour"],
 		dataRows: [
 			{ source: "ANSM", url: ANSM_SOURCE_URL, content: "Ruptures, tensions, remises à disposition", updated: "Chaque jour" },
-			{ source: "BDPM", url: BDPM_SOURCE_URL, content: "Médicaments, substances, liste MITM", updated: "Chaque mois" },
+			{ source: "BDPM", url: BDPM_SOURCE_URL, content: "Médicaments, substances, présentations, conditions de prescription, liste MITM, informations de sécurité", updated: "Chaque semaine" },
 		],
 		lastUpdate: "Date exacte de la dernière mise à jour :",
 		licence:
@@ -248,7 +248,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 			"Lists current shortages and supply problems, by status, pharmacy or hospital, or medical area.",
 			"Shows what changed in the last few days.",
 			"Tells whether a medicine is of major therapeutic interest (MITM).",
-			"Gives a medicine's boxes (CIP13 code, marketing status, price, reimbursement rate) and its prescription and dispensing conditions.",
+			"Gives a medicine's boxes (CIP13 code, marketing status, price, reimbursement rate), its prescription and dispensing conditions, and current ANSM safety information.",
 		].map((description, i) => ({ name: TOOL_NAMES[i], description })),
 		limitsHeading: "What this service does not do",
 		limits: [
@@ -260,7 +260,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		dataHeaders: ["Source", "Content", "Updated"],
 		dataRows: [
 			{ source: "ANSM", url: ANSM_SOURCE_URL, content: "Shortages, supply problems, returns", updated: "Daily" },
-			{ source: "BDPM", url: BDPM_SOURCE_URL, content: "Medicines, substances, MITM list", updated: "Monthly" },
+			{ source: "BDPM", url: BDPM_SOURCE_URL, content: "Medicines, substances, presentations, prescription conditions, MITM list, safety information", updated: "Weekly" },
 		],
 		lastUpdate: "Exact date of the last update:",
 		licence: "Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",

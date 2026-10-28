@@ -73,6 +73,15 @@ export const Presentation = z.object({
 });
 export type Presentation = z.infer<typeof Presentation>;
 
+/** An ANSM safety information item of a medicine, as listed in the BDPM: the ANSM page title and link, and its validity window. */
+export const SafetyInformation = z.object({
+	title: z.string(),
+	url: z.url(),
+	starts_on: z.iso.date(),
+	ends_on: z.iso.date(),
+});
+export type SafetyInformation = z.infer<typeof SafetyInformation>;
+
 /** A `shortages` row with the match confidence of its context (null when unmatched). */
 export interface ShortageRow {
 	id: string;

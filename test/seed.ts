@@ -90,6 +90,20 @@ export const PRESCRIPTION_CONDITIONS: Record<string, readonly string[]> = {
 	"60000003": ["liste I", "médicament nécessitant une surveillance particulière pendant le traitement"],
 };
 
+/** BDPM ANSM safety information rows by CIS (NOW is 2026-10-27): past, future and current items, current ones inserted out of order. */
+export const SAFETY_INFORMATION: Record<string, ReadonlyArray<{ title: string; url: string; starts_on: string; ends_on: string }>> = {
+	"60000003": [
+		{ title: "Ended item", url: "https://ansm.sante.fr/actualites/ended", starts_on: "2025-01-01", ends_on: "2026-10-26" },
+		{ title: "Future item", url: "https://ansm.sante.fr/actualites/future", starts_on: "2026-10-28", ends_on: "2027-10-28" },
+		{ title: "Current 2026-03", url: "https://ansm.sante.fr/actualites/c3", starts_on: "2026-03-01", ends_on: "2027-03-01" },
+		{ title: "Ends today", url: "https://www.ansm.sante.fr/actualites/c-end", starts_on: "2024-06-01", ends_on: "2026-10-27" },
+		{ title: "Starts today", url: "https://ansm.sante.fr/actualites/c-start", starts_on: "2026-10-27", ends_on: "2027-10-27" },
+		{ title: "Current 2026-05", url: "https://ansm.sante.fr/actualites/c5", starts_on: "2026-05-01", ends_on: "2027-05-01" },
+		{ title: "Current 2025-02", url: "http://ansm.sante.fr/Activites/c2", starts_on: "2025-02-01", ends_on: "2027-02-01" },
+		{ title: "Current 2026-01", url: "https://ansm.sante.fr/actualites/c1", starts_on: "2026-01-01", ends_on: "2027-01-01" },
+	],
+};
+
 interface Shortage {
 	id: string;
 	name: string;
@@ -219,7 +233,7 @@ const HISTORY: Array<[shortage: string, type: string, old_status: string | null,
 export async function seed(): Promise<void> {
 	await resetDb();
 	const db = env.DB;
-	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "presentations", "prescription_conditions"].map((t) => db.prepare(`DELETE FROM ${t}`));
+	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "presentations", "prescription_conditions", "safety_information"].map((t) => db.prepare(`DELETE FROM ${t}`));
 	for (const m of Object.values(MEDICINES) as Med[]) {
 		stmts.push(
 			db
@@ -252,6 +266,15 @@ export async function seed(): Promise<void> {
 	for (const [cis, conditions] of Object.entries(PRESCRIPTION_CONDITIONS)) {
 		for (let i = conditions.length - 1; i >= 0; i--) {
 			stmts.push(db.prepare("INSERT INTO prescription_conditions (cis, condition, position) VALUES (?, ?, ?)").bind(cis, conditions[i], i + 1));
+		}
+	}
+	for (const [cis, items] of Object.entries(SAFETY_INFORMATION)) {
+		for (const i of items) {
+			stmts.push(
+				db
+					.prepare("INSERT INTO safety_information (cis, title, url, starts_on, ends_on) VALUES (?, ?, ?, ?, ?)")
+					.bind(cis, i.title, i.url, i.starts_on, i.ends_on),
+			);
 		}
 	}
 	for (const s of Object.values(SHORTAGES) as Shortage[]) {

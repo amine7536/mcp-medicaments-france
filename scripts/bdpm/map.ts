@@ -1,5 +1,6 @@
+import * as z from "zod";
 import { parseFrDate } from "../../src/lib/dates";
-import { normalize } from "../../src/lib/normalize";
+import { decodeEntities, normalize } from "../../src/lib/normalize";
 
 export const FILES = {
 	cisBdpm: { name: "CIS_bdpm.txt", cols: 12, floor: 12_000 },
@@ -7,6 +8,7 @@ export const FILES = {
 	mitm: { name: "CIS_MITM.txt", cols: 7, floor: 6_000 },
 	presentations: { name: "CIS_CIP_bdpm.txt", cols: 13, floor: 15_000 },
 	prescriptionConditions: { name: "CIS_CPD_bdpm.txt", cols: 2, floor: 20_000 },
+	safetyInformation: { name: "CIS_InfoImportantes.txt", cols: 4, floor: 5_000 },
 } as const;
 
 export interface MedicineRow {
@@ -65,6 +67,14 @@ export interface PrescriptionConditionRow {
 	position: number;
 }
 
+export interface SafetyInformationRow {
+	cis: string;
+	title: string;
+	url: string;
+	starts_on: string;
+	ends_on: string;
+}
+
 export interface Skipped {
 	medicines: number;
 	substances: number;
@@ -78,6 +88,7 @@ export interface Mapped {
 	fts: FtsRow[];
 	presentations: PresentationRow[];
 	prescription_conditions: PrescriptionConditionRow[];
+	safety_information: SafetyInformationRow[];
 	skipped: Skipped;
 }
 
@@ -87,11 +98,20 @@ export interface BdpmInput {
 	mitm: string[][];
 	presentations: string[][];
 	prescriptionConditions: string[][];
+	safetyInformation: string[][];
 	bannerDate: string | null;
 }
 
 const CIS_RE = /^\d{8}$/;
 const CIP13_RE = /^\d{13}$/;
+/** A real calendar date in `YYYY-MM-DD`, accepted exactly as the output schema accepts it. */
+const ISO_DATE = z.iso.date();
+/** The `href` value (single or double quotes) of the cell's leading `<a>`. */
+const HREF_RE = /^\s*<a\b[^>]*?\shref=(['"])([^'"]*)\1/i;
+/** The inner text of the `<a>` that spans the whole cell; inner texts may hold a literal `>` but no `<`. */
+const INNER_RE = /^\s*<a\b[^>]*>(.*)<\/a>\s*$/is;
+/** ANSM pages, as published: `http://` or `https://`, with or without `www.`. */
+const ANSM_URL_RE = /^https?:\/\/(www\.)?ansm\.sante\.fr\//;
 const PRICE_RE = /^\d+(,\d{3})*(,\d{1,2})?$/;
 /** Declaration dates go back to 1910. */
 const DECLARED_YEARS = { min: 1900, max: 2100 };
@@ -176,13 +196,39 @@ function mapPrescriptionConditions(rows: string[][]): PrescriptionConditionRow[]
 	return out;
 }
 
+/** Title and URL of the ANSM page linked by an anchor cell; null when the cell has no `<a>` with an `href`. */
+export function parseAnchor(cell: string): { title: string; url: string } | null {
+	const href = HREF_RE.exec(cell);
+	const inner = INNER_RE.exec(cell);
+	if (!href || !inner) return null;
+	return { url: href[2] as string, title: decodeEntities((inner[1] as string).replace(/<[^>]*>/g, "")).trim() };
+}
+
+/** Columns: CIS, start date, end date (ISO), HTML anchor to the ANSM page. Throws on any invalid row. */
+function mapSafetyInformation(rows: string[][]): SafetyInformationRow[] {
+	const file = FILES.safetyInformation;
+	validate(rows, file);
+	return rows.map((row, i) => {
+		const line = `${file.name}: line ${i + 1}`;
+		const [starts_on, ends_on] = [req(row[1]), req(row[2])];
+		if (!ISO_DATE.safeParse(starts_on).success) throw new Error(`${line} has invalid start date "${starts_on}", expected YYYY-MM-DD`);
+		if (!ISO_DATE.safeParse(ends_on).success) throw new Error(`${line} has invalid end date "${ends_on}", expected YYYY-MM-DD`);
+		const anchor = parseAnchor(req(row[3]));
+		if (anchor === null) throw new Error(`${line} has no anchor with an href`);
+		if (!ANSM_URL_RE.test(anchor.url)) throw new Error(`${line} has a non-ANSM URL "${anchor.url}"`);
+		if (anchor.title === "") throw new Error(`${line} has an empty title, expected a non-empty value`);
+		return { cis: req(row[0]), title: anchor.title, url: anchor.url, starts_on, ends_on };
+	});
+}
+
 /** Validates the parsed BDPM files and maps them to table rows. Throws on any validation failure. */
-export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescriptionConditions, bannerDate }: BdpmInput): Mapped {
+export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescriptionConditions, safetyInformation, bannerDate }: BdpmInput): Mapped {
 	validate(cisBdpm, FILES.cisBdpm);
 	validate(compo, FILES.compo);
 	validate(mitm, FILES.mitm);
 	const presentationRows = mapPresentations(presentations);
 	const conditionRows = mapPrescriptionConditions(prescriptionConditions);
+	const safetyRows = mapSafetyInformation(safetyInformation);
 	mitm.forEach((row, i) => {
 		if (req(row[1]) === "") throw new Error(`${FILES.mitm.name}: line ${i + 1} has an empty ATC, expected a non-empty value`);
 	});
@@ -252,5 +298,5 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 		substances_norm: [...(byCis.get(m.cis) ?? [])].sort().join(" "),
 	}));
 
-	return { medicines, substances, mitm: mitmRows, fts, presentations: presentationRows, prescription_conditions: conditionRows, skipped };
+	return { medicines, substances, mitm: mitmRows, fts, presentations: presentationRows, prescription_conditions: conditionRows, safety_information: safetyRows, skipped };
 }

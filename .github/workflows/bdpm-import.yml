@@ -2,7 +2,7 @@ name: BDPM import
 
 on:
   schedule:
-    - cron: "0 6 5 * *"
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 permissions:

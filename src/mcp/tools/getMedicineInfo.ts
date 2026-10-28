@@ -2,11 +2,15 @@ import * as z from "zod";
 import { cisByCip13, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
-import { Candidates, Cip13, Cis, Medicine, NotFound, Presentation } from "../schemas";
+import { Candidates, Cip13, Cis, Medicine, NotFound, Presentation, SafetyInformation, utcDate } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
 export const SUMMARY_LIMIT = 10;
+/** Safety information titles listed in the summary; the full list is in the structured content. */
+export const SAFETY_SUMMARY_LIMIT = 5;
+export const SAFETY_ADVICE = "See the ANSM pages for details; do not stop or change a treatment without asking your doctor or pharmacist.";
+export const NO_SAFETY_INFORMATION = "No current ANSM safety information listed in the BDPM.";
 
 export const inputSchema = z.object({
 	cis: Cis.optional().describe("8-digit BDPM medicine code (CIS)."),
@@ -15,7 +19,13 @@ export const inputSchema = z.object({
 });
 
 export const Data = z.discriminatedUnion("kind", [
-	z.object({ kind: z.literal("info"), medicine: Medicine, presentations: z.array(Presentation), prescription_conditions: z.array(z.string()) }),
+	z.object({
+		kind: z.literal("info"),
+		medicine: Medicine,
+		presentations: z.array(Presentation),
+		prescription_conditions: z.array(z.string()),
+		safety_information: z.array(SafetyInformation),
+	}),
 	Candidates,
 	NotFound,
 ]);
@@ -27,8 +37,8 @@ const price = (p: Presentation): string => (p.public_price_eur === null ? "price
 const rates = (p: Presentation): string =>
 	p.reimbursement_rates.length === 0 ? "not reimbursed / not listed" : `reimbursed ${p.reimbursement_rates.map((r) => `${r}%`).join(", ")}`;
 
-/** The medicine line, one line per marketed presentation (at most `SUMMARY_LIMIT`), then the BDPM conditions verbatim. */
-export function infoSummary(medicine: Medicine, presentations: Presentation[], conditions: string[]): string {
+/** The medicine line, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`). */
+export function infoSummary(medicine: Medicine, presentations: Presentation[], conditions: string[], safety: SafetyInformation[]): string {
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED);
 	const lines = [`${medicine.name} (CIS ${medicine.cis}): ${marketed.length} marketed box(es) out of ${presentations.length}.`];
 	for (const p of marketed.slice(0, SUMMARY_LIMIT)) lines.push(`- ${p.label} (CIP13 ${p.cip13}): ${price(p)}; ${rates(p)}.`);
@@ -38,10 +48,18 @@ export function infoSummary(medicine: Medicine, presentations: Presentation[], c
 			? "No prescription or dispensing condition listed in the BDPM."
 			: `Prescription and dispensing conditions (BDPM): ${conditions.join("; ")}`,
 	);
+	lines.push(
+		safety.length === 0
+			? NO_SAFETY_INFORMATION
+			: `ANSM safety information (${safety.length}): ${safety
+					.slice(0, SAFETY_SUMMARY_LIMIT)
+					.map((item) => `${item.title} (${item.url})`)
+					.join("; ")}. ${SAFETY_ADVICE}`,
+	);
 	return lines.join("\n");
 }
 
-async function info(db: D1Database, m: MedicineRow, cip13: string | null): Promise<{ data: Data; summary: string }> {
+async function info(db: D1Database, now: Date, m: MedicineRow, cip13: string | null): Promise<{ data: Data; summary: string }> {
 	const medicine: Medicine = {
 		cis: m.cis,
 		name: m.name,
@@ -51,10 +69,10 @@ async function info(db: D1Database, m: MedicineRow, cip13: string | null): Promi
 		marketing_status: m.marketing_status,
 		is_mitm: m.is_mitm,
 	};
-	const { presentations, prescription_conditions } = await loadInfo(db, m.cis, cip13);
+	const { presentations, prescription_conditions, safety_information } = await loadInfo(db, m.cis, cip13, utcDate(now));
 	return {
-		data: { kind: "info", medicine, presentations, prescription_conditions },
-		summary: infoSummary(medicine, presentations, prescription_conditions),
+		data: { kind: "info", medicine, presentations, prescription_conditions, safety_information },
+		summary: infoSummary(medicine, presentations, prescription_conditions, safety_information),
 	};
 }
 
@@ -63,7 +81,7 @@ const result = (dates: SourceDates, now: Date, out: { data: Data; summary: strin
 export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_medicine_info",
 	title: "Get medicine info",
-	description: `Boxes of a medicine in the French public medicines database (BDPM) and its prescription and dispensing conditions, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
+	description: `Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions and its current ANSM safety information, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, cip13, name }): Promise<ToolOutcome> {
@@ -74,16 +92,16 @@ export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 		if (cip13 !== undefined) {
 			const code = await cisByCip13(db, cip13);
 			const med = code === null ? undefined : (await getMedicines(db, [code])).get(code);
-			const out = med === undefined ? notFound(`CIP13 ${cip13}`, []) : await info(db, med, cip13);
+			const out = med === undefined ? notFound(`CIP13 ${cip13}`, []) : await info(db, now, med, cip13);
 			return { result: result(dates, now, out), cis: med ? med.cis : null };
 		}
 		if (cis !== undefined) {
 			const med = (await getMedicines(db, [cis])).get(cis);
-			return { result: result(dates, now, med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, med, null)), cis };
+			return { result: result(dates, now, med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, now, med, null)), cis };
 		}
 		const resolved = await resolveName(db, name as string);
 		if (resolved.kind === "candidates") return { result: result(dates, now, { data: resolved, summary: candidatesSummary(name as string) }) };
 		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [])) };
-		return { result: result(dates, now, await info(db, resolved.medicine, null)), cis: resolved.medicine.cis };
+		return { result: result(dates, now, await info(db, now, resolved.medicine, null)), cis: resolved.medicine.cis };
 	},
 };

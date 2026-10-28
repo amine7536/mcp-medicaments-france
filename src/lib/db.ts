@@ -1,4 +1,4 @@
-import type { Presentation, ShortageRow } from "../mcp/schemas";
+import type { Presentation, SafetyInformation, ShortageRow } from "../mcp/schemas";
 import { ftsTokens, normalize } from "./normalize";
 
 const SHORTAGE_COLUMNS = [
@@ -239,21 +239,28 @@ export async function cisByCip13(db: D1Database, cip13: string): Promise<string 
 export interface MedicineInfo {
 	presentations: Presentation[];
 	prescription_conditions: string[];
+	safety_information: SafetyInformation[];
 }
 
 /**
- * Every presentation of a CIS (the one with `cip13` first when given, then marketed ones, then by label)
- * and its BDPM prescription and dispensing conditions, verbatim, in source order.
+ * Every presentation of a CIS (the one with `cip13` first when given, then marketed ones, then by label),
+ * its BDPM prescription and dispensing conditions, verbatim, in source order, and its ANSM safety information
+ * active on `today` (`YYYY-MM-DD`, `starts_on <= today <= ends_on`), latest start first.
  */
-export async function getMedicineInfo(db: D1Database, cis: string, cip13: string | null): Promise<MedicineInfo> {
+export async function getMedicineInfo(db: D1Database, cis: string, cip13: string | null, today: string): Promise<MedicineInfo> {
 	type Raw = Omit<Presentation, "hospital_approval" | "reimbursement_rates"> & { hospital_approval: number | null; reimbursement_rates: string | null };
-	const [presentations, conditions] = await db.batch([
+	const [presentations, conditions, safety] = await db.batch([
 		db
 			.prepare(
 				"SELECT cip13, cip7, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, price_eur, public_price_eur, dispensing_fee_eur, reimbursement_indications FROM presentations WHERE cis = ? ORDER BY cip13 IS NOT ?, marketing_status IS NOT ?, label, cip13",
 			)
 			.bind(cis, cip13, MARKETED),
 		db.prepare("SELECT condition FROM prescription_conditions WHERE cis = ? ORDER BY position").bind(cis),
+		db
+			.prepare(
+				"SELECT title, url, starts_on, ends_on FROM safety_information WHERE cis = ? AND starts_on <= ? AND ends_on >= ? ORDER BY starts_on DESC, title, url",
+			)
+			.bind(cis, today, today),
 	]);
 	return {
 		presentations: ((presentations?.results ?? []) as Raw[]).map((p) => ({
@@ -262,5 +269,6 @@ export async function getMedicineInfo(db: D1Database, cis: string, cip13: string
 			reimbursement_rates: p.reimbursement_rates === null ? [] : (JSON.parse(p.reimbursement_rates) as number[]),
 		})),
 		prescription_conditions: ((conditions?.results ?? []) as Array<{ condition: string }>).map((r) => r.condition),
+		safety_information: (safety?.results ?? []) as SafetyInformation[],
 	};
 }
