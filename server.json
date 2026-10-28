@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.amine7536/ruptures-medicaments",
-  "title": "Ruptures de médicaments (France)",
+  "name": "io.github.amine7536/medicaments-france",
+  "title": "Médicaments en France",
   "description": "Medicine shortages in France (ANSM + BDPM): status, expected return, recent changes, MITM.",
   "version": "1.1.0",
-  "websiteUrl": "https://ruptures-medicaments.a3e.dev/",
+  "websiteUrl": "https://medicaments-france.a3e.dev/",
   "repository": {
-    "url": "https://github.com/amine7536/mcp-ruptures-medicaments",
+    "url": "https://github.com/amine7536/mcp-medicaments-france",
     "source": "github"
   },
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://ruptures-medicaments.a3e.dev/mcp"
+      "url": "https://medicaments-france.a3e.dev/mcp"
     }
   ]
 }

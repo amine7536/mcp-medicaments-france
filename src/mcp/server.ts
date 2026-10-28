@@ -7,7 +7,7 @@ import { listCurrentShortages } from "./tools/listCurrentShortages";
 import { recentChanges } from "./tools/recentChanges";
 import { searchMedicine } from "./tools/searchMedicine";
 
-export const SERVER_NAME = "ruptures-medicaments";
+export const SERVER_NAME = "medicaments-france";
 export const SERVER_VERSION = "1.1.0";
 
 export const INSTRUCTIONS =

@@ -7,7 +7,7 @@ import { normalize } from "../src/lib/normalize";
 import { resetDb } from "./db";
 import { ANSM_LAST_INGEST, BDPM_RELEASE, NOW, seed } from "./seed";
 
-const URL = "https://ruptures-medicaments.a3e.dev/health";
+const URL = "https://medicaments-france.a3e.dev/health";
 
 const minutesBefore = (at: Date, m: number): string => new Date(at.getTime() - m * 60_000).toISOString();
 
@@ -206,7 +206,7 @@ describe("non-GET methods", () => {
 				throw new Error("D1 accessed");
 			},
 		});
-		for (const url of ["https://ruptures-medicaments.a3e.dev/", URL]) {
+		for (const url of ["https://medicaments-france.a3e.dev/", URL]) {
 			const res = await get({ ...env, DB: broken }, url, "POST");
 			expect(res.status).toBe(405);
 			expect(res.headers.get("Allow")).toBe("GET, HEAD");
@@ -217,13 +217,13 @@ describe("non-GET methods", () => {
 describe("unknown paths", () => {
 	it("keep the 404 JSON", async () => {
 		await resetDb();
-		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://ruptures-medicaments.a3e.dev/healthz"), env, createExecutionContext());
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://medicaments-france.a3e.dev/healthz"), env, createExecutionContext());
 		expect(res.status).toBe(404);
 		expect(await res.json()).toEqual({ error: "not_found" });
 	});
 
 	it("does not percent-decode the path", async () => {
-		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://ruptures-medicaments.a3e.dev/%68ealth"), env, createExecutionContext());
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://medicaments-france.a3e.dev/%68ealth"), env, createExecutionContext());
 		expect(res.status).toBe(404);
 		expect(await res.json()).toEqual({ error: "not_found" });
 	});

@@ -8,7 +8,7 @@ describe("server.json", () => {
 		expect(server.description.length).toBeLessThanOrEqual(100);
 		expect(server.title.length).toBeLessThanOrEqual(100);
 		expect(server.version).toBe(SERVER_VERSION);
-		expect(server.name).toBe("io.github.amine7536/ruptures-medicaments");
+		expect(server.name).toBe("io.github.amine7536/medicaments-france");
 		expect(server.remotes).toEqual([{ type: "streamable-http", url: MCP_ENDPOINT }]);
 	});
 });

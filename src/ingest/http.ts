@@ -1,5 +1,5 @@
 export const USER_AGENT =
-	"mcp-ruptures-medicaments/1.0 (+https://ruptures-medicaments.a3e.dev; contact: https://github.com/amine7536/mcp-ruptures-medicaments/issues)";
+	"mcp-medicaments-france/1.0 (+https://medicaments-france.a3e.dev; contact: https://github.com/amine7536/mcp-medicaments-france/issues)";
 
 export const ANSM_ORIGIN = "https://ansm.sante.fr";
 export const ANSM_LIST_URL = `${ANSM_ORIGIN}/disponibilites-des-produits-de-sante/medicaments`;
