@@ -31,13 +31,17 @@ export const UNKNOWN_DATES: SourceDates = { ansm_last_ingest: null, bdpm_release
 export async function loadSourceDates(db: D1Database): Promise<SourceDates> {
 	const latest = (source: string, columns: string) =>
 		db.prepare(`SELECT ${columns} FROM ingest_runs WHERE source = ? AND status = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1`).bind(source);
-	const [ansm, bdpm] = await db.batch<Record<string, string | null>>([
+	const [ansmRuns, bdpmRuns] = (await db.batch([
 		latest("ansm", "finished_at AS ansm_last_ingest"),
 		latest("bdpm", "bdpm_release, started_at AS bdpm_imported_at"),
-	]);
-	const a = ansm?.results[0];
-	const b = bdpm?.results[0];
-	return { ansm_last_ingest: a?.ansm_last_ingest ?? null, bdpm_release: b?.bdpm_release ?? null, bdpm_imported_at: b?.bdpm_imported_at ?? null };
+	])) as [D1Result<Pick<SourceDates, "ansm_last_ingest">>, D1Result<Pick<SourceDates, "bdpm_release" | "bdpm_imported_at">>];
+	const ansmRun = ansmRuns.results[0];
+	const bdpmRun = bdpmRuns.results[0];
+	return {
+		ansm_last_ingest: ansmRun?.ansm_last_ingest ?? null,
+		bdpm_release: bdpmRun?.bdpm_release ?? null,
+		bdpm_imported_at: bdpmRun?.bdpm_imported_at ?? null,
+	};
 }
 
 export function envelopeSchema<D extends z.ZodType>(data: D) {
