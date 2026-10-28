@@ -6,15 +6,15 @@ import { log } from "../src/ingest/http";
 import { getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
-import { Medicine, Presentation } from "../src/mcp/schemas";
+import { Medicine, Presentation, SafetyInformation } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
-import { Data, getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
+import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
-import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SHORTAGES, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown).";
@@ -478,7 +478,7 @@ describe("get_medicine_info", () => {
 
 	it("has the description and the info-only suffix", () => {
 		expect(getMedicineInfo.description).toBe(
-			"Boxes of a medicine in the French public medicines database (BDPM) and its prescription and dispensing conditions, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. " +
+			"Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions and its current ANSM safety information, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. " +
 				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
 		);
 	});
@@ -528,7 +528,7 @@ describe("get_medicine_info", () => {
 		expect(data.medicine.cis).toBe(MEDICINES.dolipraneTablet.cis);
 		expect(cips(data)).toEqual([second, ...cips(byCis).filter((c: string) => c !== second)]);
 		expect(cips((await call(getMedicineInfo, { cip13: stopped.cip13 })).data)[0]).toBe(stopped.cip13);
-		const ordered = (code: string | null) => loadInfo(env.DB, MEDICINES.dolipraneTablet.cis, code).then((i) => i.presentations.map((p) => p.cip13));
+		const ordered = (code: string | null) => loadInfo(env.DB, MEDICINES.dolipraneTablet.cis, code, "2026-10-27").then((i) => i.presentations.map((p) => p.cip13));
 		expect(await ordered(null)).toEqual(cips(byCis));
 		expect(await ordered(stopped.cip13)).toEqual([stopped.cip13, box100.cip13, box8.cip13]);
 		const { result: raw } = await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }));
@@ -579,16 +579,53 @@ describe("get_medicine_info", () => {
 		}
 	});
 
-	it("reads presentations and conditions in a single D1 batch", async () => {
+	it("reads presentations, conditions and safety information in a single D1 batch", async () => {
 		const batch = vi.spyOn(env.DB, "batch");
 		try {
-			const info = await loadInfo(env.DB, MEDICINES.amoxicilline.cis, null);
-			expect(info).toEqual({ presentations: [], prescription_conditions: PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis] });
+			const info = await loadInfo(env.DB, MEDICINES.amoxicilline.cis, null, "2026-10-27");
+			expect(info.presentations).toEqual([]);
+			expect(info.prescription_conditions).toEqual(PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis]);
+			expect(info.safety_information).toHaveLength(6);
 			expect(batch).toHaveBeenCalledTimes(1);
-			expect(batch.mock.calls[0][0]).toHaveLength(2);
+			expect(batch.mock.calls[0][0]).toHaveLength(3);
 		} finally {
 			batch.mockRestore();
 		}
+	});
+
+	it("returns only the ANSM safety information active today (UTC), latest start first, with the safety sentence", async () => {
+		const active = ["Starts today", "Current 2026-05", "Current 2026-03", "Current 2026-01", "Current 2025-02", "Ends today"];
+		const byTitle = new Map(SAFETY_INFORMATION[MEDICINES.amoxicilline.cis].map((i) => [i.title, i]));
+		for (const args of [{ cis: MEDICINES.amoxicilline.cis }, { name: "amoxicilline" }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data.safety_information).toEqual(active.map((t) => byTitle.get(t)));
+			for (const item of data.safety_information) expect(SafetyInformation.strict().safeParse(item).success).toBe(true);
+			expect(Data.safeParse(data).success).toBe(true);
+			const line = summary(result).split("\n").find((l) => l.startsWith("ANSM safety information"));
+			expect(line).toBe(
+				"ANSM safety information (6): Starts today (https://ansm.sante.fr/actualites/c-start); Current 2026-05 (https://ansm.sante.fr/actualites/c5); " +
+					"Current 2026-03 (https://ansm.sante.fr/actualites/c3); Current 2026-01 (https://ansm.sante.fr/actualites/c1); Current 2025-02 (http://ansm.sante.fr/Activites/c2). " +
+					"See the ANSM pages for details; do not stop or change a treatment without asking your doctor or pharmacist.",
+			);
+			expect(summary(result)).toContain(SAFETY_ADVICE);
+			expect(summary(result)).not.toContain(NO_SAFETY_INFORMATION);
+		}
+		// The filter follows the UTC date: just past midnight UTC on 2026-10-28, "Ends today" has ended and "Future item" has started.
+		const { data: next } = await call(getMedicineInfo, { cis: MEDICINES.amoxicilline.cis }, new Date("2026-10-28T00:30:00.000Z"));
+		expect(next.safety_information.map((i: SafetyInformation) => i.title)).toEqual(["Future item", "Starts today", "Current 2026-05", "Current 2026-03", "Current 2026-01", "Current 2025-02"]);
+		const { data: before } = await call(getMedicineInfo, { cis: MEDICINES.amoxicilline.cis }, new Date("2024-01-01T12:00:00.000Z"));
+		expect(before.safety_information).toEqual([]);
+	});
+
+	it("has an empty safety information list and says so when none is current", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+		expect(data.safety_information).toEqual([]);
+		expect(summary(result).split("\n")).toContain(NO_SAFETY_INFORMATION);
+		expect(summary(result)).not.toContain(SAFETY_ADVICE);
+		expect(Data.safeParse(data).success).toBe(true);
+		expect(Data.safeParse({ ...data, safety_information: undefined }).success).toBe(false);
+		expect(Data.safeParse({ ...data, safety_information: [{ title: "x", url: "not a url", starts_on: "2026-01-01", ends_on: "2027-01-01" }] }).success).toBe(false);
+		expect(Data.safeParse({ ...data, safety_information: [{ title: "x", url: "https://ansm.sante.fr/x", starts_on: "01/01/2026", ends_on: "2027-01-01" }] }).success).toBe(false);
 	});
 
 	it("caps the summary at 10 presentations and keeps the full list in structuredContent", async () => {
