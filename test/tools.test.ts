@@ -478,7 +478,7 @@ describe("get_medicine_info", () => {
 
 	it("has the description and the info-only suffix", () => {
 		expect(getMedicineInfo.description).toBe(
-			"Look up a medicine's official reference information from the French public medicines database (BDPM): boxes with their CIP13 barcode, marketing status, price and reimbursement rate. " +
+			"Boxes of a medicine in the French public medicines database (BDPM), given exactly one of its CIS code, a CIP13 barcode or its name: CIP13, marketing status, price and reimbursement rate. " +
 				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
 		);
 	});

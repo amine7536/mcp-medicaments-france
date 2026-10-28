@@ -55,7 +55,7 @@ const result = (dates: SourceDates, now: Date, out: { data: Data; summary: strin
 export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_medicine_info",
 	title: "Get medicine info",
-	description: `Look up a medicine's official reference information from the French public medicines database (BDPM): boxes with their CIP13 barcode, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
+	description: `Boxes of a medicine in the French public medicines database (BDPM), given exactly one of its CIS code, a CIP13 barcode or its name: CIP13, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, cip13, name }): Promise<ToolOutcome> {
