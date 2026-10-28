@@ -513,7 +513,7 @@ describe("get_medicine_info", () => {
 			reimbursement_indications: null,
 		});
 		expect(summary(result).split("\n").slice(0, 3)).toEqual([
-			`${MEDICINES.dolipraneTablet.name} (CIS ${MEDICINES.dolipraneTablet.cis}): 2 marketed presentation(s) out of 3.`,
+			`${MEDICINES.dolipraneTablet.name} (CIS ${MEDICINES.dolipraneTablet.cis}): 2 marketed box(es) out of 3.`,
 			`- ${box100.label} (CIP13 ${box100.cip13}): price not listed; not reimbursed / not listed.`,
 			`- ${box8.label} (CIP13 ${box8.cip13}): public price 2.18 EUR; reimbursed 65%.`,
 		]);
@@ -559,7 +559,7 @@ describe("get_medicine_info", () => {
 		expect(data.presentations).toHaveLength(12);
 		const lines = summary(result).split("\n");
 		expect(lines.filter((l) => l.startsWith("- "))).toHaveLength(SUMMARY_LIMIT);
-		expect(lines).toContain("2 more marketed presentation(s) in the structured content.");
+		expect(lines).toContain("2 more marketed box(es) in the structured content.");
 	});
 
 	it("candidates and not_found variants", async () => {

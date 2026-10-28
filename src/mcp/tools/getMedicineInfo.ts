@@ -30,9 +30,9 @@ const rates = (p: Presentation): string =>
 /** The medicine line, then one line per marketed presentation (at most `SUMMARY_LIMIT`). */
 export function infoSummary(medicine: Medicine, presentations: Presentation[]): string {
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED);
-	const lines = [`${medicine.name} (CIS ${medicine.cis}): ${marketed.length} marketed presentation(s) out of ${presentations.length}.`];
+	const lines = [`${medicine.name} (CIS ${medicine.cis}): ${marketed.length} marketed box(es) out of ${presentations.length}.`];
 	for (const p of marketed.slice(0, SUMMARY_LIMIT)) lines.push(`- ${p.label} (CIP13 ${p.cip13}): ${price(p)}; ${rates(p)}.`);
-	if (marketed.length > SUMMARY_LIMIT) lines.push(`${marketed.length - SUMMARY_LIMIT} more marketed presentation(s) in the structured content.`);
+	if (marketed.length > SUMMARY_LIMIT) lines.push(`${marketed.length - SUMMARY_LIMIT} more marketed box(es) in the structured content.`);
 	return lines.join("\n");
 }
 
