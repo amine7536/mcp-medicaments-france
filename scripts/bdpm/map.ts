@@ -6,6 +6,7 @@ export const FILES = {
 	compo: { name: "CIS_COMPO_bdpm.txt", cols: 8, floor: 25_000 },
 	mitm: { name: "CIS_MITM.txt", cols: 7, floor: 6_000 },
 	presentations: { name: "CIS_CIP_bdpm.txt", cols: 13, floor: 15_000 },
+	prescriptionConditions: { name: "CIS_CPD_bdpm.txt", cols: 2, floor: 20_000 },
 } as const;
 
 export interface MedicineRow {
@@ -57,6 +58,13 @@ export interface PresentationRow {
 	reimbursement_indications: string | null;
 }
 
+export interface PrescriptionConditionRow {
+	cis: string;
+	condition: string;
+	/** 1-based source order within the CIS. */
+	position: number;
+}
+
 export interface Skipped {
 	medicines: number;
 	substances: number;
@@ -69,6 +77,7 @@ export interface Mapped {
 	mitm: MitmRow[];
 	fts: FtsRow[];
 	presentations: PresentationRow[];
+	prescription_conditions: PrescriptionConditionRow[];
 	skipped: Skipped;
 }
 
@@ -77,6 +86,7 @@ export interface BdpmInput {
 	compo: string[][];
 	mitm: string[][];
 	presentations: string[][];
+	prescriptionConditions: string[][];
 	bannerDate: string | null;
 }
 
@@ -147,12 +157,32 @@ function mapPresentations(rows: string[][]): PresentationRow[] {
 	}));
 }
 
+/** Verbatim conditions per CIS in source order; a repeated (cis, condition) pair keeps its first position. Throws on an empty condition. */
+function mapPrescriptionConditions(rows: string[][]): PrescriptionConditionRow[] {
+	const file = FILES.prescriptionConditions;
+	validate(rows, file);
+	const seen = new Map<string, Set<string>>();
+	const out: PrescriptionConditionRow[] = [];
+	rows.forEach((row, i) => {
+		const cis = req(row[0]);
+		const condition = req(row[1]);
+		if (condition === "") throw new Error(`${file.name}: line ${i + 1} has an empty condition, expected a non-empty value`);
+		let conditions = seen.get(cis);
+		if (!conditions) seen.set(cis, (conditions = new Set()));
+		if (conditions.has(condition)) return;
+		conditions.add(condition);
+		out.push({ cis, condition, position: conditions.size });
+	});
+	return out;
+}
+
 /** Validates the parsed BDPM files and maps them to table rows. Throws on any validation failure. */
-export function validateAndMap({ cisBdpm, compo, mitm, presentations, bannerDate }: BdpmInput): Mapped {
+export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescriptionConditions, bannerDate }: BdpmInput): Mapped {
 	validate(cisBdpm, FILES.cisBdpm);
 	validate(compo, FILES.compo);
 	validate(mitm, FILES.mitm);
 	const presentationRows = mapPresentations(presentations);
+	const conditionRows = mapPrescriptionConditions(prescriptionConditions);
 	mitm.forEach((row, i) => {
 		if (req(row[1]) === "") throw new Error(`${FILES.mitm.name}: line ${i + 1} has an empty ATC, expected a non-empty value`);
 	});
@@ -222,5 +252,5 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, bannerDate
 		substances_norm: [...(byCis.get(m.cis) ?? [])].sort().join(" "),
 	}));
 
-	return { medicines, substances, mitm: mitmRows, fts, presentations: presentationRows, skipped };
+	return { medicines, substances, mitm: mitmRows, fts, presentations: presentationRows, prescription_conditions: conditionRows, skipped };
 }
