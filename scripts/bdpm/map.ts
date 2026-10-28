@@ -1,9 +1,11 @@
+import { parseFrDate } from "../../src/lib/dates";
 import { normalize } from "../../src/lib/normalize";
 
 export const FILES = {
 	cisBdpm: { name: "CIS_bdpm.txt", cols: 12, floor: 12_000 },
 	compo: { name: "CIS_COMPO_bdpm.txt", cols: 8, floor: 25_000 },
 	mitm: { name: "CIS_MITM.txt", cols: 7, floor: 6_000 },
+	presentations: { name: "CIS_CIP_bdpm.txt", cols: 13, floor: 15_000 },
 } as const;
 
 export interface MedicineRow {
@@ -38,6 +40,23 @@ export interface FtsRow {
 	substances_norm: string;
 }
 
+export interface PresentationRow {
+	cip13: string;
+	cip7: string | null;
+	cis: string;
+	label: string;
+	admin_status: string | null;
+	marketing_status: string | null;
+	declared_at: string | null;
+	hospital_approval: 0 | 1 | null;
+	/** JSON array of integers, in source order. */
+	reimbursement_rates: string | null;
+	price_eur: number | null;
+	public_price_eur: number | null;
+	dispensing_fee_eur: number | null;
+	reimbursement_indications: string | null;
+}
+
 export interface Skipped {
 	medicines: number;
 	substances: number;
@@ -49,6 +68,7 @@ export interface Mapped {
 	substances: SubstanceRow[];
 	mitm: MitmRow[];
 	fts: FtsRow[];
+	presentations: PresentationRow[];
 	skipped: Skipped;
 }
 
@@ -56,10 +76,12 @@ export interface BdpmInput {
 	cisBdpm: string[][];
 	compo: string[][];
 	mitm: string[][];
+	presentations: string[][];
 	bannerDate: string | null;
 }
 
 const CIS_RE = /^\d{8}$/;
+const CIP13_RE = /^\d{13}$/;
 const opt = (v: string | undefined): string | null => (v === undefined || v === "" ? null : v);
 const req = (v: string | undefined): string => v ?? "";
 
@@ -74,11 +96,64 @@ function validate(rows: string[][], file: (typeof FILES)[keyof typeof FILES]): v
 	});
 }
 
+/** A BDPM price: the last comma is the decimal separator, the other commas are dropped (`1,466,29` is 1466.29). Null when empty. */
+export function parsePrice(v: string): number | null {
+	const s = v.trim();
+	if (s === "") return null;
+	const i = s.lastIndexOf(",");
+	const n = Number(i < 0 ? s : `${s.slice(0, i).replaceAll(",", "")}.${s.slice(i + 1)}`);
+	if (!Number.isFinite(n)) throw new Error(`${FILES.presentations.name}: invalid price "${s}"`);
+	return n;
+}
+
+/** BDPM reimbursement rates (`65%`, `65 %`, `100%;65%`) as a JSON array of integers in source order. Null when empty. */
+export function parseRates(v: string): string | null {
+	const rates = v.split(";").flatMap((part) => {
+		const m = /(\d+)\s*%/.exec(part);
+		return m ? [Number(m[1])] : [];
+	});
+	return rates.length === 0 ? null : JSON.stringify(rates);
+}
+
+/** `oui` is 1, `non` is 0, anything else null. */
+export function parseApproval(v: string): 0 | 1 | null {
+	return v === "oui" ? 1 : v === "non" ? 0 : null;
+}
+
+function mapPresentations(rows: string[][]): PresentationRow[] {
+	const file = FILES.presentations;
+	rows.forEach((row, i) => {
+		if (row.length !== file.cols) throw new Error(`${file.name}: line ${i + 1} has ${row.length} columns, expected ${file.cols}`);
+	});
+	validate(rows, file);
+	rows.forEach((row, i) => {
+		if (!CIP13_RE.test(req(row[6]))) {
+			throw new Error(`${file.name}: line ${i + 1} has invalid CIP13 "${req(row[6])}", expected 13 digits`);
+		}
+	});
+	return rows.map((r) => ({
+		cip13: req(r[6]),
+		cip7: opt(r[1]),
+		cis: req(r[0]),
+		label: req(r[2]),
+		admin_status: opt(r[3]),
+		marketing_status: opt(r[4]),
+		declared_at: parseFrDate(req(r[5])),
+		hospital_approval: parseApproval(req(r[7])),
+		reimbursement_rates: parseRates(req(r[8])),
+		price_eur: parsePrice(req(r[9])),
+		public_price_eur: parsePrice(req(r[10])),
+		dispensing_fee_eur: parsePrice(req(r[11])),
+		reimbursement_indications: opt(r[12]),
+	}));
+}
+
 /** Validates the parsed BDPM files and maps them to table rows. Throws on any validation failure. */
-export function validateAndMap({ cisBdpm, compo, mitm, bannerDate }: BdpmInput): Mapped {
+export function validateAndMap({ cisBdpm, compo, mitm, presentations, bannerDate }: BdpmInput): Mapped {
 	validate(cisBdpm, FILES.cisBdpm);
 	validate(compo, FILES.compo);
 	validate(mitm, FILES.mitm);
+	const presentationRows = mapPresentations(presentations);
 	mitm.forEach((row, i) => {
 		if (req(row[1]) === "") throw new Error(`${FILES.mitm.name}: line ${i + 1} has an empty ATC, expected a non-empty value`);
 	});
@@ -148,5 +223,5 @@ export function validateAndMap({ cisBdpm, compo, mitm, bannerDate }: BdpmInput):
 		substances_norm: [...(byCis.get(m.cis) ?? [])].sort().join(" "),
 	}));
 
-	return { medicines, substances, mitm: mitmRows, fts, skipped };
+	return { medicines, substances, mitm: mitmRows, fts, presentations: presentationRows, skipped };
 }
