@@ -6,6 +6,7 @@ import { SERVER_VERSION } from "../src/mcp/server";
 
 describe("server.json", () => {
 	it("is a registry entry matching the deployed server", () => {
+		expect(server.description).toBe("French medicines (ANSM + BDPM): shortages, boxes and prices, prescription conditions, safety info.");
 		expect(server.description.length).toBeLessThanOrEqual(100);
 		expect(server.title.length).toBeLessThanOrEqual(100);
 		expect(server.version).toBe(SERVER_VERSION);

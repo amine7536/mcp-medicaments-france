@@ -64,7 +64,7 @@ Every result carries the sources, their update dates, the coverage note, the dis
 ## Data sources and licence
 
 - **ANSM**, list of medicine shortages: <https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments>. Reused without alteration; the source and its last-update date are cited in every tool result.
-- **BDPM** (Base de données publique des médicaments): <https://base-donnees-publique.medicaments.gouv.fr>, under the Licence Ouverte. Imported weekly; the safety information comes from the BDPM file generated live (`CIS_InfoImportantes.txt`), the other files from the monthly release. Reused without alteration; the source and its monthly release date are cited in every tool result. The safety information is as of the last weekly import, which can be more recent than that date.
+- **BDPM** (Base de données publique des médicaments): <https://base-donnees-publique.medicaments.gouv.fr>, under the Licence Ouverte. Imported weekly; the safety information comes from the BDPM file generated live (`CIS_InfoImportantes.txt`), the other files from the monthly release. Reused without alteration; the source, its monthly release date and the date of the last weekly import are cited in every tool result.
 - Ce service n'est ni approuvé ni soutenu par l'ANSM, la HAS ou l'UNCAM.
 
 ## Privacy
