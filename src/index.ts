@@ -3,10 +3,23 @@ import { handleAdminIngest } from "./admin";
 import { handleHealth } from "./health";
 import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
-import { handleLanding } from "./landing";
+import { renderLanding, resolveLang } from "./landing";
 import { createServer } from "./mcp/server";
 
 const RETRY_AFTER_SECONDS = 60;
+
+/** `GET /`: the landing page in the language picked from `?lang` or `Accept-Language`. */
+function handleLanding(request: Request, url: URL): Response {
+	const lang = resolveLang(url, request.headers.get("Accept-Language"));
+	return new Response(renderLanding(lang), {
+		headers: {
+			"content-type": "text/html; charset=utf-8",
+			"Cache-Control": "public, max-age=3600",
+			Vary: "Accept-Language",
+			"Content-Language": lang,
+		},
+	});
+}
 
 /** `/mcp`: per-IP rate limit, then a stateless MCP handler built for this request. */
 async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -23,11 +36,12 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		const { pathname } = new URL(request.url);
+		const url = new URL(request.url);
+		const { pathname } = url;
 		if ((pathname === "/" || pathname === "/health") && request.method !== "GET") {
 			return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "GET" } });
 		}
-		if (pathname === "/") return handleLanding();
+		if (pathname === "/") return handleLanding(request, url);
 		if (pathname === "/health") return handleHealth(request, env, ctx);
 		if (pathname === "/admin/ingest") return handleAdminIngest(request, env, ctx);
 		if (pathname === "/mcp") return handleMcp(request, env, ctx);
