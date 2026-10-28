@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.4.0...v1.5.0) (2026-10-28)
+
+
+### Features
+
+* **mcp:** cite the bdpm import date and describe the medicines reference data ([#20](https://github.com/amine7536/mcp-medicaments-france/issues/20)) ([610b554](https://github.com/amine7536/mcp-medicaments-france/commit/610b55413042813f6853cd3b747e666ebbb04520))
+
 ## [1.4.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.3.0...v1.4.0) (2026-10-28)
 
 
