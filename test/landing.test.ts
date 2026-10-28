@@ -20,7 +20,7 @@ import {
 } from "../src/landing";
 import { consume } from "../src/lib/html";
 
-const ORIGIN = "https://ruptures-medicaments.a3e.dev";
+const ORIGIN = "https://medicaments-france.a3e.dev";
 const LANGS: readonly Lang[] = ["fr", "en"];
 const PAGES: Record<Lang, string> = { fr: renderLanding("fr"), en: renderLanding("en") };
 
@@ -110,12 +110,12 @@ const ownText = (n: El) => norm(rawText(n, (e) => ["head", "script", "style", "p
 
 const CURSOR_JSON = `{
   "mcpServers": {
-    "ruptures-medicaments": {
+    "medicaments-france": {
       "url": "${MCP_ENDPOINT}"
     }
   }
 }`;
-const CLAUDE_CODE = `claude mcp add --transport http ruptures-medicaments ${MCP_ENDPOINT}`;
+const CLAUDE_CODE = `claude mcp add --transport http medicaments-france ${MCP_ENDPOINT}`;
 
 const VERBATIM: Record<Lang, readonly string[]> = {
 	fr: [
@@ -329,7 +329,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 
 	it("sets html lang, title, description and hreflang links", () => {
 		expect(one(tree, is("html")).attrs.lang).toBe(lang);
-		expect(text(one(tree, is("title")))).toBe("Ruptures de médicaments (France)");
+		expect(text(one(tree, is("title")))).toBe("Médicaments en France");
 		expect(one(tree, (e) => e.tag === "meta" && e.attrs.name === "description").attrs.content).toBe(VERBATIM[lang][1]);
 		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
 		expect(alternates).toEqual([
@@ -337,6 +337,10 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 			["en", `${ORIGIN}/?lang=en`],
 			["x-default", `${ORIGIN}/`],
 		]);
+	});
+
+	it("never mentions the old service name", () => {
+		expect(html).not.toContain(["ruptures", "medicaments"].join("-"));
 	});
 
 	it("opens the header with the site name, then the language switch", () => {
@@ -347,7 +351,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(site.tag).toBe("a");
 		expect(site.attrs.class).toBe("site");
 		expect(site.attrs.href).toBe(`/?lang=${lang}`);
-		expect(text(site)).toBe("Ruptures de médicaments");
+		expect(text(site)).toBe("Médicaments en France");
 		expect(nav.tag).toBe("nav");
 		expect(nav.attrs.class).toBe("lang");
 		expect(nav.attrs["aria-label"]).toBe("Langue / Language");
@@ -364,7 +368,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 	it("marks the French title as French on the English page", () => {
 		const h1 = one(tree, is("h1"));
 		const site = one(tree, is("a", "site"));
-		expect(text(h1)).toBe("Ruptures de médicaments (France)");
+		expect(text(h1)).toBe("Médicaments en France");
 		expect(h1.attrs.lang).toBe(lang === "en" ? "fr" : undefined);
 		expect(site.attrs.lang).toBe(lang === "en" ? "fr" : undefined);
 	});
@@ -413,7 +417,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(elements(chat).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.chat-head", "div.chat-body"]);
 		const [head, chatBody] = elements(chat);
 		expect(elements(head).map((e) => [e.tag, text(e)])).toEqual([
-			["span", "Claude + ruptures-medicaments"],
+			["span", "Claude + medicaments-france"],
 			["span", lang === "fr" ? "28/10/2026" : "28 Oct 2026"],
 		]);
 		const msgs = elements(chatBody);

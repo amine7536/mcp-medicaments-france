@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "mcp-ruptures-medicaments",
+	"name": "mcp-medicaments-france",
 	"main": "src/index.ts",
 	"account_id": "7806bdd95447f476c67e586e0421c666",
 	"compatibility_date": "2026-10-01",
@@ -36,7 +36,7 @@
 	],
 	"routes": [
 		{
-			"pattern": "ruptures-medicaments.a3e.dev",
+			"pattern": "medicaments-france.a3e.dev",
 			"custom_domain": true
 		}
 	],

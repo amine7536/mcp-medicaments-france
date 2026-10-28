@@ -6,7 +6,7 @@ import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
 import { seed } from "./seed";
 
-const URL = "https://ruptures-medicaments.a3e.dev/mcp";
+const URL = "https://medicaments-france.a3e.dev/mcp";
 const PROTOCOL_VERSION = "2025-11-25";
 
 const SUBSTITUTION_RULE =

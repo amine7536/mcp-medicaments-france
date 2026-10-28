@@ -1,4 +1,4 @@
-# Ruptures de médicaments (France)
+# Médicaments en France
 
 MCP server: medicine shortages in France (ANSM + BDPM). Ruptures et tensions d'approvisionnement des médicaments, pour Claude, ChatGPT, Cursor.
 
@@ -9,21 +9,21 @@ MCP server: medicine shortages in France (ANSM + BDPM). Ruptures et tensions d'a
 ## Endpoint
 
 ```
-https://ruptures-medicaments.a3e.dev/mcp
+https://medicaments-france.a3e.dev/mcp
 ```
 
-Streamable HTTP, read-only, no authentication. Status and data dates: <https://ruptures-medicaments.a3e.dev/health>.
+Streamable HTTP, read-only, no authentication. Status and data dates: <https://medicaments-france.a3e.dev/health>.
 
 ## Connect
 
-- **Claude:** add a custom connector with the URL `https://ruptures-medicaments.a3e.dev/mcp`.
+- **Claude:** add a custom connector with the URL `https://medicaments-france.a3e.dev/mcp`.
 - **Cursor:** add it to `mcp.json`:
 
   ```json
   {
     "mcpServers": {
-      "ruptures-medicaments": {
-        "url": "https://ruptures-medicaments.a3e.dev/mcp"
+      "medicaments-france": {
+        "url": "https://medicaments-france.a3e.dev/mcp"
       }
     }
   }

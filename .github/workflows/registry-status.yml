@@ -1,0 +1,38 @@
+name: MCP registry status
+
+on:
+  workflow_dispatch:
+    inputs:
+      server:
+        description: Registry server name (e.g. io.github.amine7536/medicaments-france)
+        type: string
+        required: true
+      status:
+        description: New status for every version
+        type: choice
+        options:
+          - active
+          - deprecated
+          - deleted
+        required: true
+      message:
+        description: Optional status message
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  status:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: ./.github/actions/mcp-publisher
+      - name: Set the server status
+        env:
+          SERVER: ${{ inputs.server }}
+          STATUS: ${{ inputs.status }}
+          MESSAGE: ${{ inputs.message }}
+        run: ./mcp-publisher status --status "$STATUS" --all-versions --yes ${MESSAGE:+--message "$MESSAGE"} "$SERVER"

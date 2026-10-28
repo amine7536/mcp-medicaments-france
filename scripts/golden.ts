@@ -27,7 +27,7 @@ const PROMPTS = [
 
 const dir = mkdtempSync(join(tmpdir(), "golden-"));
 const config = join(dir, "mcp.json");
-writeFileSync(config, JSON.stringify({ mcpServers: { "ruptures-medicaments": { type: "http", url: values.url } } }));
+writeFileSync(config, JSON.stringify({ mcpServers: { "medicaments-france": { type: "http", url: values.url } } }));
 
 let failed = 0;
 for (const [p, prompt] of PROMPTS.entries()) {
@@ -36,7 +36,7 @@ for (const [p, prompt] of PROMPTS.entries()) {
 		try {
 			const answer = execFileSync(
 				"claude",
-				["-p", prompt, "--mcp-config", config, "--strict-mcp-config", "--allowedTools", "mcp__ruptures-medicaments__*", "--max-turns", "6"],
+				["-p", prompt, "--mcp-config", config, "--strict-mcp-config", "--allowedTools", "mcp__medicaments-france__*", "--max-turns", "6"],
 				{ cwd: dir, encoding: "utf8", timeout: 180_000, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 },
 			);
 			reason = check(answer);

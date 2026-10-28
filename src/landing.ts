@@ -1,9 +1,9 @@
 import { escapeAttribute, escapeText } from "entities/escape";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL } from "./mcp/envelope";
 
-export const SITE_URL = "https://ruptures-medicaments.a3e.dev";
+export const SITE_URL = "https://medicaments-france.a3e.dev";
 export const MCP_ENDPOINT = `${SITE_URL}/mcp`;
-export const REPO_URL = "https://github.com/amine7536/mcp-ruptures-medicaments";
+export const REPO_URL = "https://github.com/amine7536/mcp-medicaments-france";
 export const NON_ENDORSEMENT = "Ce service n'est ni approuvé ni soutenu par l'ANSM, la HAS ou l'UNCAM.";
 
 /** Example questions with the expected behaviour of the assistant. */
@@ -296,8 +296,8 @@ export function renderRealAnswers(answers: readonly RealAnswer[], format: (s: st
 		.join("\n");
 }
 
-const CLAUDE_CODE_COMMAND = `claude mcp add --transport http ruptures-medicaments ${MCP_ENDPOINT}`;
-const CURSOR_CONFIG = JSON.stringify({ mcpServers: { "ruptures-medicaments": { url: MCP_ENDPOINT } } }, null, 2);
+const CLAUDE_CODE_COMMAND = `claude mcp add --transport http medicaments-france ${MCP_ENDPOINT}`;
+const CURSOR_CONFIG = JSON.stringify({ mcpServers: { "medicaments-france": { url: MCP_ENDPOINT } } }, null, 2);
 
 const UI_FONT = `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
 const TEXT_FONT = `Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif`;
@@ -464,7 +464,7 @@ export function renderLanding(lang: Lang): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ruptures de médicaments (France)</title>
+<title>Médicaments en France</title>
 <meta name="description" content="${escapeAttribute(c.lead)}">
 <link rel="alternate" hreflang="fr" href="${SITE_URL}/?lang=fr">
 <link rel="alternate" hreflang="en" href="${SITE_URL}/?lang=en">
@@ -480,10 +480,10 @@ ${CSS}
 <header>
 <div class="wrap">
 <div class="top">
-<a class="site" href="/?lang=${lang}"${fr}>Ruptures de médicaments</a>
+<a class="site" href="/?lang=${lang}"${fr}>Médicaments en France</a>
 <nav class="lang" aria-label="Langue / Language">${langLink("fr", lang)} | ${langLink("en", lang)}</nav>
 </div>
-<h1${fr}>Ruptures de médicaments (France)</h1>
+<h1${fr}>Médicaments en France</h1>
 <p class="lead">${t(c.lead)}</p>
 <div class="endpoint">
 <span class="sr-only">${t(c.endpointLabel)}</span>
@@ -503,7 +503,7 @@ ${renderExamples(c.examples, t)}
 <h3>${t(c.realAnswersHeading)}</h3>
 <p class="note">${t(c.realAnswersNote)}</p>
 <div class="chat" role="log" aria-label="${escapeAttribute(c.chatLabel)}">
-<div class="chat-head"><span>Claude + ruptures-medicaments</span><span>${escapeText(c.chatDate)}</span></div>
+<div class="chat-head"><span>Claude + medicaments-france</span><span>${escapeText(c.chatDate)}</span></div>
 <div class="chat-body">
 ${renderRealAnswers(c.realAnswers, t)}
 </div>

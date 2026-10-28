@@ -1,0 +1,33 @@
+name: Set up mcp-publisher
+description: Download mcp-publisher, verify its signature with cosign, and log in to the MCP registry with GitHub OIDC.
+
+inputs:
+  version:
+    description: mcp-publisher release tag
+    required: false
+    default: v1.8.6
+
+runs:
+  using: composite
+  steps:
+    - uses: sigstore/cosign-installer@v4.1.2
+    - name: Download and verify mcp-publisher
+      shell: bash
+      env:
+        MCP_PUBLISHER_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        archive="mcp-publisher_linux_amd64.tar.gz"
+        base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+        curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+        curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+        cosign verify-blob \
+          --bundle "$archive.sigstore.json" \
+          --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "$archive"
+        tar xzf "$archive" mcp-publisher
+        rm -f "$archive" "$archive.sigstore.json"
+    - name: Log in to the MCP registry
+      shell: bash
+      run: ./mcp-publisher login github-oidc

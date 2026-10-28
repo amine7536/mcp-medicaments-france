@@ -8,7 +8,7 @@ import { count, ran, resetDb } from "./db";
 import { type FakeFetcher, fakeFetcher } from "./fixtures";
 
 const TOKEN = "s3cret-token";
-const URL = "https://ruptures-medicaments.a3e.dev/admin/ingest";
+const URL = "https://medicaments-france.a3e.dev/admin/ingest";
 
 async function call(init: RequestInit<IncomingRequestCfProperties> = {}, testEnv: Env = env): Promise<Response> {
 	const ctx = createExecutionContext();
