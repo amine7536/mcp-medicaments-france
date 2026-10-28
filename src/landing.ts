@@ -554,6 +554,7 @@ function pageHead(path: string, title: string, description?: string): string {
 <link rel="alternate" hreflang="fr" href="${SITE_URL}${path}?lang=fr">
 <link rel="alternate" hreflang="en" href="${SITE_URL}${path}?lang=en">
 <link rel="alternate" hreflang="x-default" href="${SITE_URL}${path}">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
 ${CSS}
 </style>

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { methodNotAllowed } from "hono/method-not-allowed";
 import { handleAdminIngest } from "./admin";
 import { handleHealth } from "./health";
+import { handleIcon } from "./icon";
 import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
 import { type Lang, renderLanding, renderPrivacy, resolveLang } from "./landing";
@@ -47,6 +48,7 @@ app.use(
 );
 app.get("/", (c) => handlePage(c.req.raw, new URL(c.req.url), renderLanding));
 app.get("/privacy", (c) => handlePage(c.req.raw, new URL(c.req.url), renderPrivacy));
+app.get("/icon.svg", () => handleIcon());
 // Hono types executionCtx narrowly; at runtime it is the Worker's ExecutionContext passed through app.fetch.
 app.get("/health", (c) => handleHealth(c.req.raw, c.env, c.executionCtx as ExecutionContext));
 app.all("/admin/ingest", (c) => handleAdminIngest(c.req.raw, c.env, c.executionCtx as ExecutionContext));

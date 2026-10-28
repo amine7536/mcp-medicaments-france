@@ -154,6 +154,7 @@ function slopGuards(html: string, tree: El, scripts: number): void {
 		it("(e) loads no asset and only its inline scripts", () => {
 			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
 			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
+			expect(all(tree, is("link")).map((e) => e.attrs.rel)).toEqual(["alternate", "alternate", "alternate", "icon"]);
 			expect(html).not.toMatch(/@import|url\(/i);
 			const found = all(tree, is("script"));
 			expect(found).toHaveLength(scripts);
@@ -1022,4 +1023,16 @@ describe.each(LANGS)("privacy page (%s)", (lang) => {
 	});
 
 	slopGuards(html, tree, 0);
+});
+
+describe.each(LANGS)("favicon (%s)", (lang) => {
+	for (const [page, tree] of [
+		["landing", TREES[lang]],
+		["privacy", PRIVACY_TREES[lang]],
+	] as const) {
+		it(`links the SVG icon from the ${page} page`, () => {
+			const icon = one(tree, (e) => e.tag === "link" && e.attrs.rel === "icon");
+			expect(icon.attrs).toEqual({ rel: "icon", type: "image/svg+xml", href: "/icon.svg" });
+		});
+	}
 });
