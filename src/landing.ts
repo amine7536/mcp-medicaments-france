@@ -55,11 +55,17 @@ export const REAL_ANSWERS: readonly { question: string; answer: string }[] = [
 	},
 ];
 
-const EXAMPLES_HTML = EXAMPLES.map((e) => `<dt>${escapeText(e.question)}</dt>\n<dd>${escapeText(e.behaviour)}</dd>`).join("\n");
+/** Renders the example questions as `<dt>`/`<dd>` pairs, every text escaped. */
+export function renderExamples(examples: readonly { question: string; behaviour: string }[]): string {
+	return examples.map((e) => `<dt>${escapeText(e.question)}</dt>\n<dd>${escapeText(e.behaviour)}</dd>`).join("\n");
+}
 
-const REAL_ANSWERS_HTML = REAL_ANSWERS.map(
-	(a) => `<figure>\n<figcaption>${escapeText(a.question)}</figcaption>\n<blockquote>${escapeText(a.answer)}</blockquote>\n</figure>`,
-).join("\n");
+/** Renders the real answers as `<figure>` blocks, every text escaped. */
+export function renderRealAnswers(answers: readonly { question: string; answer: string }[]): string {
+	return answers
+		.map((a) => `<figure>\n<figcaption>${escapeText(a.question)}</figcaption>\n<blockquote>${escapeText(a.answer)}</blockquote>\n</figure>`)
+		.join("\n");
+}
 
 const CURSOR_CONFIG = JSON.stringify({ mcpServers: { "ruptures-medicaments": { url: MCP_ENDPOINT } } }, null, 2);
 
@@ -125,11 +131,11 @@ blockquote { margin: .5rem 0 1rem; padding: .5rem 1rem; border-left: 3px solid v
 
 <h2>Exemples / Examples</h2>
 <dl>
-${EXAMPLES_HTML}
+${renderExamples(EXAMPLES)}
 </dl>
 <h3>Réponses réelles / Real answers</h3>
 <p class="note">${escapeText(REAL_ANSWERS_NOTE)}</p>
-${REAL_ANSWERS_HTML}
+${renderRealAnswers(REAL_ANSWERS)}
 
 <h2>Coverage</h2>
 <p>${COVERAGE_NOTE}</p>

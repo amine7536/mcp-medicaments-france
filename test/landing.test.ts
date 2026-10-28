@@ -2,7 +2,7 @@ import { exports } from "cloudflare:workers";
 import { decodeHTML } from "entities/decode";
 import { escapeText } from "entities/escape";
 import { describe, expect, it } from "vitest";
-import { EXAMPLES, LANDING_HTML, MCP_ENDPOINT, NON_ENDORSEMENT, REAL_ANSWERS, REAL_ANSWERS_NOTE } from "../src/landing";
+import { EXAMPLES, LANDING_HTML, MCP_ENDPOINT, NON_ENDORSEMENT, REAL_ANSWERS, REAL_ANSWERS_NOTE, renderExamples, renderRealAnswers } from "../src/landing";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER } from "../src/mcp/envelope";
 
 describe("GET /", () => {
@@ -77,18 +77,18 @@ describe("GET /", () => {
 		expect(html.indexOf(REAL_ANSWERS_NOTE)).toBeLessThan(html.indexOf("<figure>"));
 	});
 
-	it("escapes every example text", () => {
-		const samples = [...EXAMPLES.flatMap((e) => [e.question, e.behaviour]), ...REAL_ANSWERS.flatMap((a) => [a.question, a.answer])];
-		for (const s of samples) expect(LANDING_HTML).toContain(escapeText(s));
-		expect(escapeText("a < b & c")).toBe("a &lt; b &amp; c");
-		const sample = REAL_ANSWERS[0].answer;
-		expect(sample).toMatch(/'/);
-		expect(LANDING_HTML).toContain(escapeText(sample));
-		expect(LANDING_HTML).toContain("« L'Aspirine est-elle en rupture ? »");
-		// No raw `<` from texts: the examples section holds only the expected tags.
-		const section = LANDING_HTML.slice(LANDING_HTML.indexOf("<h2>Exemples / Examples</h2>"), LANDING_HTML.indexOf("<h2>Coverage</h2>"));
-		const tags = new Set([...section.matchAll(/<\/?([a-z0-9]+)/g)].map((m) => m[1]));
-		expect([...tags].sort()).toEqual(["blockquote", "dd", "dl", "dt", "figcaption", "figure", "h2", "h3", "p"]);
+	it("escapes markup, ampersands and non-breaking spaces in the rendered texts", () => {
+		const raw = "<b>A</b> & B\u00a0C";
+		const outputs = [renderExamples([{ question: raw, behaviour: raw }]), renderRealAnswers([{ question: raw, answer: raw }])];
+		for (const out of outputs) {
+			expect(out).toContain("&lt;b&gt;A&lt;/b&gt;");
+			expect(out).toContain("&amp;");
+			expect(out).toContain("&nbsp;");
+			expect(out).not.toContain("<b>");
+			expect(out).not.toContain("\u00a0");
+		}
+		expect(LANDING_HTML).toContain(renderExamples(EXAMPLES));
+		expect(LANDING_HTML).toContain(renderRealAnswers(REAL_ANSWERS));
 	});
 
 	it("styles the banner and quotes for small screens and both color schemes", () => {
