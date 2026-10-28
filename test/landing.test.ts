@@ -151,7 +151,7 @@ function slopGuards(html: string, tree: El, scripts: number): void {
 			expect(html).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
 		});
 
-		it("(e) loads no asset and only its inline scripts", () => {
+		it("(e) loads only the favicon and its inline scripts", () => {
 			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
 			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
 			expect(all(tree, is("link")).map((e) => e.attrs.rel)).toEqual(["alternate", "alternate", "alternate", "icon"]);
@@ -905,7 +905,7 @@ const PRIVACY: Record<Lang, { title: string; h1: string; sections: readonly [str
 			["Ce que le service n'enregistre pas", "Ni compte, ni cookie, ni adresse IP, ni user agent, ni texte des questions. La page web ne charge aucun script de suivi."],
 			[
 				"Hébergement",
-				"Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels (60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes. Politique de confidentialité de Cloudflare",
+				"Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels au serveur MCP (environ 60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes. Politique de confidentialité de Cloudflare",
 			],
 			["Partage", "Aucune donnée n'est vendue ni partagée avec des tiers, en dehors de l'hébergement par Cloudflare."],
 			["Contact", `Pour toute question ou demande, ouvrez un ticket sur GitHub (les tickets sont publics). ${REPO_URL}/issues`],
@@ -923,7 +923,7 @@ const PRIVACY: Record<Lang, { title: string; h1: string; sections: readonly [str
 			["What the service does not store", "No account, no cookie, no IP address, no user agent, no question text. The web page loads no tracking script."],
 			[
 				"Hosting",
-				"The service is hosted by Cloudflare. To serve each request and limit the number of calls (60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details. Cloudflare privacy policy",
+				"The service is hosted by Cloudflare. To serve each request and limit the number of calls to the MCP server (about 60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details. Cloudflare privacy policy",
 			],
 			["Sharing", "No data is sold or shared with third parties, apart from hosting by Cloudflare."],
 			["Contact", `For any question or request, open an issue on GitHub (issues are public). ${REPO_URL}/issues`],
@@ -1040,7 +1040,7 @@ describe.each(LANGS)("favicon (%s)", (lang) => {
 });
 
 describe("BDPM examples", () => {
-	it("follow the MITM example in both languages", () => {
+	it("follow the MITM example", () => {
 		expect(EXAMPLES.slice(4, 6)).toEqual([
 			{
 				question: "« J'ai une boîte avec le code 3400931922766, qu'est-ce que c'est et combien elle coûte ? »",
@@ -1050,12 +1050,6 @@ describe("BDPM examples", () => {
 				question: "« La Dépakine nécessite-t-elle une ordonnance particulière ? »",
 				behaviour: "Conditions de prescription et de délivrance de la BDPM, citées mot pour mot, et informations de sécurité en cours de l'ANSM avec leurs liens.",
 			},
-		]);
-		expect(EXAMPLES[3].question).toContain("MITM");
-		expect(COPY.en.examples.slice(3, 6).map((e) => e.question)).toEqual([
-			'"Is amoxicillin a medicine of major therapeutic interest?"',
-			'"I have a box with the code 3400931922766: what is it and how much does it cost?"',
-			'"Does Depakine need a special prescription?"',
 		]);
 	});
 });

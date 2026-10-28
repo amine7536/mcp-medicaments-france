@@ -325,7 +325,7 @@ export const PRIVACY_COPY: Record<Lang, PrivacyCopy> = {
 			},
 			{
 				heading: "Hébergement",
-				text: "Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels (60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes.",
+				text: "Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels au serveur MCP (environ 60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes.",
 				link: { href: CLOUDFLARE_PRIVACY_URL, label: "Politique de confidentialité de Cloudflare" },
 			},
 			{
@@ -354,7 +354,7 @@ export const PRIVACY_COPY: Record<Lang, PrivacyCopy> = {
 			},
 			{
 				heading: "Hosting",
-				text: "The service is hosted by Cloudflare. To serve each request and limit the number of calls (60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details.",
+				text: "The service is hosted by Cloudflare. To serve each request and limit the number of calls to the MCP server (about 60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details.",
 				link: { href: CLOUDFLARE_PRIVACY_URL, label: "Cloudflare privacy policy" },
 			},
 			{
@@ -560,7 +560,7 @@ function langLink(path: string, lang: Lang, current: Lang): string {
 	return `<a href="${path}?lang=${lang}" hreflang="${lang}" lang="${lang}"${aria}>${lang.toUpperCase()}</a>`;
 }
 
-/** The `<head>` of a page served at `path`: title, optional description, hreflang links and the shared styles. */
+/** The `<head>` of a page served at `path`: title, optional description, hreflang links, icon link and the shared styles. */
 function pageHead(path: string, title: string, description?: string): string {
 	const meta = description === undefined ? "" : `\n<meta name="description" content="${escapeAttribute(description)}">`;
 	return `<head>
