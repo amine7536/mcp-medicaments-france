@@ -106,7 +106,7 @@ function rawText(n: El, skip: (e: El) => boolean = () => false): string {
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 const text = (n: El) => norm(rawText(n));
 /** Visible text of our own copy: no head, script, style, code, or Claude's real answers. */
-const ownText = (n: El) => norm(rawText(n, (e) => ["head", "script", "style", "pre", "code"].includes(e.tag) || is("div", "exchange")(e)));
+const ownText = (n: El) => norm(rawText(n, (e) => ["head", "script", "style", "pre", "code"].includes(e.tag) || is("div", "msg")(e)));
 
 const CURSOR_JSON = `{
   "mcpServers": {
@@ -400,29 +400,36 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 			["dt", norm(q)],
 			["dd", norm(b)],
 		]));
-		const exchanges = all(tree, is("div", "exchange"));
-		expect(exchanges).toHaveLength(3);
-		exchanges.forEach((ex, i) => {
-			const [q, a] = elements(ex);
-			expect(q.tag).toBe("p");
-			expect(q.attrs.class).toBe("q");
-			expect(text(q)).toBe(norm(answers[i][0]));
-			expect(a.tag).toBe("blockquote");
-			expect(a.attrs.class).toBe("a");
-			const who = elements(a)[0];
-			expect(who.tag).toBe("span");
-			expect(who.attrs.class).toBe("who");
-			expect(text(who)).toBe("Claude");
-			expect(norm(rawText(a, (e) => e === who))).toBe(norm(answers[i][1]));
-			expect(answers[i][1]).not.toMatch(/\*\*|\]\(/);
+		const chat = one(tree, is("div", "chat"));
+		expect(chat.attrs.role).toBe("log");
+		expect(chat.attrs["aria-label"]).toBe(lang === "fr" ? "Exemple de conversation avec Claude" : "Example conversation with Claude");
+		expect(elements(chat).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.chat-head", "div.chat-body"]);
+		const [head, chatBody] = elements(chat);
+		expect(elements(head).map((e) => [e.tag, text(e)])).toEqual([
+			["span", "Claude + ruptures-medicaments"],
+			["span", lang === "fr" ? "28/10/2026" : "28 Oct 2026"],
+		]);
+		const msgs = elements(chatBody);
+		expect(msgs.map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(answers.flatMap(() => ["div.msg user", "div.msg bot"]));
+		answers.forEach(([question, answer], i) => {
+			const user = msgs[2 * i];
+			const bot = msgs[2 * i + 1];
+			expect(elements(user).map((e) => e.tag)).toEqual(["p"]);
+			expect(text(user)).toBe(norm(question));
+			expect(elements(bot).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["span.who", "p."]);
+			expect(text(elements(bot)[0])).toBe("Claude");
+			expect(text(elements(bot)[1])).toBe(norm(answer));
+			expect(answer).not.toMatch(/\*\*|\]\(/);
 		});
+		expect(all(tree, (e) => ["exchange", "q", "a"].some((cls) => hasClass(e, cls)))).toHaveLength(0);
+		expect(all(tree, is("blockquote"))).toHaveLength(0);
 		const t = formatText(lang);
 		expect(html).toContain(renderExamples(c.examples, t));
 		expect(html).toContain(renderRealAnswers(c.realAnswers, t));
 		expect(html).not.toContain("**");
 		expect(all(tree, (e) => e.tag === "a" && /\/medicaments\/(acide|brevibloc)/.test(e.attrs.href ?? ""))).toHaveLength(0);
 		const examplesBody = elements(sections[0])[1];
-		expect(elements(examplesBody).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["dl.", "h3.", "p.note", "div.exchange", "div.exchange", "div.exchange"]);
+		expect(elements(examplesBody).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["dl.", "h3.", "p.note", "div.chat"]);
 		expect(text(elements(examplesBody)[1])).toBe(c.realAnswersHeading);
 		expect(text(elements(examplesBody)[2])).toBe(norm(c.realAnswersNote));
 	});
@@ -472,7 +479,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(elements(links).map((li) => [li.tag, text(li), one(li, is("a")).attrs.href])).toEqual(FOOTER_LINKS[lang].map(([t, h]) => ["li", t, h]));
 	});
 
-	it("renders the endpoint bar and the snippets with hidden, labelled copy buttons", () => {
+	it("renders the endpoint bar and the install tabs with hidden, labelled copy buttons", () => {
 		const bar = one(header, is("div", "endpoint"));
 		expect(elements(bar).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["span.sr-only", "span.pill", "code.", "button.copy primary"]);
 		const [label, pill, code] = elements(bar);
@@ -480,29 +487,49 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(text(pill)).toBe("MCP");
 		expect(text(code)).toBe(MCP_ENDPOINT);
 
-		const snippets = all(tree, is("div", "snippet"));
-		expect(snippets).toHaveLength(3);
-		expect(snippets.map((s) => text(one(s, is("h3"))))).toEqual(["Claude", "Claude Code", "Cursor"]);
-		const [claude, claudeCode, cursor] = snippets;
-		expect(elements(claude).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.snippet-head", "p."]);
+		expect(all(tree, is("div", "snippet"))).toHaveLength(0);
+		const connect = elements(sectionByHeading(c.connectHeading))[1];
+		expect(elements(connect).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.tabs", "p."]);
+		expect(text(elements(connect)[1])).toBe(norm(c.connectOther));
+		const tabs = elements(connect)[0];
+		expect(elements(tabs).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.tabbar", "div.", "div.", "div."]);
+		const [tabbar, ...panels] = elements(tabs);
+		expect(elements(tabbar).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.", "button.copy secondary"]);
+		const [tablist, tabCopy] = elements(tabbar);
+		expect(tablist.attrs.role).toBe("tablist");
+		expect(tablist.attrs["aria-label"]).toBe(lang === "fr" ? "Clients MCP" : "MCP clients");
+		expect(tablist.attrs.hidden).toBe("");
+		const keys = ["claude", "claude-code", "cursor"];
+		expect(elements(tablist).map((b) => [b.tag, b.attrs.type, b.attrs.role, b.attrs.id, b.attrs["aria-controls"], b.attrs["aria-selected"], text(b)])).toEqual(
+			keys.map((k, i) => ["button", "button", "tab", `tab-${k}`, `panel-${k}`, i === 0 ? "true" : "false", ["Claude", "Claude Code", "Cursor"][i]]),
+		);
+		expect(panels.map((p) => [p.attrs.role, p.attrs.id, p.attrs["aria-labelledby"], p.attrs.hidden])).toEqual(keys.map((k) => ["tabpanel", `panel-${k}`, `tab-${k}`, undefined]));
+		expect(panels.map((p) => [`${elements(p)[0].tag}.${elements(p)[0].attrs.class}`, text(elements(p)[0])])).toEqual([
+			["h3.panel-title", "Claude"],
+			["h3.panel-title", "Claude Code"],
+			["h3.panel-title", "Cursor"],
+		]);
+		const [claude, claudeCode, cursor] = panels;
+		expect(elements(claude).map((e) => e.tag)).toEqual(["h3", "p"]);
+		expect(claude.attrs["data-label"]).toBeUndefined();
 		expect(text(elements(claude)[1])).toBe(norm(c.connectClaude));
-		for (const [s, sentence, value] of [
-			[claudeCode, c.connectClaudeCode, CLAUDE_CODE],
-			[cursor, c.connectCursor, CURSOR_JSON],
+		for (const [p, sentence, value, label] of [
+			[claudeCode, c.connectClaudeCode, CLAUDE_CODE, BUTTON_LABELS[lang][1]],
+			[cursor, c.connectCursor, CURSOR_JSON, BUTTON_LABELS[lang][2]],
 		] as const) {
-			expect(elements(s).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.snippet-head", "p.", "pre."]);
-			expect(elements(elements(s)[0]).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["h3.", "button.copy secondary"]);
-			expect(text(elements(s)[1])).toBe(norm(sentence));
-			const pre = elements(s)[2];
+			expect(elements(p).map((e) => e.tag)).toEqual(["h3", "p", "pre"]);
+			expect(p.attrs["data-label"]).toBe(label);
+			expect(text(elements(p)[1])).toBe(norm(sentence));
+			const pre = elements(p)[2];
 			expect(elements(pre).map((e) => e.tag)).toEqual(["code"]);
 			expect(rawText(elements(pre)[0])).toBe(value);
 		}
+		expect(tabCopy.attrs["data-copy"]).toBeUndefined();
 
-		const buttons = all(tree, is("button"));
+		const buttons = all(tree, (e) => is("button")(e) && e.attrs.role !== "tab");
 		expect(buttons.map((b) => [b.attrs.class, b.attrs["data-copy"], b.attrs["aria-label"]])).toEqual([
 			["copy primary", MCP_ENDPOINT, BUTTON_LABELS[lang][0]],
-			["copy secondary", CLAUDE_CODE, BUTTON_LABELS[lang][1]],
-			["copy secondary", CURSOR_JSON, BUTTON_LABELS[lang][2]],
+			["copy secondary", undefined, undefined],
 		]);
 		for (const b of buttons) {
 			expect(b.attrs.type).toBe("button");
@@ -695,22 +722,68 @@ describe("styles", () => {
 		for (const s of [".copy", ".primary", ".secondary"]) expect(rule(s)).not.toMatch(/display:/);
 	});
 
-	it("sets code blocks, snippets, exchanges, tables, links and the switch", () => {
-		expectDecls("pre", ["background: var(--code-bg)", "border: 1px solid var(--border)", "border-radius: 8px", "padding: 14px 16px", "overflow-x: auto"]);
-		expectDecls(".snippet-head", ["display: flex", "justify-content: space-between", "align-items: center"]);
-		expectDecls(".q", [
-			"background: var(--accent-soft)",
-			"color: var(--fg)",
-			"border-radius: 12px 12px 4px 12px",
-			"padding: 10px 14px",
-			"margin: 0 0 0 auto",
-			"width: fit-content",
-			"max-width: 85%",
-			`font-family: ${text}`,
-			"font-size: 16px",
+	it("sets the install tabs", () => {
+		expectDecls(".tabs", ["border: 1px solid var(--border)", "border-radius: 8px", "background: var(--surface)", "overflow: hidden"]);
+		expectDecls(".tabbar", [
+			"display: flex",
+			"justify-content: space-between",
+			"align-items: center",
+			"background: var(--code-bg)",
+			"border-bottom: 1px solid var(--border)",
+			"padding: 0 8px 0 4px",
 		]);
-		expectDecls(".a", ["background: var(--surface)", "border: 1px solid var(--border)", "border-radius: 8px", "padding: 14px 18px", "margin: 8px 0 28px", "overflow-wrap: anywhere"]);
-		expectDecls(".who", ["display: block", `font-family: ${ui}`, "font-size: 13px", "font-weight: 600", "color: var(--muted)", "margin-bottom: 6px"]);
+		expectDecls("[role=tab]", [
+			"background: none",
+			"border: none",
+			`font-family: ${ui}`,
+			"font-size: 14px",
+			"font-weight: 500",
+			"color: var(--muted)",
+			"padding: 12px 12px 10px",
+			"border-bottom: 2px solid transparent",
+			"margin-bottom: -1px",
+			"cursor: pointer",
+		]);
+		expect(rule("[role=tab]").indexOf("border: none")).toBeLessThan(rule("[role=tab]").indexOf("border-bottom:"));
+		expectDecls("[role=tab][aria-selected=true]", ["color: var(--fg)", "font-weight: 600", "border-bottom-color: var(--accent)"]);
+		expectDecls("[role=tab]:focus-visible", ["outline: 2px solid var(--accent)", "outline-offset: 2px"]);
+		expectDecls("[role=tabpanel]", ["padding: 16px"]);
+		expectDecls("[role=tabpanel] pre", ["background: var(--code-bg)", "border: 1px solid var(--border)", "border-radius: 6px"]);
+		expectDecls(".tabs.js .panel-title", ["display: none"]);
+		for (const s of ["[role=tabpanel]", ".tabs", ".tabbar"]) expect(rule(s)).not.toMatch(/display: (block|grid)/);
+		expect(rules.filter((r) => /\.snippet/.test(r.selector))).toEqual([]);
+	});
+
+	it("sets the chat transcript", () => {
+		expectDecls(".chat", ["background: var(--surface)", "border: 1px solid var(--border)", "border-radius: 12px", "overflow: hidden", "max-width: 680px"]);
+		expectDecls(".chat-head", [
+			"display: flex",
+			"justify-content: space-between",
+			"background: var(--code-bg)",
+			"border-bottom: 1px solid var(--border)",
+			"padding: 10px 16px",
+			`font-family: ${ui}`,
+			"font-size: 13px",
+			"color: var(--muted)",
+		]);
+		expectDecls(".chat-body", ["padding: 20px 16px", "display: flex", "flex-direction: column", "gap: 14px"]);
+		expectDecls(".msg p", ["margin: 0", `font-family: ${ui}`, "font-size: 15px", "line-height: 1.55", "overflow-wrap: anywhere"]);
+		expectDecls(".msg.user", ["align-self: flex-end", "max-width: 80%", "background: var(--accent)", "color: #FFFFFF", "border-radius: 16px 16px 4px 16px", "padding: 10px 14px"]);
+		expectDecls(".msg.bot", [
+			"align-self: flex-start",
+			"max-width: 92%",
+			"background: var(--bg)",
+			"border: 1px solid var(--border)",
+			"color: var(--fg)",
+			"border-radius: 16px 16px 16px 4px",
+			"padding: 10px 14px 12px",
+		]);
+		expectDecls(".who", ["display: block", `font-family: ${ui}`, "font-size: 12px", "font-weight: 600", "color: var(--muted)", "margin-bottom: 4px"]);
+		expect(rules.filter((r) => /(^|[\s,])\.(q|a|exchange)\b/.test(r.selector))).toEqual([]);
+	});
+
+	it("sets code blocks, tables, links and the switch", () => {
+		expectDecls("pre", ["background: var(--code-bg)", "border: 1px solid var(--border)", "border-radius: 8px", "padding: 14px 16px", "overflow-x: auto"]);
 		expectDecls(".table-wrap", ["border: 1px solid var(--border)", "border-radius: 8px", "overflow-x: auto"]);
 		expectDecls("table", ["border-collapse: collapse", "width: 100%"]);
 		expectDecls("th, td", ["padding: 10px 14px", "border-bottom: 1px solid var(--border)", "text-align: left"]);
@@ -744,8 +817,9 @@ describe("copy script", () => {
 	it("is the same in both languages and holds no text of its own", () => {
 		expect(PAGES.en).toContain(`<script>${script}</script>`);
 		expect(script).toContain('addEventListener("DOMContentLoaded"');
-		expect(script).toContain("if (!(navigator.clipboard && navigator.clipboard.writeText)) return;");
-		expect(script.indexOf("navigator.clipboard && navigator.clipboard.writeText")).toBeLessThan(script.indexOf("b.hidden = false"));
+		expect(script).toContain("var clip = !!(navigator.clipboard && navigator.clipboard.writeText);");
+		expect(script).toContain('if (clip) document.querySelectorAll("button.copy")');
+		expect(script.indexOf("if (clip)")).toBeLessThan(script.indexOf("b.hidden = false"));
 		expect(script).toContain('querySelectorAll("button.copy")');
 		expect(script).toContain('document.querySelector("p[aria-live]")');
 		expect(script).toContain("navigator.clipboard.writeText(b.dataset.copy)");
@@ -753,6 +827,21 @@ describe("copy script", () => {
 		expect(script).toContain("live.textContent = b.dataset.done");
 		expect(script).toContain("1500");
 		expect(script).not.toMatch(/Copi|Copy|fetch\(|import|https?:/);
+	});
+
+	it("turns the install snippets into tabs", () => {
+		expect(script).toContain('tabs.classList.add("js")');
+		expect(script).toContain(`tabs.querySelector('[role="tablist"]').hidden = false`);
+		expect(script).toContain(`querySelectorAll('[role="tab"]')`);
+		expect(script).toContain('t.setAttribute("aria-selected", j === i ? "true" : "false")');
+		expect(script).toContain('t.setAttribute("tabindex", j === i ? "0" : "-1")');
+		expect(script).toContain("panelOf(t).hidden = j !== i");
+		for (const key of ["ArrowRight", "ArrowLeft", "Home", "End", "Enter"]) expect(script).toContain(`e.key === "${key}"`);
+		expect(script).toContain("copyBtn.hidden = !(clip && pre)");
+		expect(script).toContain("copyBtn.dataset.copy = pre.textContent");
+		expect(script).toContain('copyBtn.setAttribute("aria-label", panel.dataset.label)');
+		expect(script).toContain("if (b !== copyBtn) b.hidden = false");
+		expect(script).toContain("select(0)");
 	});
 });
 

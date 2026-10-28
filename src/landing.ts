@@ -78,7 +78,10 @@ export interface LandingCopy {
 	realAnswersHeading: string;
 	realAnswersNote: string;
 	realAnswers: readonly RealAnswer[];
+	chatLabel: string;
+	chatDate: string;
 	connectHeading: string;
+	clientsLabel: string;
 	connectClaude: string;
 	connectClaudeCode: string;
 	connectCursor: string;
@@ -121,7 +124,10 @@ export const COPY: Record<Lang, LandingCopy> = {
 		realAnswersHeading: "Réponses réelles",
 		realAnswersNote: REAL_ANSWERS_NOTE,
 		realAnswers: REAL_ANSWERS,
+		chatLabel: "Exemple de conversation avec Claude",
+		chatDate: "28/10/2026",
 		connectHeading: "Ajouter le serveur",
+		clientsLabel: "Clients MCP",
 		connectClaude:
 			"Dans Claude, ouvrez Customize > Connectors, choisissez Add custom connector, collez l'adresse ci-dessus et sélectionnez No sign-in.",
 		connectClaudeCode: "Dans un terminal :",
@@ -218,7 +224,10 @@ export const COPY: Record<Lang, LandingCopy> = {
 					"I can't suggest a replacement for Brevibloc; only your doctor or the hospital pharmacist can choose one. ANSM lists Brevibloc 100 mg/10 ml injectable solution as out of stock in hospitals, with supply expected back sometime in 2027 (ANSM, updated 2026-10-26: https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments/brevibloc-100-mg-10-ml-solution-injectable-en-flacon-esmolol-chlorhydrate-d). Brevibloc 10 mg/ml infusion solution has no shortage listed, but ANSM mainly lists shortages reported by manufacturers, so that doesn't guarantee it's available. Source: ANSM data retrieved 2026-10-28 and BDPM release 2026-09-29.",
 			},
 		],
+		chatLabel: "Example conversation with Claude",
+		chatDate: "28 Oct 2026",
 		connectHeading: "Add the server",
+		clientsLabel: "MCP clients",
 		connectClaude: "In Claude, open Customize > Connectors, choose Add custom connector, paste the address above and select No sign-in.",
 		connectClaudeCode: "In a terminal:",
 		connectCursor: "In mcp.json:",
@@ -280,13 +289,10 @@ export function renderExamples(examples: readonly Example[], format: (s: string)
 	return examples.map((e) => `<dt>${format(e.question)}</dt>\n<dd>${format(e.behaviour)}</dd>`).join("\n");
 }
 
-/** Renders the real answers as question/answer exchanges, every text escaped. */
+/** Renders the real answers as alternating user and Claude chat messages, every text escaped. */
 export function renderRealAnswers(answers: readonly RealAnswer[], format: (s: string) => string = escapeText): string {
 	return answers
-		.map(
-			(a) =>
-				`<div class="exchange">\n<p class="q">${format(a.question)}</p>\n<blockquote class="a"><span class="who">Claude</span>${format(a.answer)}</blockquote>\n</div>`,
-		)
+		.map((a) => `<div class="msg user"><p>${format(a.question)}</p></div>\n<div class="msg bot"><span class="who">Claude</span><p>${format(a.answer)}</p></div>`)
 		.join("\n");
 }
 
@@ -334,13 +340,21 @@ dt { font-family: ${UI_FONT}; font-size: 16px; font-weight: 600; margin-top: 16p
 dd { font-size: 16px; color: var(--muted); margin: 4px 0 0 0; }
 .note { color: var(--muted); font-size: 15px; }
 .small { font-size: 15px; }
-.q { background: var(--accent-soft); color: var(--fg); border-radius: 12px 12px 4px 12px; padding: 10px 14px; margin: 0 0 0 auto; width: fit-content; max-width: 85%; font-family: ${TEXT_FONT}; font-size: 16px; }
-.a { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin: 8px 0 28px; overflow-wrap: anywhere; }
-.who { display: block; font-family: ${UI_FONT}; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-.snippet { margin-top: 32px; }
-.snippet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.snippet h3 { margin: 0; }
-.snippet p { margin: 8px 0 12px; }
+.chat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; max-width: 680px; }
+.chat-head { display: flex; justify-content: space-between; background: var(--code-bg); border-bottom: 1px solid var(--border); padding: 10px 16px; font-family: ${UI_FONT}; font-size: 13px; color: var(--muted); }
+.chat-body { padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; }
+.msg p { margin: 0; font-family: ${UI_FONT}; font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; max-width: 80%; background: var(--accent); color: #FFFFFF; border-radius: 16px 16px 4px 16px; padding: 10px 14px; }
+.msg.bot { align-self: flex-start; max-width: 92%; background: var(--bg); border: 1px solid var(--border); color: var(--fg); border-radius: 16px 16px 16px 4px; padding: 10px 14px 12px; }
+.who { display: block; font-family: ${UI_FONT}; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.tabs { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.tabbar { display: flex; justify-content: space-between; align-items: center; background: var(--code-bg); border-bottom: 1px solid var(--border); padding: 0 8px 0 4px; }
+[role=tab] { background: none; border: none; font-family: ${UI_FONT}; font-size: 14px; font-weight: 500; color: var(--muted); padding: 12px 12px 10px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+[role=tab][aria-selected=true] { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); }
+[role=tab]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[role=tabpanel] { padding: 16px; }
+[role=tabpanel] pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; }
+.tabs.js .panel-title { display: none; }
 li + li { margin-top: 8px; }
 .table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
@@ -357,10 +371,12 @@ footer p { margin: 0 0 8px; max-width: 560px; }
 @media (min-width: 900px) { section { display: grid; grid-template-columns: 220px 1fr; column-gap: 48px; margin-top: 64px; } footer .wrap { display: grid; grid-template-columns: 1fr auto; column-gap: 48px; } }`;
 
 const SCRIPT = `document.addEventListener("DOMContentLoaded", function () {
-	if (!(navigator.clipboard && navigator.clipboard.writeText)) return;
+	var clip = !!(navigator.clipboard && navigator.clipboard.writeText);
 	var live = document.querySelector("p[aria-live]");
-	document.querySelectorAll("button.copy").forEach(function (b) {
-		b.hidden = false;
+	var tabs = document.querySelector(".tabs");
+	var copyBtn = tabs && tabs.querySelector(".tabbar button.copy");
+	if (clip) document.querySelectorAll("button.copy").forEach(function (b) {
+		if (b !== copyBtn) b.hidden = false;
 		var label = b.textContent;
 		b.addEventListener("click", function () {
 			navigator.clipboard.writeText(b.dataset.copy).then(function () {
@@ -370,16 +386,67 @@ const SCRIPT = `document.addEventListener("DOMContentLoaded", function () {
 			}, function () {});
 		});
 	});
+	if (!tabs) return;
+	tabs.classList.add("js");
+	tabs.querySelector('[role="tablist"]').hidden = false;
+	var tabEls = Array.prototype.slice.call(tabs.querySelectorAll('[role="tab"]'));
+	var panelOf = function (t) { return document.getElementById(t.getAttribute("aria-controls")); };
+	function select(i) {
+		tabEls.forEach(function (t, j) {
+			t.setAttribute("aria-selected", j === i ? "true" : "false");
+			t.setAttribute("tabindex", j === i ? "0" : "-1");
+			panelOf(t).hidden = j !== i;
+		});
+		var panel = panelOf(tabEls[i]);
+		var pre = panel.querySelector("pre");
+		copyBtn.hidden = !(clip && pre);
+		if (pre) {
+			copyBtn.dataset.copy = pre.textContent;
+			copyBtn.setAttribute("aria-label", panel.dataset.label);
+		}
+	}
+	tabEls.forEach(function (t, i) {
+		t.addEventListener("click", function () { select(i); });
+		t.addEventListener("keydown", function (e) {
+			var n = tabEls.length;
+			var j = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i + n - 1) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : e.key === "Enter" ? i : -1;
+			if (j < 0) return;
+			e.preventDefault();
+			tabEls[j].focus();
+			if (e.key === "Enter") select(i);
+		});
+	});
+	select(0);
 });`;
 
-function copyButton(c: LandingCopy, kind: "primary" | "secondary", value: string, label: string): string {
-	return `<button type="button" class="copy ${kind}" data-copy="${escapeAttribute(value)}" data-done="${escapeAttribute(c.copied)}" aria-label="${escapeAttribute(label)}" hidden>${escapeText(c.copy)}</button>`;
+function copyButton(c: LandingCopy, value: string, label: string): string {
+	return `<button type="button" class="copy primary" data-copy="${escapeAttribute(value)}" data-done="${escapeAttribute(c.copied)}" aria-label="${escapeAttribute(label)}" hidden>${escapeText(c.copy)}</button>`;
 }
 
-function snippet(c: LandingCopy, t: (s: string) => string, client: string, sentence: string, code?: { value: string; label: string }): string {
-	const button = code ? `\n${copyButton(c, "secondary", code.value, code.label)}` : "";
-	const pre = code ? `\n<pre><code>${escapeText(code.value)}</code></pre>` : "";
-	return `<div class="snippet">\n<div class="snippet-head">\n<h3>${client}</h3>${button}\n</div>\n<p>${t(sentence)}</p>${pre}\n</div>`;
+const CLIENTS = [
+	{ key: "claude", name: "Claude" },
+	{ key: "claude-code", name: "Claude Code" },
+	{ key: "cursor", name: "Cursor" },
+] as const;
+
+/** The install snippets as tabs; without JS the tablist and the copy button stay hidden and every panel shows. */
+function installTabs(c: LandingCopy, t: (s: string) => string): string {
+	const panels: Record<(typeof CLIENTS)[number]["key"], { sentence: string; code?: { value: string; label: string } }> = {
+		claude: { sentence: c.connectClaude },
+		"claude-code": { sentence: c.connectClaudeCode, code: { value: CLAUDE_CODE_COMMAND, label: c.copyCommandLabel } },
+		cursor: { sentence: c.connectCursor, code: { value: CURSOR_CONFIG, label: c.copyConfigLabel } },
+	};
+	const tabs = CLIENTS.map(
+		({ key, name }, i) => `<button type="button" role="tab" id="tab-${key}" aria-controls="panel-${key}" aria-selected="${i === 0}">${name}</button>`,
+	).join("\n");
+	const body = CLIENTS.map(({ key, name }) => {
+		const { sentence, code } = panels[key];
+		const label = code ? ` data-label="${escapeAttribute(code.label)}"` : "";
+		const pre = code ? `\n<pre><code>${escapeText(code.value)}</code></pre>` : "";
+		return `<div role="tabpanel" id="panel-${key}" aria-labelledby="tab-${key}"${label}>\n<h3 class="panel-title">${name}</h3>\n<p>${t(sentence)}</p>${pre}\n</div>`;
+	}).join("\n");
+	const copy = `<button type="button" class="copy secondary" data-done="${escapeAttribute(c.copied)}" hidden>${escapeText(c.copy)}</button>`;
+	return `<div class="tabs">\n<div class="tabbar">\n<div role="tablist" aria-label="${escapeAttribute(c.clientsLabel)}" hidden>\n${tabs}\n</div>\n${copy}\n</div>\n${body}\n</div>`;
 }
 
 function langLink(lang: Lang, current: Lang): string {
@@ -422,7 +489,7 @@ ${CSS}
 <span class="sr-only">${t(c.endpointLabel)}</span>
 <span class="pill">MCP</span>
 <code>${escapeText(MCP_ENDPOINT)}</code>
-${copyButton(c, "primary", MCP_ENDPOINT, c.copyEndpointLabel)}
+${copyButton(c, MCP_ENDPOINT, c.copyEndpointLabel)}
 </div>
 </div>
 </header>
@@ -435,16 +502,19 @@ ${renderExamples(c.examples, t)}
 </dl>
 <h3>${t(c.realAnswersHeading)}</h3>
 <p class="note">${t(c.realAnswersNote)}</p>
+<div class="chat" role="log" aria-label="${escapeAttribute(c.chatLabel)}">
+<div class="chat-head"><span>Claude + ruptures-medicaments</span><span>${escapeText(c.chatDate)}</span></div>
+<div class="chat-body">
 ${renderRealAnswers(c.realAnswers, t)}
+</div>
+</div>
 </div>
 </section>
 
 <section>
 <h2>${t(c.connectHeading)}</h2>
 <div class="body">
-${snippet(c, t, "Claude", c.connectClaude)}
-${snippet(c, t, "Claude Code", c.connectClaudeCode, { value: CLAUDE_CODE_COMMAND, label: c.copyCommandLabel })}
-${snippet(c, t, "Cursor", c.connectCursor, { value: CURSOR_CONFIG, label: c.copyConfigLabel })}
+${installTabs(c, t)}
 <p>${t(c.connectOther)}</p>
 </div>
 </section>
