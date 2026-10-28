@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.2.0...v1.3.0) (2026-10-28)
+
+
+### Features
+
+* **mcp:** add get_medicine_info with medicine presentations ([#15](https://github.com/amine7536/mcp-medicaments-france/issues/15)) ([cdde0e1](https://github.com/amine7536/mcp-medicaments-france/commit/cdde0e1283bbc1a76883fbe853e8467d5e5212b7))
+
 ## [1.2.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.1.0...v1.2.0) (2026-10-28)
 
 
