@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { currentShortages, getMedicines, searchCis, unmatchedShortages } from "../../lib/db";
+import { cisByCip13, currentShortages, getMedicines, searchCis, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { Cis, describeShortage, ShortageSummary, toShortageSummary } from "../schemas";
@@ -7,6 +7,18 @@ import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
 export const SEARCH_LIMIT = 100;
 export const UNMATCHED_LIMIT = 10;
+const CIP13_RE = /^\d{13}$/;
+
+/** A 13-digit query is a CIP13: the medicine of that presentation, else nothing. Otherwise the full-text search. */
+async function findCis(db: D1Database, query: string): Promise<string[]> {
+	const q = query.trim();
+	if (CIP13_RE.test(q)) {
+		const cis = await cisByCip13(db, q);
+		return cis === null ? [] : [cis];
+	}
+	return searchCis(db, query, SEARCH_LIMIT);
+}
+
 export const SHORTAGE_NOTE = "No shortage linked to this medicine. Not listed does not mean available.";
 
 export const inputSchema = z.object({
@@ -45,7 +57,7 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 	outputSchema,
 	async handler({ db, now }, { query, only_in_shortage, limit }) {
 		const dates = await loadSourceDates(db);
-		const cis = await searchCis(db, query, SEARCH_LIMIT);
+		const cis = await findCis(db, query);
 		const [meds, shortages, unmatched] = await Promise.all([
 			getMedicines(db, cis),
 			currentShortages(db, cis),

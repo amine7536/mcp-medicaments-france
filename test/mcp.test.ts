@@ -14,7 +14,7 @@ const SUBSTITUTION_RULE =
 const NEW_INFO_ONLY =
 	"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.";
 
-const TOOLS = ["search_medicine", "get_availability", "list_current_shortages", "recent_changes", "is_major_therapeutic_interest"];
+const TOOLS = ["search_medicine", "get_availability", "list_current_shortages", "recent_changes", "is_major_therapeutic_interest", "get_medicine_info"];
 
 async function rpc(id: number, method: string, params: Record<string, unknown>, headers: Record<string, string> = {}) {
 	const res = await exports.default.fetch(URL, {
@@ -59,6 +59,7 @@ describe("/mcp", () => {
 
 		const list = await rpc(2, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
 		const tools = list.result.tools as Array<{ name: string; annotations: Record<string, boolean>; outputSchema: object; description: string }>;
+		expect(tools).toHaveLength(6);
 		expect(tools.map((t) => t.name).sort()).toEqual([...TOOLS].sort());
 		for (const t of tools) {
 			expect(t.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
@@ -76,6 +77,19 @@ describe("/mcp", () => {
 		);
 		expect(call.result.isError).toBeFalsy();
 		expect(call.result.structuredContent).toMatchObject({ data: { kind: "availability", medicine: { cis: "60000001" } } });
+	});
+
+	it("calls get_medicine_info by CIP13 through the SDK output validation", async () => {
+		const call = await rpc(
+			4,
+			"tools/call",
+			{ name: "get_medicine_info", arguments: { cip13: "3400930000011" } },
+			{ "MCP-Protocol-Version": PROTOCOL_VERSION },
+		);
+		expect(call.result.isError).toBeFalsy();
+		const data = (call.result.structuredContent as { data: { kind: string; medicine: { cis: string }; presentations: Array<{ cip13: string }> } }).data;
+		expect(data).toMatchObject({ kind: "info", medicine: { cis: "60000001" } });
+		expect(data.presentations[0]?.cip13).toBe("3400930000011");
 	});
 
 	it("rate-limited: 429 JSON with Retry-After: 60, keyed on the client IP", async () => {

@@ -7,11 +7,12 @@ import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
+import { getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
-import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, SHORTAGES, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESENTATIONS, SHORTAGES, seed } from "./seed";
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown).";
@@ -162,6 +163,13 @@ describe("search_medicine", () => {
 		expect(summary(result)).toContain("Check the spelling or search by active substance");
 		const syntax = await call(searchMedicine, { query: '"* OR NEAR(' });
 		expect(syntax.data.results).toEqual([]);
+	});
+
+	it("resolves a 13-digit query as a CIP13", async () => {
+		const { data } = await call(searchMedicine, { query: ` ${PRESENTATIONS.dolipraneBoxOf100.cip13} ` });
+		expect(data.results.map((r: { cis: string }) => r.cis)).toEqual([MEDICINES.dolipraneTablet.cis]);
+		const unknown = await call(searchMedicine, { query: "3400999999999" });
+		expect(unknown.data.results).toEqual([]);
 	});
 
 	it("quotes the ANSM wording of a month-precision return, never a bare ISO date", async () => {
@@ -449,6 +457,98 @@ describe("is_major_therapeutic_interest", () => {
 			kind: "not_found",
 			possibly_related_shortages: [],
 		});
+	});
+});
+
+describe("get_medicine_info", () => {
+	const { dolipraneBoxOf8: box8, dolipraneBoxOf100: box100, dolipraneStopped: stopped } = PRESENTATIONS;
+	const cips = (data: { presentations: Array<{ cip13: string }> }) => data.presentations.map((p) => p.cip13);
+
+	it("requires exactly one argument, with the source line", async () => {
+		for (const args of [{}, { cis: MEDICINES.dolipraneTablet.cis, cip13: box8.cip13 }, { cip13: box8.cip13, name: "doliprane" }]) {
+			const { result } = await call(getMedicineInfo, args);
+			expect(result.isError).toBe(true);
+			expect(text(result)).toBe(`Provide exactly one of cis, cip13 or name.\n${SAFETY_LINE}\n${SOURCE_LINE}`);
+		}
+		expect(getMedicineInfo.inputSchema.safeParse({ cip13: "340093000001" }).success).toBe(false);
+		expect(getMedicineInfo.inputSchema.safeParse({ cis: "6000000" }).success).toBe(false);
+	});
+
+	it("has the description and the info-only suffix", () => {
+		expect(getMedicineInfo.description).toBe(
+			"Look up a medicine's official reference information from the French public medicines database (BDPM): boxes with their CIP13 barcode, marketing status, price and reimbursement rate. " +
+				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
+		);
+	});
+
+	it("info by CIS: identity, marketed presentations first then by label", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+		expect(data.kind).toBe("info");
+		expect(data.medicine).toEqual({
+			cis: MEDICINES.dolipraneTablet.cis,
+			name: MEDICINES.dolipraneTablet.name,
+			form: "comprimé",
+			routes: null,
+			holder: null,
+			marketing_status: null,
+			is_mitm: true,
+		});
+		expect(cips(data)).toEqual([box100.cip13, box8.cip13, stopped.cip13]);
+		expect(data.presentations[2]).toEqual({
+			cip13: stopped.cip13,
+			cip7: stopped.cip13.slice(5, 12),
+			label: stopped.label,
+			admin_status: "Présentation active",
+			marketing_status: stopped.marketing_status,
+			declared_at: "2011-03-16",
+			hospital_approval: true,
+			reimbursement_rates: [100, 65],
+			price_eur: null,
+			public_price_eur: 1.5,
+			dispensing_fee_eur: null,
+			reimbursement_indications: null,
+		});
+		expect(summary(result).split("\n").slice(0, 3)).toEqual([
+			`${MEDICINES.dolipraneTablet.name} (CIS ${MEDICINES.dolipraneTablet.cis}): 2 marketed presentation(s) out of 3.`,
+			`- ${box100.label} (CIP13 ${box100.cip13}): price not listed; not reimbursed / not listed.`,
+			`- ${box8.label} (CIP13 ${box8.cip13}): public price 2.18 EUR; reimbursed 65%.`,
+		]);
+		expect(summary(result)).not.toContain(stopped.cip13);
+	});
+
+	it("info by CIP13: the matching presentation comes first", async () => {
+		const { data: byCis } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+		const second = byCis.presentations[1].cip13 as string;
+		const { data, result } = await call(getMedicineInfo, { cip13: second });
+		expect(data.kind).toBe("info");
+		expect(data.medicine.cis).toBe(MEDICINES.dolipraneTablet.cis);
+		expect(cips(data)).toEqual([second, ...cips(byCis).filter((c: string) => c !== second)]);
+		expect(cips((await call(getMedicineInfo, { cip13: stopped.cip13 })).data)[0]).toBe(stopped.cip13);
+		const { result: raw } = await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }));
+		expect(raw).toEqual(result);
+		expect((await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }))).cis).toBe(MEDICINES.dolipraneTablet.cis);
+	});
+
+	it("info by name; a medicine without presentations has an empty list", async () => {
+		const { data } = await call(getMedicineInfo, { name: "amoxicilline" });
+		expect(data).toMatchObject({ kind: "info", medicine: { cis: MEDICINES.amoxicilline.cis }, presentations: [] });
+	});
+
+	it("caps the summary at 10 presentations and keeps the full list in structuredContent", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.kardegic.cis });
+		expect(data.presentations).toHaveLength(12);
+		const lines = summary(result).split("\n");
+		expect(lines.filter((l) => l.startsWith("- "))).toHaveLength(SUMMARY_LIMIT);
+		expect(lines).toContain("2 more marketed presentation(s) in the structured content.");
+	});
+
+	it("candidates and not_found variants", async () => {
+		expect((await call(getMedicineInfo, { name: "doliprane" })).data.kind).toBe("candidates");
+		for (const args of [{ cis: "69999999" }, { cip13: "3400999999999" }, { name: "zzzunknown" }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+			expect(summary(result)).toContain("Check the spelling or search by active substance");
+		}
 	});
 });
 
