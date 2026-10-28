@@ -107,6 +107,10 @@ Substitution check: asks Claude Code the substitution questions 3 times each (`-
 pnpm golden -- --url http://localhost:8787/mcp
 ```
 
+## Releases
+
+Versions come from the Conventional Commits on `main`: release-please keeps a release PR open that bumps the version in `package.json`, `server.json` and `src/mcp/server.ts` and updates `CHANGELOG.md`. Merging that PR tags `vX.Y.Z`, creates the GitHub release and publishes `server.json` to the MCP registry. The deploy follows every push to `main`.
+
 ## Licence
 
 MIT.
