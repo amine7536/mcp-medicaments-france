@@ -2,13 +2,11 @@ import * as z from "zod";
 import { cisByCip13, getMedicineInfo as loadMedicineInfo, MARKETED, type MedicineIdentity, type PresentationRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
-import { Candidates, Cis, NotFound } from "../schemas";
+import { Candidates, Cip13, Cis, NotFound } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
 export const SUMMARY_LIMIT = 10;
-
-export const Cip13 = z.string().regex(/^\d{13}$/);
 
 export const inputSchema = z.object({
 	cis: Cis.optional().describe("8-digit BDPM medicine code (CIS)."),

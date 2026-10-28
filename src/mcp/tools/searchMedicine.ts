@@ -2,17 +2,16 @@ import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicines, searchCis, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
-import { Cis, describeShortage, ShortageSummary, toShortageSummary } from "../schemas";
+import { Cip13, Cis, describeShortage, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
 export const SEARCH_LIMIT = 100;
 export const UNMATCHED_LIMIT = 10;
-const CIP13_RE = /^\d{13}$/;
 
 /** A 13-digit query is a CIP13: the medicine of that presentation, else nothing. Otherwise the full-text search. */
 async function findCis(db: D1Database, query: string): Promise<string[]> {
 	const q = query.trim();
-	if (CIP13_RE.test(q)) {
+	if (Cip13.safeParse(q).success) {
 		const cis = await cisByCip13(db, q);
 		return cis === null ? [] : [cis];
 	}

@@ -9,6 +9,7 @@ export const Status = z.enum(STATUSES);
 export const Scope = z.enum(SCOPES);
 export const ChangeType = z.enum(CHANGE_TYPES);
 export const Cis = z.string().regex(/^\d{8}$/);
+export const Cip13 = z.string().regex(/^\d{13}$/);
 
 /** Below this match confidence a shortage is reported as a probable match. */
 export const PROBABLE_MATCH_BELOW = 0.8;
