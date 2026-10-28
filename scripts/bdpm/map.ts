@@ -82,6 +82,7 @@ export interface BdpmInput {
 
 const CIS_RE = /^\d{8}$/;
 const CIP13_RE = /^\d{13}$/;
+const PRICE_RE = /^\d+(,\d{3})*(,\d{1,2})?$/;
 const opt = (v: string | undefined): string | null => (v === undefined || v === "" ? null : v);
 const req = (v: string | undefined): string => v ?? "";
 
@@ -96,14 +97,13 @@ function validate(rows: string[][], file: (typeof FILES)[keyof typeof FILES]): v
 	});
 }
 
-/** A BDPM price: the last comma is the decimal separator, the other commas are dropped (`1,466,29` is 1466.29). Null when empty. */
+/** A BDPM price: the last comma is the decimal separator, the other commas are dropped (`1,466,29` is 1466.29). Null when empty. Throws on any other format. */
 export function parsePrice(v: string): number | null {
 	const s = v.trim();
 	if (s === "") return null;
+	if (!PRICE_RE.test(s)) throw new Error(`${FILES.presentations.name}: invalid price "${s}"`);
 	const i = s.lastIndexOf(",");
-	const n = Number(i < 0 ? s : `${s.slice(0, i).replaceAll(",", "")}.${s.slice(i + 1)}`);
-	if (!Number.isFinite(n)) throw new Error(`${FILES.presentations.name}: invalid price "${s}"`);
-	return n;
+	return Number(i < 0 ? s : `${s.slice(0, i).replaceAll(",", "")}.${s.slice(i + 1)}`);
 }
 
 /** BDPM reimbursement rates (`65%`, `65 %`, `100%;65%`) as a JSON array of integers in source order. Null when empty. */

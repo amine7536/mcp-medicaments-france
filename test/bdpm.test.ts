@@ -180,6 +180,10 @@ describe("presentations", () => {
 		expect(() => parsePrice("n/a")).toThrow('CIS_CIP_bdpm.txt: invalid price "n/a"');
 	});
 
+	it.each(["1e3", "0x10", "-1,00", "1.466,29"])("rejects the price %s", (price) => {
+		expect(() => parsePrice(price)).toThrow(`CIS_CIP_bdpm.txt: invalid price "${price}"`);
+	});
+
 	it("parses reimbursement rates into a JSON array in source order", () => {
 		expect(parseRates("65%")).toBe("[65]");
 		expect(parseRates("65 %")).toBe("[65]");
