@@ -92,4 +92,23 @@ describe("/mcp", () => {
 		expect(await res.json()).toEqual({ error: "rate_limited", retry_after_seconds: 60 });
 		expect(limit).toHaveBeenCalledWith({ key: "203.0.113.7" });
 	});
+
+	it("PUT reaches the MCP handler, not the router's 405 or 404", async () => {
+		const limit = vi.fn(async () => ({ success: true }));
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL, { method: "PUT" }), { ...env, MCP_LIMIT: { limit } }, ctx);
+		await waitOnExecutionContext(ctx);
+		expect(limit).toHaveBeenCalledOnce();
+		const body = await res.text();
+		expect(body).not.toBe(JSON.stringify({ error: "method_not_allowed" }));
+		expect(body).not.toBe(JSON.stringify({ error: "not_found" }));
+	});
+});
+
+describe("unknown paths", () => {
+	it("404 JSON", async () => {
+		const res = await exports.default.fetch(`${URL}/unknown`);
+		expect(res.status).toBe(404);
+		expect(await res.json()).toEqual({ error: "not_found" });
+	});
 });

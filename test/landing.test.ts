@@ -295,11 +295,18 @@ describe("GET /", () => {
 		});
 	}
 
+	it("answers HEAD with 200, the HTML content-type and an empty body", async () => {
+		const res = await exports.default.fetch(`${ORIGIN}/`, { method: "HEAD" });
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+		expect(await res.text()).toBe("");
+	});
+
 	it("rejects non-GET methods with 405", async () => {
 		for (const method of ["POST", "PUT", "DELETE"]) {
 			const res = await exports.default.fetch(`${ORIGIN}/`, { method });
 			expect(res.status).toBe(405);
-			expect(res.headers.get("allow")).toBe("GET");
+			expect(res.headers.get("allow")).toBe("GET, HEAD");
 		}
 	});
 });
