@@ -21,16 +21,23 @@ export function isStale(lastIngest: string | null, now: Date): boolean {
 export interface SourceDates {
 	ansm_last_ingest: string | null;
 	bdpm_release: string | null;
+	/** Start of the latest successful BDPM import, when its files (the live safety file included) were downloaded. */
+	bdpm_imported_at: string | null;
 }
 
-export const UNKNOWN_DATES: SourceDates = { ansm_last_ingest: null, bdpm_release: null };
+export const UNKNOWN_DATES: SourceDates = { ansm_last_ingest: null, bdpm_release: null, bdpm_imported_at: null };
 
 /** Dates of the latest successful ANSM ingest and BDPM import. */
 export async function loadSourceDates(db: D1Database): Promise<SourceDates> {
-	const latest = (source: string, column: string) =>
-		db.prepare(`SELECT ${column} AS v FROM ingest_runs WHERE source = ? AND status = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1`).bind(source);
-	const [ansm, bdpm] = await db.batch<{ v: string | null }>([latest("ansm", "finished_at"), latest("bdpm", "bdpm_release")]);
-	return { ansm_last_ingest: ansm?.results[0]?.v ?? null, bdpm_release: bdpm?.results[0]?.v ?? null };
+	const latest = (source: string, columns: string) =>
+		db.prepare(`SELECT ${columns} FROM ingest_runs WHERE source = ? AND status = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1`).bind(source);
+	const [ansm, bdpm] = await db.batch<Record<string, string | null>>([
+		latest("ansm", "finished_at AS ansm_last_ingest"),
+		latest("bdpm", "bdpm_release, started_at AS bdpm_imported_at"),
+	]);
+	const a = ansm?.results[0];
+	const b = bdpm?.results[0];
+	return { ansm_last_ingest: a?.ansm_last_ingest ?? null, bdpm_release: b?.bdpm_release ?? null, bdpm_imported_at: b?.bdpm_imported_at ?? null };
 }
 
 export function envelopeSchema<D extends z.ZodType>(data: D) {
@@ -41,6 +48,7 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 			bdpm: z.literal(BDPM_SOURCE_URL),
 			ansm_last_ingest: z.iso.datetime().nullable(),
 			bdpm_release: z.iso.date().nullable(),
+			bdpm_imported_at: z.iso.datetime().nullable(),
 		}),
 		coverage_note: z.literal(COVERAGE_NOTE),
 		disclaimer: z.literal(DISCLAIMER),
@@ -66,7 +74,7 @@ export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D>
 }
 
 export function sourceLine(dates: SourceDates): string {
-	return `Source: ANSM (updated ${dates.ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${dates.bdpm_release ?? "unknown"}).`;
+	return `Source: ANSM (updated ${dates.ansm_last_ingest?.slice(0, 10) ?? "unknown"}), BDPM (release ${dates.bdpm_release ?? "unknown"}, imported ${dates.bdpm_imported_at?.slice(0, 10) ?? "unknown"}).`;
 }
 
 const SAFETY_LINE = `Safety: ${SAFETY}`;
