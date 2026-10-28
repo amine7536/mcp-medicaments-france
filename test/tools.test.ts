@@ -5,6 +5,7 @@ import type * as z from "zod";
 import { log } from "../src/ingest/http";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
+import { Medicine, Presentation } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
 import { getMedicineInfo, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
@@ -493,6 +494,8 @@ describe("get_medicine_info", () => {
 			marketing_status: null,
 			is_mitm: true,
 		});
+		expect(Medicine.strict().safeParse(data.medicine).success).toBe(true);
+		for (const p of data.presentations) expect(Presentation.strict().safeParse(p).success).toBe(true);
 		expect(cips(data)).toEqual([box100.cip13, box8.cip13, stopped.cip13]);
 		expect(data.presentations[2]).toEqual({
 			cip13: stopped.cip13,

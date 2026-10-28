@@ -1,8 +1,8 @@
 import * as z from "zod";
-import { cisByCip13, getMedicineInfo as loadMedicineInfo, MARKETED, type MedicineIdentity, type PresentationRow } from "../../lib/db";
+import { cisByCip13, getMedicineInfo as loadMedicineInfo, MARKETED } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
-import { Candidates, Cip13, Cis, NotFound } from "../schemas";
+import { Candidates, Cip13, Cis, Medicine, NotFound, Presentation } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
@@ -14,31 +14,6 @@ export const inputSchema = z.object({
 	name: z.string().min(2).max(100).optional().describe("Medicine name; resolved to one CIS or a list of candidates."),
 });
 
-const Medicine = z.object({
-	cis: Cis,
-	name: z.string(),
-	form: z.string().nullable(),
-	routes: z.string().nullable(),
-	holder: z.string().nullable(),
-	marketing_status: z.string().nullable(),
-	is_mitm: z.boolean(),
-});
-
-const Presentation = z.object({
-	cip13: Cip13,
-	cip7: z.string().nullable(),
-	label: z.string(),
-	admin_status: z.string().nullable(),
-	marketing_status: z.string().nullable(),
-	declared_at: z.iso.date().nullable(),
-	hospital_approval: z.boolean().nullable(),
-	reimbursement_rates: z.array(z.int().min(0)),
-	price_eur: z.number().nullable(),
-	public_price_eur: z.number().nullable(),
-	dispensing_fee_eur: z.number().nullable(),
-	reimbursement_indications: z.string().nullable(),
-});
-
 export const Data = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("info"), medicine: Medicine, presentations: z.array(Presentation) }),
 	Candidates,
@@ -48,12 +23,12 @@ type Data = z.infer<typeof Data>;
 
 export const outputSchema = envelopeSchema(Data);
 
-const price = (p: PresentationRow): string => (p.public_price_eur === null ? "price not listed" : `public price ${p.public_price_eur.toFixed(2)} EUR`);
-const rates = (p: PresentationRow): string =>
+const price = (p: Presentation): string => (p.public_price_eur === null ? "price not listed" : `public price ${p.public_price_eur.toFixed(2)} EUR`);
+const rates = (p: Presentation): string =>
 	p.reimbursement_rates.length === 0 ? "not reimbursed / not listed" : `reimbursed ${p.reimbursement_rates.map((r) => `${r}%`).join(", ")}`;
 
 /** The medicine line, then one line per marketed presentation (at most `SUMMARY_LIMIT`). */
-export function infoSummary(medicine: MedicineIdentity, presentations: PresentationRow[]): string {
+export function infoSummary(medicine: Medicine, presentations: Presentation[]): string {
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED);
 	const lines = [`${medicine.name} (CIS ${medicine.cis}): ${marketed.length} marketed presentation(s) out of ${presentations.length}.`];
 	for (const p of marketed.slice(0, SUMMARY_LIMIT)) lines.push(`- ${p.label} (CIP13 ${p.cip13}): ${price(p)}; ${rates(p)}.`);
@@ -67,7 +42,7 @@ async function info(db: D1Database, cis: string, cip13: string | null): Promise<
 	const { medicine } = found;
 	let { presentations } = found;
 	const match = cip13 === null ? -1 : presentations.findIndex((p) => p.cip13 === cip13);
-	if (match > 0) presentations = [presentations[match] as PresentationRow, ...presentations.filter((_, i) => i !== match)];
+	if (match > 0) presentations = [presentations[match] as Presentation, ...presentations.filter((_, i) => i !== match)];
 	return { data: { kind: "info", medicine, presentations }, summary: infoSummary(medicine, presentations) };
 }
 

@@ -1,4 +1,4 @@
-import type { ShortageRow } from "../mcp/schemas";
+import type { Medicine, Presentation, ShortageRow } from "../mcp/schemas";
 import { ftsTokens, normalize } from "./normalize";
 
 const SHORTAGE_COLUMNS = [
@@ -228,31 +228,6 @@ export async function recentChanges(
 /** The `marketing_status` of a presentation that is on the market. */
 export const MARKETED = "Déclaration de commercialisation";
 
-export interface MedicineIdentity {
-	cis: string;
-	name: string;
-	form: string | null;
-	routes: string | null;
-	holder: string | null;
-	marketing_status: string | null;
-	is_mitm: boolean;
-}
-
-export interface PresentationRow {
-	cip13: string;
-	cip7: string | null;
-	label: string;
-	admin_status: string | null;
-	marketing_status: string | null;
-	declared_at: string | null;
-	hospital_approval: boolean | null;
-	reimbursement_rates: number[];
-	price_eur: number | null;
-	public_price_eur: number | null;
-	dispensing_fee_eur: number | null;
-	reimbursement_indications: string | null;
-}
-
 /** The CIS of the presentation with this CIP13, or null. */
 export async function cisByCip13(db: D1Database, cip13: string): Promise<string | null> {
 	return db.prepare("SELECT cis FROM presentations WHERE cip13 = ?").bind(cip13).first<string>("cis");
@@ -262,7 +237,7 @@ export async function cisByCip13(db: D1Database, cip13: string): Promise<string 
 export async function getMedicineInfo(
 	db: D1Database,
 	cis: string,
-): Promise<{ medicine: MedicineIdentity; presentations: PresentationRow[] } | null> {
+): Promise<{ medicine: Medicine; presentations: Presentation[] } | null> {
 	const [med, pres] = await db.batch([
 		db
 			.prepare(
@@ -275,9 +250,9 @@ export async function getMedicineInfo(
 			)
 			.bind(cis, MARKETED),
 	]);
-	const m = med?.results[0] as (Omit<MedicineIdentity, "is_mitm"> & { is_mitm: number }) | undefined;
+	const m = med?.results[0] as (Omit<Medicine, "is_mitm"> & { is_mitm: number }) | undefined;
 	if (m === undefined) return null;
-	type Raw = Omit<PresentationRow, "hospital_approval" | "reimbursement_rates"> & { hospital_approval: number | null; reimbursement_rates: string | null };
+	type Raw = Omit<Presentation, "hospital_approval" | "reimbursement_rates"> & { hospital_approval: number | null; reimbursement_rates: string | null };
 	const presentations = ((pres?.results ?? []) as Raw[]).map((p) => ({
 		...p,
 		hospital_approval: p.hospital_approval === null ? null : p.hospital_approval === 1,
