@@ -103,6 +103,16 @@ describe("/mcp", () => {
 		expect(body).not.toBe(JSON.stringify({ error: "method_not_allowed" }));
 		expect(body).not.toBe(JSON.stringify({ error: "not_found" }));
 	});
+
+	it("a handler exception rejects fetch instead of answering 500", async () => {
+		const limit = vi.fn(async () => {
+			throw new Error("limiter down");
+		});
+		const ctx = createExecutionContext();
+		await expect(
+			worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL, { method: "POST" }), { ...env, MCP_LIMIT: { limit } }, ctx),
+		).rejects.toThrow("limiter down");
+	});
 });
 
 describe("unknown paths", () => {

@@ -51,6 +51,9 @@ app.get("/health", (c) => handleHealth(c.req.raw, c.env, c.executionCtx as Execu
 app.all("/admin/ingest", (c) => handleAdminIngest(c.req.raw, c.env, c.executionCtx as ExecutionContext));
 app.all("/mcp", (c) => handleMcp(c.req.raw, c.env, c.executionCtx as ExecutionContext));
 app.notFound((c) => c.json({ error: "not_found" }, 404));
+app.onError((err) => {
+	throw err;
+});
 
 export default {
 	fetch: (request, env, ctx) => app.fetch(request, env, ctx),
