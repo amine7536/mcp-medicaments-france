@@ -2,6 +2,10 @@
 
 MCP server: medicine shortages in France (ANSM + BDPM). Ruptures et tensions d'approvisionnement des médicaments, pour Claude, ChatGPT, Cursor.
 
+> **Information uniquement, pas un avis médical.** Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.
+>
+> **Information only, not medical advice.** This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.
+
 ## Endpoint
 
 ```
@@ -41,12 +45,12 @@ Every result carries the sources, their update dates, the coverage note, the dis
 
 ## Example questions
 
-- "Le Doliprane est-il en rupture ?"
-- "Quels médicaments sont en rupture à l'hôpital en ce moment ?"
-- "Qu'est-ce qui a changé cette semaine ?"
-- "L'amoxicilline est-elle un MITM ?"
-- "Mon médicament n'est pas listé, il est donc disponible ?"
-- "Par quoi remplacer X ?" (the server refuses to name any alternative and refers to a pharmacist or doctor)
+- « L'Aspirine est-elle en rupture ? » — Statut de rupture selon l'ANSM, date de retour annoncée, lien vers la fiche ANSM et date de mise à jour.
+- « Quels sont les médicaments en tension pour la cardiologie ? » — Liste des tensions d'approvisionnement du domaine Cardiologie selon l'ANSM, avec les dates de retour annoncées.
+- « Qu'est-ce qui a changé cette semaine ? » — Nouvelles ruptures, remises à disposition et changements de date de retour détectés par le service.
+- « L'amoxicilline est-elle un MITM ? » — Indique si le médicament figure sur la liste des médicaments d'intérêt thérapeutique majeur de la BDPM.
+- « Mon médicament n'est pas listé, il est donc disponible ? » — Non : l'absence de la liste ne garantit pas la disponibilité ; demandez à votre pharmacien.
+- « Par quoi remplacer le Brevibloc ? » — Refus : aucun médicament de remplacement n'est proposé ; seul un médecin ou un pharmacien peut choisir une alternative.
 
 ## Coverage and limits
 
