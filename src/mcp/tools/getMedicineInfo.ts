@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { cisByCip13, getMedicineInfo as loadMedicineInfo, MARKETED } from "../../lib/db";
+import { cisByCip13, getMedicineInfo as loadPresentations, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
 import { Candidates, Cip13, Cis, Medicine, NotFound, Presentation } from "../schemas";
@@ -36,13 +36,17 @@ export function infoSummary(medicine: Medicine, presentations: Presentation[]): 
 	return lines.join("\n");
 }
 
-async function info(db: D1Database, cis: string, cip13: string | null): Promise<{ data: Data; summary: string } | null> {
-	const found = await loadMedicineInfo(db, cis);
-	if (found === null) return null;
-	const { medicine } = found;
-	let { presentations } = found;
-	const match = cip13 === null ? -1 : presentations.findIndex((p) => p.cip13 === cip13);
-	if (match > 0) presentations = [presentations[match] as Presentation, ...presentations.filter((_, i) => i !== match)];
+async function info(db: D1Database, m: MedicineRow, cip13: string | null): Promise<{ data: Data; summary: string }> {
+	const medicine: Medicine = {
+		cis: m.cis,
+		name: m.name,
+		form: m.form,
+		routes: m.routes,
+		holder: m.holder,
+		marketing_status: m.marketing_status,
+		is_mitm: m.is_mitm,
+	};
+	const presentations = await loadPresentations(db, m.cis, cip13);
 	return { data: { kind: "info", medicine, presentations }, summary: infoSummary(medicine, presentations) };
 }
 
@@ -61,16 +65,17 @@ export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 		const dates = await loadSourceDates(db);
 		if (cip13 !== undefined) {
 			const code = await cisByCip13(db, cip13);
-			const out = code === null ? null : await info(db, code, cip13);
-			return { result: result(dates, now, out ?? notFound(`CIP13 ${cip13}`, [])), cis: out ? code : null };
+			const med = code === null ? undefined : (await getMedicines(db, [code])).get(code);
+			const out = med === undefined ? notFound(`CIP13 ${cip13}`, []) : await info(db, med, cip13);
+			return { result: result(dates, now, out), cis: med ? med.cis : null };
 		}
 		if (cis !== undefined) {
-			return { result: result(dates, now, (await info(db, cis, null)) ?? notFound(`CIS ${cis}`, [])), cis };
+			const med = (await getMedicines(db, [cis])).get(cis);
+			return { result: result(dates, now, med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, med, null)), cis };
 		}
 		const resolved = await resolveName(db, name as string);
 		if (resolved.kind === "candidates") return { result: result(dates, now, { data: resolved, summary: candidatesSummary(name as string) }) };
 		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [])) };
-		const code = resolved.medicine.cis;
-		return { result: result(dates, now, (await info(db, code, null)) ?? notFound(`"${name}"`, [])), cis: code };
+		return { result: result(dates, now, await info(db, resolved.medicine, null)), cis: resolved.medicine.cis };
 	},
 };

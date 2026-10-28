@@ -3,6 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
+import { getMedicineInfo as loadPresentations } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
 import { Medicine, Presentation } from "../src/mcp/schemas";
@@ -527,6 +528,9 @@ describe("get_medicine_info", () => {
 		expect(data.medicine.cis).toBe(MEDICINES.dolipraneTablet.cis);
 		expect(cips(data)).toEqual([second, ...cips(byCis).filter((c: string) => c !== second)]);
 		expect(cips((await call(getMedicineInfo, { cip13: stopped.cip13 })).data)[0]).toBe(stopped.cip13);
+		const ordered = (code: string | null) => loadPresentations(env.DB, MEDICINES.dolipraneTablet.cis, code).then((ps) => ps.map((p) => p.cip13));
+		expect(await ordered(null)).toEqual(cips(byCis));
+		expect(await ordered(stopped.cip13)).toEqual([stopped.cip13, box100.cip13, box8.cip13]);
 		const { result: raw } = await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }));
 		expect(raw).toEqual(result);
 		expect((await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }))).cis).toBe(MEDICINES.dolipraneTablet.cis);
@@ -535,6 +539,19 @@ describe("get_medicine_info", () => {
 	it("info by name; a medicine without presentations has an empty list", async () => {
 		const { data } = await call(getMedicineInfo, { name: "amoxicilline" });
 		expect(data).toMatchObject({ kind: "info", medicine: { cis: MEDICINES.amoxicilline.cis }, presentations: [] });
+	});
+
+	it("takes the identity from the BDPM medicine, by CIS and by name", async () => {
+		const { cis, name } = MEDICINES.amoxicilline;
+		await env.DB.prepare("UPDATE medicines SET routes = 'orale', holder = 'BIOGARAN', marketing_status = 'Commercialisée' WHERE cis = ?").bind(cis).run();
+		try {
+			const identity = { cis, name, form: "gélule", routes: "orale", holder: "BIOGARAN", marketing_status: "Commercialisée", is_mitm: true };
+			expect((await call(getMedicineInfo, { cis })).data.medicine).toEqual(identity);
+			expect((await call(getMedicineInfo, { name: "amoxicilline" })).data.medicine).toEqual(identity);
+			expect((await call(getMedicineInfo, { cis: MEDICINES.kardegic.cis })).data.medicine.is_mitm).toBe(false);
+		} finally {
+			await env.DB.prepare("UPDATE medicines SET routes = NULL, holder = NULL, marketing_status = NULL WHERE cis = ?").bind(cis).run();
+		}
 	});
 
 	it("caps the summary at 10 presentations and keeps the full list in structuredContent", async () => {
