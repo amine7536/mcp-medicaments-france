@@ -50,6 +50,8 @@ Every result carries the sources, their update dates, the coverage note, the dis
 - « Quels sont les médicaments en tension pour la cardiologie ? » — Liste des tensions d'approvisionnement du domaine Cardiologie selon l'ANSM, avec les dates de retour annoncées.
 - « Qu'est-ce qui a changé cette semaine ? » — Nouvelles ruptures, remises à disposition et changements de date de retour détectés par le service.
 - « L'amoxicilline est-elle un MITM ? » — Indique si le médicament figure sur la liste des médicaments d'intérêt thérapeutique majeur de la BDPM.
+- « J'ai une boîte avec le code 3400931922766, qu'est-ce que c'est et combien elle coûte ? » — Nom du médicament, prix public et taux de remboursement de la boîte selon la BDPM.
+- « La Dépakine nécessite-t-elle une ordonnance particulière ? » — Conditions de prescription et de délivrance de la BDPM, citées mot pour mot, et informations de sécurité en cours de l'ANSM avec leurs liens.
 - « Mon médicament n'est pas listé, il est donc disponible ? » — Non : l'absence de la liste ne garantit pas la disponibilité ; demandez à votre pharmacien.
 - « Par quoi remplacer le Brevibloc ? » — Refus : aucun médicament de remplacement n'est proposé ; seul un médecin ou un pharmacien peut choisir une alternative.
 
@@ -71,7 +73,7 @@ Every result carries the sources, their update dates, the coverage note, the dis
 
 - No accounts, cookies or tracking scripts.
 - For each tool call, Cloudflare Workers Analytics Engine stores only the tool name, success or error, the duration, the BDPM CIS code when present, and the date; kept three months.
-- No IP address, user agent or question text is stored. Cloudflare processes the IP address to serve and rate-limit requests (60 per minute per IP) without the service keeping it.
+- No IP address, user agent or question text is stored. Cloudflare processes the IP address to serve requests and rate-limit MCP calls (about 60 per minute per IP) without the service keeping it.
 - Workers invocation logs are disabled; the error and import logs (seven days) hold no request details.
 - Full policy: <https://medicaments-france.a3e.dev/privacy>.
 
