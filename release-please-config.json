@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "650f66b57ec6fb955d2d41a5c6d8ea86f6a724a8",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "server.json",
+          "jsonpath": "$.version"
+        },
+        "src/mcp/server.ts"
+      ]
+    }
+  }
+}
