@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fetchBytes } from "./bdpm/download";
 import { FILES, validateAndMap } from "./bdpm/map";
-import { decodeCp1252, parseBanner, parseTsv } from "./bdpm/parse";
+import { decodeCp1252, decodeUtf8, parseBanner, parseTsv } from "./bdpm/parse";
 import { buildImportSql } from "./bdpm/sql";
 
 const BASE = "https://base-donnees-publique.medicaments.gouv.fr";
@@ -23,6 +23,7 @@ async function main(): Promise<void> {
 	const cisBdpmBytes = await download(`${BASE}/download/file/${FILES.cisBdpm.name}`, FILES.cisBdpm.name);
 	const compoBytes = await download(`${BASE}/download/file/${FILES.compo.name}`, FILES.compo.name);
 	const mitmBytes = await download(`${BASE}/download/file/${FILES.mitm.name}`, FILES.mitm.name);
+	const presentationsBytes = await download(`${BASE}/download/file/${FILES.presentations.name}`, FILES.presentations.name);
 	const pageBytes = await download(`${BASE}/telechargement`, "telechargement.html");
 
 	const bannerDate = parseBanner(new TextDecoder().decode(pageBytes));
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
 		cisBdpm: parseTsv(decodeCp1252(cisBdpmBytes), FILES.cisBdpm.cols, FILES.cisBdpm.name),
 		compo: parseTsv(decodeCp1252(compoBytes), FILES.compo.cols, FILES.compo.name),
 		mitm: parseTsv(decodeCp1252(mitmBytes), FILES.mitm.cols, FILES.mitm.name),
+		presentations: parseTsv(decodeUtf8(presentationsBytes), FILES.presentations.cols, FILES.presentations.name),
 		bannerDate,
 	});
 	// validateAndMap throws when the banner date is missing.
@@ -41,7 +43,7 @@ async function main(): Promise<void> {
 	const { skipped } = mapped;
 	console.log(`BDPM release ${release}`);
 	console.log(
-		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length}`,
+		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length} presentations=${mapped.presentations.length}`,
 	);
 	console.log(`skipped medicines=${skipped.medicines} substances=${skipped.substances} mitm=${skipped.mitm}`);
 	console.log(`wrote ${SQL_PATH}`);

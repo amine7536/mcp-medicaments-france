@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import type * as z from "zod";
 import { ANNOTATIONS, runTool, type Tool } from "./tool";
 import { getAvailability } from "./tools/getAvailability";
+import { getMedicineInfo } from "./tools/getMedicineInfo";
 import { isMajorTherapeuticInterest } from "./tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "./tools/listCurrentShortages";
 import { recentChanges } from "./tools/recentChanges";
@@ -26,5 +27,6 @@ export function createServer(env: Env, _ctx: ExecutionContext): McpServer {
 	server.registerTool(listCurrentShortages.name, config(listCurrentShortages), (args) => runTool(env, listCurrentShortages, args));
 	server.registerTool(recentChanges.name, config(recentChanges), (args) => runTool(env, recentChanges, args));
 	server.registerTool(isMajorTherapeuticInterest.name, config(isMajorTherapeuticInterest), (args) => runTool(env, isMajorTherapeuticInterest, args));
+	server.registerTool(getMedicineInfo.name, config(getMedicineInfo), (args) => runTool(env, getMedicineInfo, args));
 	return server;
 }

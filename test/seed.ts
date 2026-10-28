@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { resetDb } from "./db";
 
@@ -33,6 +34,56 @@ export const MEDICINES = {
 	/** Commercialisation stopped (city). */
 	zymad: { cis: "60000005", name: "ZYMAD 80 000 UI, solution buvable en ampoule", form: "solution buvable", substances: [["CHOLÉCALCIFÉROL", "80 000 UI"]] },
 } satisfies Record<string, Med>;
+
+interface Presentation {
+	cip13: string;
+	cis: string;
+	label: string;
+	marketing_status: string;
+	public_price_eur: number | null;
+	reimbursement_rates: string | null;
+}
+
+export const PRESENTATIONS = {
+	/** DOLIPRANE 1000 mg: two marketed boxes and one stopped; the default order is boxOf8, boxOf100, stopped. */
+	dolipraneBoxOf8: {
+		cip13: "3400930000011",
+		cis: "60000001",
+		label: "plaquette(s) PVC aluminium de 8 comprimé(s)",
+		marketing_status: MARKETED,
+		public_price_eur: 2.18,
+		reimbursement_rates: "[65]",
+	},
+	dolipraneBoxOf100: {
+		cip13: "3400930000028",
+		cis: "60000001",
+		label: "plaquette(s) PVC aluminium de 100 comprimé(s)",
+		marketing_status: MARKETED,
+		public_price_eur: null,
+		reimbursement_rates: null,
+	},
+	dolipraneStopped: {
+		cip13: "3400930000035",
+		cis: "60000001",
+		label: "flacon de 8 comprimé(s)",
+		marketing_status: "Déclaration d'arrêt de commercialisation",
+		public_price_eur: 1.5,
+		reimbursement_rates: "[100,65]",
+	},
+	...Object.fromEntries(
+		Array.from({ length: 12 }, (_, i) => [
+			`kardegic${i}`,
+			{
+				cip13: String(3_400_940_000_000 + i),
+				cis: "60000004",
+				label: `sachet(s) papier aluminium de ${String(i + 10)} sachet(s)`,
+				marketing_status: MARKETED,
+				public_price_eur: 3,
+				reimbursement_rates: "[65]",
+			},
+		]),
+	),
+} satisfies Record<string, Presentation>;
 
 interface Shortage {
 	id: string;
@@ -163,7 +214,7 @@ const HISTORY: Array<[shortage: string, type: string, old_status: string | null,
 export async function seed(): Promise<void> {
 	await resetDb();
 	const db = env.DB;
-	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts"].map((t) => db.prepare(`DELETE FROM ${t}`));
+	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "presentations"].map((t) => db.prepare(`DELETE FROM ${t}`));
 	for (const m of Object.values(MEDICINES) as Med[]) {
 		stmts.push(
 			db
@@ -182,6 +233,15 @@ export async function seed(): Promise<void> {
 			db
 				.prepare("INSERT INTO medicines_fts (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)")
 				.bind(m.cis, normalize(m.name), m.substances.map(([n]) => normalize(n)).join(" ")),
+		);
+	}
+	for (const p of Object.values(PRESENTATIONS) as Presentation[]) {
+		stmts.push(
+			db
+				.prepare(
+					"INSERT INTO presentations (cip13, cip7, cis, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, public_price_eur) VALUES (?, ?, ?, ?, 'Présentation active', ?, '2011-03-16', 1, ?, ?)",
+				)
+				.bind(p.cip13, p.cip13.slice(5, 12), p.cis, p.label, p.marketing_status, p.reimbursement_rates, p.public_price_eur),
 		);
 	}
 	for (const s of Object.values(SHORTAGES) as Shortage[]) {

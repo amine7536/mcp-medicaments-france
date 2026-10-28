@@ -181,6 +181,7 @@ const TOOLS: Record<Lang, readonly [string, string][]> = {
 		["list_current_shortages", "Liste les ruptures et tensions en cours, par statut, ville ou hôpital, ou domaine médical."],
 		["recent_changes", "Montre ce qui a changé ces derniers jours."],
 		["is_major_therapeutic_interest", "Indique si un médicament est d'intérêt thérapeutique majeur (MITM)."],
+		["get_medicine_info", "Donne les boîtes d'un médicament : code CIP13, commercialisation, prix et taux de remboursement."],
 	],
 	en: [
 		["Tool", "What it answers"],
@@ -189,6 +190,7 @@ const TOOLS: Record<Lang, readonly [string, string][]> = {
 		["list_current_shortages", "Lists current shortages and supply problems, by status, pharmacy or hospital, or medical area."],
 		["recent_changes", "Shows what changed in the last few days."],
 		["is_major_therapeutic_interest", "Tells whether a medicine is of major therapeutic interest (MITM)."],
+		["get_medicine_info", "Gives a medicine's boxes: CIP13 code, marketing status, price and reimbursement rate."],
 	],
 };
 

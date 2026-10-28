@@ -1,4 +1,4 @@
-import type { ShortageRow } from "../mcp/schemas";
+import type { Presentation, ShortageRow } from "../mcp/schemas";
 import { ftsTokens, normalize } from "./normalize";
 
 const SHORTAGE_COLUMNS = [
@@ -57,6 +57,9 @@ export interface MedicineRow {
 	name: string;
 	denomination_norm: string;
 	form: string | null;
+	routes: string | null;
+	holder: string | null;
+	marketing_status: string | null;
 	is_mitm: boolean;
 	atc_code: string | null;
 	substances: Array<{ name: string; dosage: string | null }>;
@@ -70,7 +73,7 @@ export async function getMedicines(db: D1Database, cis: readonly string[]): Prom
 	const [meds, subs] = await db.batch([
 		db
 			.prepare(
-				"SELECT m.cis, m.denomination AS name, m.denomination_norm, m.form, t.atc_code FROM medicines m LEFT JOIN mitm t ON t.cis = m.cis WHERE m.cis IN (SELECT value FROM json_each(?))",
+				"SELECT m.cis, m.denomination AS name, m.denomination_norm, m.form, m.routes, m.holder, m.marketing_status, t.atc_code FROM medicines m LEFT JOIN mitm t ON t.cis = m.cis WHERE m.cis IN (SELECT value FROM json_each(?))",
 			)
 			.bind(ids),
 		db.prepare("SELECT cis, substance_name AS name, dosage FROM substances WHERE cis IN (SELECT value FROM json_each(?)) ORDER BY rowid").bind(ids),
@@ -223,4 +226,29 @@ export async function recentChanges(
 		counts: new Map(((counts?.results ?? []) as Array<{ change_type: string; n: number }>).map((r) => [r.change_type, r.n])),
 		items: (items?.results ?? []) as ChangeRow[],
 	};
+}
+
+/** The `marketing_status` of a presentation that is on the market. */
+export const MARKETED = "Déclaration de commercialisation";
+
+/** The CIS of the presentation with this CIP13, or null. */
+export async function cisByCip13(db: D1Database, cip13: string): Promise<string | null> {
+	return db.prepare("SELECT cis FROM presentations WHERE cip13 = ?").bind(cip13).first<string>("cis");
+}
+
+/** Every presentation of a CIS: the one with `cip13` first (when given), then marketed ones, then by label. */
+export async function getMedicineInfo(db: D1Database, cis: string, cip13: string | null): Promise<Presentation[]> {
+	type Raw = Omit<Presentation, "hospital_approval" | "reimbursement_rates"> & { hospital_approval: number | null; reimbursement_rates: string | null };
+	const rows = await all<Raw>(
+		db
+			.prepare(
+				"SELECT cip13, cip7, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, price_eur, public_price_eur, dispensing_fee_eur, reimbursement_indications FROM presentations WHERE cis = ? ORDER BY cip13 IS NOT ?, marketing_status IS NOT ?, label, cip13",
+			)
+			.bind(cis, cip13, MARKETED),
+	);
+	return rows.map((p) => ({
+		...p,
+		hospital_approval: p.hospital_approval === null ? null : p.hospital_approval === 1,
+		reimbursement_rates: p.reimbursement_rates === null ? [] : (JSON.parse(p.reimbursement_rates) as number[]),
+	}));
 }

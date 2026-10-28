@@ -9,6 +9,7 @@ export const Status = z.enum(STATUSES);
 export const Scope = z.enum(SCOPES);
 export const ChangeType = z.enum(CHANGE_TYPES);
 export const Cis = z.string().regex(/^\d{8}$/);
+export const Cip13 = z.string().regex(/^\d{13}$/);
 
 /** Below this match confidence a shortage is reported as a probable match. */
 export const PROBABLE_MATCH_BELOW = 0.8;
@@ -42,6 +43,35 @@ export type ShortageSummary = z.infer<typeof ShortageSummary>;
 
 export const Candidates = z.object({ kind: z.literal("candidates"), candidates: z.array(z.object({ cis: Cis, name: z.string() })) });
 export const NotFound = z.object({ kind: z.literal("not_found"), possibly_related_shortages: z.array(ShortageSummary) });
+
+/** A BDPM medicine's identity. */
+export const Medicine = z.object({
+	cis: Cis,
+	name: z.string(),
+	form: z.string().nullable(),
+	routes: z.string().nullable(),
+	holder: z.string().nullable(),
+	marketing_status: z.string().nullable(),
+	is_mitm: z.boolean(),
+});
+export type Medicine = z.infer<typeof Medicine>;
+
+/** A BDPM presentation (box) of a medicine. */
+export const Presentation = z.object({
+	cip13: Cip13,
+	cip7: z.string().nullable(),
+	label: z.string(),
+	admin_status: z.string().nullable(),
+	marketing_status: z.string().nullable(),
+	declared_at: z.iso.date().nullable(),
+	hospital_approval: z.boolean().nullable(),
+	reimbursement_rates: z.array(z.int().min(0)),
+	price_eur: z.number().nullable(),
+	public_price_eur: z.number().nullable(),
+	dispensing_fee_eur: z.number().nullable(),
+	reimbursement_indications: z.string().nullable(),
+});
+export type Presentation = z.infer<typeof Presentation>;
 
 /** A `shortages` row with the match confidence of its context (null when unmatched). */
 export interface ShortageRow {

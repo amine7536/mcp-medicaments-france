@@ -87,4 +87,11 @@ describe("parseFrDate", () => {
 	])("%s", (input, expected) => {
 		expect(parseFrDate(input)).toBe(expected);
 	});
+
+	it("applies explicit year bounds", () => {
+		const years = { min: 1900, max: 2100 };
+		expect(parseFrDate("19/05/1964", years)).toBe("1964-05-19");
+		expect(parseFrDate("29/11/2924", years)).toBeNull();
+		expect(parseFrDate("31/12/1899", years)).toBeNull();
+	});
 });

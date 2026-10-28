@@ -64,18 +64,26 @@ const RE_YEAR = new RegExp(`^(?:COURANT )?${YEAR}`);
 const pad = (n: number): string => String(n).padStart(2, "0");
 const iso = (y: number, m: number, d: number): string => `${y}-${pad(m)}-${pad(d)}`;
 const lastDay = (y: number, m: number): number => new Date(Date.UTC(y, m, 0)).getUTCDate();
-const yearInRange = (y: number): boolean => y >= 2000 && y <= 2100;
 
-function validDay(y: number, m: number, d: number): string | null {
-	if (!yearInRange(y) || m < 1 || m > 12 || d < 1 || d > lastDay(y, m)) return null;
+/** Inclusive year bounds of a parsed date. */
+export interface YearBounds {
+	min: number;
+	max: number;
+}
+
+const DEFAULT_YEARS: YearBounds = { min: 2000, max: 2100 };
+const yearInRange = (y: number, years: YearBounds = DEFAULT_YEARS): boolean => y >= years.min && y <= years.max;
+
+function validDay(y: number, m: number, d: number, years: YearBounds = DEFAULT_YEARS): string | null {
+	if (!yearInRange(y, years) || m < 1 || m > 12 || d < 1 || d > lastDay(y, m)) return null;
 	return iso(y, m, d);
 }
 
-/** Parses `DD/MM/YYYY` or `D/M/YYYY` into `YYYY-MM-DD` (years 2000–2100). */
-export function parseFrDate(s: string): string | null {
+/** Parses `DD/MM/YYYY` or `D/M/YYYY` into `YYYY-MM-DD` (years 2000–2100 unless `years` says otherwise). */
+export function parseFrDate(s: string, years: YearBounds = DEFAULT_YEARS): string | null {
 	const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim());
 	if (!m) return null;
-	return validDay(Number(m[3]), Number(m[2]), Number(m[1]));
+	return validDay(Number(m[3]), Number(m[2]), Number(m[1]), years);
 }
 
 function day(date: string): ExpectedReturn {
