@@ -3,7 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
-import { getMedicineInfo as loadPresentations } from "../src/lib/db";
+import { getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY } from "../src/mcp/envelope";
 import { Medicine, Presentation } from "../src/mcp/schemas";
@@ -528,7 +528,7 @@ describe("get_medicine_info", () => {
 		expect(data.medicine.cis).toBe(MEDICINES.dolipraneTablet.cis);
 		expect(cips(data)).toEqual([second, ...cips(byCis).filter((c: string) => c !== second)]);
 		expect(cips((await call(getMedicineInfo, { cip13: stopped.cip13 })).data)[0]).toBe(stopped.cip13);
-		const ordered = (code: string | null) => loadPresentations(env.DB, MEDICINES.dolipraneTablet.cis, code).then((ps) => ps.map((p) => p.cip13));
+		const ordered = (code: string | null) => loadInfo(env.DB, MEDICINES.dolipraneTablet.cis, code).then((i) => i.presentations.map((p) => p.cip13));
 		expect(await ordered(null)).toEqual(cips(byCis));
 		expect(await ordered(stopped.cip13)).toEqual([stopped.cip13, box100.cip13, box8.cip13]);
 		const { result: raw } = await getMedicineInfo.handler(ctx, getMedicineInfo.inputSchema.parse({ cip13: second }));
@@ -558,7 +558,6 @@ describe("get_medicine_info", () => {
 		const conditions = PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis];
 		for (const args of [{ cis: MEDICINES.amoxicilline.cis }, { name: "amoxicilline" }]) {
 			const { data, result } = await call(getMedicineInfo, args);
-			expect(data.prescription_conditions).toEqual(["liste I", "médicament nécessitant une surveillance particulière pendant le traitement"]);
 			expect(data.prescription_conditions).toEqual(conditions);
 			expect(summary(result).split("\n")).toContain(
 				"Prescription and dispensing conditions (BDPM): liste I; médicament nécessitant une surveillance particulière pendant le traitement",
@@ -575,10 +574,21 @@ describe("get_medicine_info", () => {
 			expect(summary(result).split("\n")).toContain("No prescription or dispensing condition listed in the BDPM.");
 			expect(summary(result)).not.toContain("Prescription and dispensing conditions (BDPM)");
 			expect(Data.safeParse(data).success).toBe(true);
+			expect(Data.safeParse({ ...data, prescription_conditions: undefined }).success).toBe(false);
+			expect(Data.safeParse({ ...data, prescription_conditions: [1] }).success).toBe(false);
 		}
-		const { data } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
-		expect(Data.safeParse({ ...data, prescription_conditions: undefined }).success).toBe(false);
-		expect(Data.safeParse({ ...data, prescription_conditions: [1] }).success).toBe(false);
+	});
+
+	it("reads presentations and conditions in a single D1 batch", async () => {
+		const batch = vi.spyOn(env.DB, "batch");
+		try {
+			const info = await loadInfo(env.DB, MEDICINES.amoxicilline.cis, null);
+			expect(info).toEqual({ presentations: [], prescription_conditions: PRESCRIPTION_CONDITIONS[MEDICINES.amoxicilline.cis] });
+			expect(batch).toHaveBeenCalledTimes(1);
+			expect(batch.mock.calls[0][0]).toHaveLength(2);
+		} finally {
+			batch.mockRestore();
+		}
 	});
 
 	it("caps the summary at 10 presentations and keeps the full list in structuredContent", async () => {
