@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { cisByCip13, getMedicineInfo as loadPresentations, getMedicines, getPrescriptionConditions, MARKETED, type MedicineRow } from "../../lib/db";
+import { cisByCip13, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
 import { Candidates, Cip13, Cis, Medicine, NotFound, Presentation } from "../schemas";
@@ -51,10 +51,10 @@ async function info(db: D1Database, m: MedicineRow, cip13: string | null): Promi
 		marketing_status: m.marketing_status,
 		is_mitm: m.is_mitm,
 	};
-	const [presentations, conditions] = await Promise.all([loadPresentations(db, m.cis, cip13), getPrescriptionConditions(db, m.cis)]);
+	const { presentations, prescription_conditions } = await loadInfo(db, m.cis, cip13);
 	return {
-		data: { kind: "info", medicine, presentations, prescription_conditions: conditions },
-		summary: infoSummary(medicine, presentations, conditions),
+		data: { kind: "info", medicine, presentations, prescription_conditions },
+		summary: infoSummary(medicine, presentations, prescription_conditions),
 	};
 }
 
