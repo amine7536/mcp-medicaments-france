@@ -188,8 +188,19 @@ describe("GET /health", () => {
 	});
 });
 
+describe("HEAD /health", () => {
+	it("200", async () => {
+		await clearRuns();
+		const now = new Date().toISOString();
+		await addRun("ok", now, now);
+		const res = await get(env, URL, "HEAD");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("");
+	});
+});
+
 describe("non-GET methods", () => {
-	it("405 with Allow: GET on POST / and POST /health, without touching D1", async () => {
+	it("405 with Allow: GET, HEAD on POST / and POST /health, without touching D1", async () => {
 		const broken = new Proxy(env.DB, {
 			get() {
 				throw new Error("D1 accessed");
@@ -198,7 +209,7 @@ describe("non-GET methods", () => {
 		for (const url of ["https://ruptures-medicaments.a3e.dev/", URL]) {
 			const res = await get({ ...env, DB: broken }, url, "POST");
 			expect(res.status).toBe(405);
-			expect(res.headers.get("Allow")).toBe("GET");
+			expect(res.headers.get("Allow")).toBe("GET, HEAD");
 		}
 	});
 });
@@ -207,6 +218,12 @@ describe("unknown paths", () => {
 	it("keep the 404 JSON", async () => {
 		await resetDb();
 		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://ruptures-medicaments.a3e.dev/healthz"), env, createExecutionContext());
+		expect(res.status).toBe(404);
+		expect(await res.json()).toEqual({ error: "not_found" });
+	});
+
+	it("does not percent-decode the path", async () => {
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://ruptures-medicaments.a3e.dev/%68ealth"), env, createExecutionContext());
 		expect(res.status).toBe(404);
 		expect(await res.json()).toEqual({ error: "not_found" });
 	});

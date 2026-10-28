@@ -1,4 +1,6 @@
 import { createMcpHandler } from "agents/mcp/server";
+import { Hono } from "hono";
+import { methodNotAllowed } from "hono/method-not-allowed";
 import { handleAdminIngest } from "./admin";
 import { handleHealth } from "./health";
 import { log } from "./ingest/http";
@@ -34,19 +36,27 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
 	return createMcpHandler(() => createServer(env, ctx), { route: "/mcp" })(request, env, ctx);
 }
 
+const app = new Hono<{ Bindings: Env }>({ getPath: (req) => new URL(req.url).pathname });
+
+app.use(
+	methodNotAllowed({
+		app,
+		onMethodNotAllowed: (c, methods) =>
+			c.json({ error: "method_not_allowed" }, 405, { Allow: methods.join(", ") }),
+	}),
+);
+app.get("/", (c) => handleLanding(c.req.raw, new URL(c.req.url)));
+// Hono types executionCtx narrowly; at runtime it is the Worker's ExecutionContext passed through app.fetch.
+app.get("/health", (c) => handleHealth(c.req.raw, c.env, c.executionCtx as ExecutionContext));
+app.all("/admin/ingest", (c) => handleAdminIngest(c.req.raw, c.env, c.executionCtx as ExecutionContext));
+app.all("/mcp", (c) => handleMcp(c.req.raw, c.env, c.executionCtx as ExecutionContext));
+app.notFound((c) => c.json({ error: "not_found" }, 404));
+app.onError((err) => {
+	throw err;
+});
+
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
-		const url = new URL(request.url);
-		const { pathname } = url;
-		if ((pathname === "/" || pathname === "/health") && request.method !== "GET") {
-			return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "GET" } });
-		}
-		if (pathname === "/") return handleLanding(request, url);
-		if (pathname === "/health") return handleHealth(request, env, ctx);
-		if (pathname === "/admin/ingest") return handleAdminIngest(request, env, ctx);
-		if (pathname === "/mcp") return handleMcp(request, env, ctx);
-		return Response.json({ error: "not_found" }, { status: 404 });
-	},
+	fetch: (request, env, ctx) => app.fetch(request, env, ctx),
 
 	async scheduled(_controller, env, ctx): Promise<void> {
 		ctx.waitUntil(
