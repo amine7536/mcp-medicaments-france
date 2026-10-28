@@ -139,7 +139,7 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Date exacte de la dernière mise à jour : /health",
 		"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
 		"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS s'il y en a un et la date sont enregistrés. Ni adresse IP, ni texte des questions.",
-		"Service indépendant, maintenu par Amine Benseddik.",
+		"Service indépendant.",
 		NON_ENDORSEMENT,
 	],
 	en: [
@@ -163,7 +163,7 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Exact date of the last update: /health",
 		"Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
 		"No accounts, no cookies. For each call, only the tool name, the result (success or error), the duration, the CIS code when there is one and the date are stored. No IP address, no question text.",
-		"Independent service, maintained by Amine Benseddik.",
+		"Independent service.",
 		"This service is not approved or endorsed by ANSM, HAS or UNCAM.",
 	],
 };

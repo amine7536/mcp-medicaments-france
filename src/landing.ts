@@ -159,7 +159,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 			"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
 		privacy:
 			"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS s'il y en a un et la date sont enregistrés. Ni adresse IP, ni texte des questions.",
-		maintainer: "Service indépendant, maintenu par Amine Benseddik.",
+		maintainer: "Service indépendant.",
 		nonEndorsement: NON_ENDORSEMENT,
 		linkSource: "Code source",
 		linkIssues: "Signaler un problème",
@@ -257,7 +257,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		licence: "Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
 		privacy:
 			"No accounts, no cookies. For each call, only the tool name, the result (success or error), the duration, the CIS code when there is one and the date are stored. No IP address, no question text.",
-		maintainer: "Independent service, maintained by Amine Benseddik.",
+		maintainer: "Independent service.",
 		nonEndorsement: "This service is not approved or endorsed by ANSM, HAS or UNCAM.",
 		linkSource: "Source code",
 		linkIssues: "Report a problem",
