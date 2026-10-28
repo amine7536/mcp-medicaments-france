@@ -1,5 +1,6 @@
 import { type ExpectedReturn, parseExpectedReturn, parseFrDate } from "../lib/dates";
 import { sha256Hex } from "../lib/hash";
+import { consume } from "../lib/html";
 import { decodeEntities, normalize } from "../lib/normalize";
 import { log } from "./http";
 
@@ -67,10 +68,6 @@ export function splitNameDci(cell: string): { raw_name: string; dci_raw: string 
 	let dci = cell.slice(last.index + last[0].length).replace(/\*$/, "");
 	if (dci.endsWith("]")) dci = dci.slice(0, -1);
 	return { raw_name, dci_raw: dci.trim() };
-}
-
-async function consume(rewriter: HTMLRewriter, html: string): Promise<void> {
-	await rewriter.transform(new Response(html)).arrayBuffer();
 }
 
 /** Parses the ANSM list page into one row per `tr.product-item`. */
