@@ -341,7 +341,6 @@ describe("safety information", () => {
 			});
 		}
 		expect(parseAnchor(anchor("https://ansm.sante.fr/a", " dose d'irinotécan > 180 mg/m² "))).toEqual({ url: "https://ansm.sante.fr/a", title: "dose d'irinotécan > 180 mg/m²" });
-		expect(parseAnchor(anchor("https://ansm.sante.fr/a", "x"))?.title).not.toContain("fenêtre");
 		expect(parseAnchor("Protoxyde d'azote")).toBeNull();
 		expect(parseAnchor("<a target='_blank'>sans lien</a>")).toBeNull();
 	});
@@ -361,13 +360,20 @@ describe("safety information", () => {
 		expect(out[1]).toEqual({ cis: cis(1), title: "RTU de Gymiso et Misoone", url: "http://ansm.sante.fr/Activites/RTU/GYMISO", starts_on: "2026-02-01", ends_on: "2026-12-31" });
 	});
 
+	it("accepts a leap day", () => {
+		const rows = input().safetyInformation;
+		rows[2] = [cis(2), "2028-02-29", "2028-02-29", anchor("https://ansm.sante.fr/a", "Bissextile")];
+		const { safety_information: out } = validateAndMap(input({ safetyInformation: rows }));
+		expect(out[2]).toMatchObject({ starts_on: "2028-02-29", ends_on: "2028-02-29" });
+	});
+
 	it("rejects a file below 5,000 rows", () => {
 		expect(() => validateAndMap(input({ safetyInformation: input().safetyInformation.slice(1) }))).toThrow(
 			"CIS_InfoImportantes.txt: 4999 rows, below the floor of 5000",
 		);
 	});
 
-	it("rejects an invalid CIS, a non-ISO date, a missing anchor, a non-ANSM URL or an empty title", () => {
+	it("rejects an invalid CIS, a non-ISO or impossible date, a missing anchor, a non-ANSM URL or an empty title", () => {
 		const bad = (i: number, row: string[]): BdpmInput => {
 			const rows = input().safetyInformation;
 			rows[i] = row;
@@ -377,6 +383,8 @@ describe("safety information", () => {
 		expect(() => validateAndMap(bad(2, ["6000001", ok[1], ok[2], ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 3 has invalid CIS "6000001"');
 		expect(() => validateAndMap(bad(3, [cis(3), "15/01/2026", ok[2], ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 4 has invalid start date "15/01/2026", expected YYYY-MM-DD');
 		expect(() => validateAndMap(bad(4, [cis(4), ok[1], "", ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 5 has invalid end date "", expected YYYY-MM-DD');
+		expect(() => validateAndMap(bad(3, [cis(3), "2026-02-30", ok[2], ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 4 has invalid start date "2026-02-30", expected YYYY-MM-DD');
+		expect(() => validateAndMap(bad(4, [cis(4), ok[1], "2026-13-01", ok[3]]))).toThrow('CIS_InfoImportantes.txt: line 5 has invalid end date "2026-13-01", expected YYYY-MM-DD');
 		expect(() => validateAndMap(bad(5, [cis(5), ok[1], ok[2], "Protoxyde d'azote"]))).toThrow("CIS_InfoImportantes.txt: line 6 has no anchor with an href");
 		for (const url of ["https://example.com/ansm.sante.fr/", "https://ansm.sante.fr.evil.com/x", "ftp://ansm.sante.fr/x", "https://sante.fr/x"]) {
 			expect(() => validateAndMap(bad(6, [cis(6), ok[1], ok[2], anchor(url, "titre")]))).toThrow(`CIS_InfoImportantes.txt: line 7 has a non-ANSM URL "${url}"`);

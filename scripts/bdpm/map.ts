@@ -1,3 +1,4 @@
+import * as z from "zod";
 import { parseFrDate } from "../../src/lib/dates";
 import { decodeEntities, normalize } from "../../src/lib/normalize";
 
@@ -103,7 +104,8 @@ export interface BdpmInput {
 
 const CIS_RE = /^\d{8}$/;
 const CIP13_RE = /^\d{13}$/;
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** A real calendar date in `YYYY-MM-DD`, accepted exactly as the output schema accepts it. */
+const ISO_DATE = z.iso.date();
 /** The `href` value (single or double quotes) of the cell's leading `<a>`. */
 const HREF_RE = /^\s*<a\b[^>]*?\shref=(['"])([^'"]*)\1/i;
 /** The inner text of the `<a>` that spans the whole cell; inner texts may hold a literal `>` but no `<`. */
@@ -209,8 +211,8 @@ function mapSafetyInformation(rows: string[][]): SafetyInformationRow[] {
 	return rows.map((row, i) => {
 		const line = `${file.name}: line ${i + 1}`;
 		const [starts_on, ends_on] = [req(row[1]), req(row[2])];
-		if (!ISO_DATE_RE.test(starts_on)) throw new Error(`${line} has invalid start date "${starts_on}", expected YYYY-MM-DD`);
-		if (!ISO_DATE_RE.test(ends_on)) throw new Error(`${line} has invalid end date "${ends_on}", expected YYYY-MM-DD`);
+		if (!ISO_DATE.safeParse(starts_on).success) throw new Error(`${line} has invalid start date "${starts_on}", expected YYYY-MM-DD`);
+		if (!ISO_DATE.safeParse(ends_on).success) throw new Error(`${line} has invalid end date "${ends_on}", expected YYYY-MM-DD`);
 		const anchor = parseAnchor(req(row[3]));
 		if (anchor === null) throw new Error(`${line} has no anchor with an href`);
 		if (!ANSM_URL_RE.test(anchor.url)) throw new Error(`${line} has a non-ANSM URL "${anchor.url}"`);
