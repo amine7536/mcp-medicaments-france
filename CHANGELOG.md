@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.3.0...v1.4.0) (2026-10-28)
+
+
+### Features
+
+* **mcp:** add current ansm safety information to get_medicine_info ([#19](https://github.com/amine7536/mcp-medicaments-france/issues/19)) ([fc6cfa8](https://github.com/amine7536/mcp-medicaments-france/commit/fc6cfa8d53edd7a4102b3318e0783cfed38c39e5))
+* **mcp:** add prescription and dispensing conditions to get_medicine_info ([#17](https://github.com/amine7536/mcp-medicaments-france/issues/17)) ([05ee4ea](https://github.com/amine7536/mcp-medicaments-france/commit/05ee4eab03492849f7076ed6185d17e761caac76))
+
 ## [1.3.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.2.0...v1.3.0) (2026-10-28)
 
 
