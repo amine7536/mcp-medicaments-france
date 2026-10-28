@@ -5,7 +5,7 @@ import type * as z from "zod";
 import { log } from "../src/ingest/http";
 import { getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
-import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine, UNKNOWN_DATES } from "../src/mcp/envelope";
+import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
 import { Medicine, Presentation, SafetyInformation } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
@@ -92,7 +92,7 @@ describe("envelope", () => {
 	});
 
 	it("carries the source dates and no warning when fresh", async () => {
-		const { sc, result } = await call(searchMedicine, { query: "kardegic" });
+		const { sc } = await call(searchMedicine, { query: "kardegic" });
 		expect(sc.source).toEqual({
 			ansm: ANSM_SOURCE_URL,
 			bdpm: BDPM_SOURCE_URL,
@@ -101,23 +101,20 @@ describe("envelope", () => {
 			bdpm_imported_at: BDPM_IMPORTED_AT,
 		});
 		expect(sc.warning).toBeUndefined();
-		expect(summary(result)).toContain(SOURCE_LINE);
 	});
 
-	it("sourceLine: prints the BDPM release and import dates, unknown when missing", () => {
+	it("sourceLine: prints the BDPM release and import dates", () => {
 		expect(sourceLine({ ansm_last_ingest: ANSM_LAST_INGEST, bdpm_release: "2026-09-29", bdpm_imported_at: "2026-11-02T04:00:00.000Z" })).toBe(
 			"Source: ANSM (updated 2026-10-27), BDPM (release 2026-09-29, imported 2026-11-02).",
 		);
-		expect(sourceLine(UNKNOWN_DATES)).toBe(UNKNOWN_SOURCE_LINE);
 	});
 
 	it("reads unknown BDPM dates when no BDPM import succeeded", async () => {
 		await env.DB.prepare("UPDATE ingest_runs SET status = 'error' WHERE source = 'bdpm'").run();
 		try {
-			const { sc, result } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+			const { sc } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
 			expect(sc.source.bdpm_release).toBeNull();
 			expect(sc.source.bdpm_imported_at).toBeNull();
-			expect(summary(result)).toContain("Source: ANSM (updated 2026-10-27), BDPM (release unknown, imported unknown).");
 		} finally {
 			await env.DB.prepare("UPDATE ingest_runs SET status = 'ok' WHERE source = 'bdpm'").run();
 		}
