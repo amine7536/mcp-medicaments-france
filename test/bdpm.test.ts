@@ -198,9 +198,6 @@ describe("presentations", () => {
 	});
 
 	it("rejects a line without 13 columns", () => {
-		const presentations = input().presentations;
-		presentations[7] = presentationRow(7).slice(0, 12);
-		expect(() => validateAndMap(input({ presentations }))).toThrow("CIS_CIP_bdpm.txt: line 8 has 12 columns, expected 13");
 		expect(() => parseTsv("a\tb\n", 13, "CIS_CIP_bdpm.txt")).toThrow("CIS_CIP_bdpm.txt: line 1 has 2 columns, expected 13");
 	});
 

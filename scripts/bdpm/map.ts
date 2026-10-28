@@ -122,9 +122,6 @@ export function parseApproval(v: string): 0 | 1 | null {
 
 function mapPresentations(rows: string[][]): PresentationRow[] {
 	const file = FILES.presentations;
-	rows.forEach((row, i) => {
-		if (row.length !== file.cols) throw new Error(`${file.name}: line ${i + 1} has ${row.length} columns, expected ${file.cols}`);
-	});
 	validate(rows, file);
 	rows.forEach((row, i) => {
 		if (!CIP13_RE.test(req(row[6]))) {
