@@ -216,6 +216,15 @@ describe("presentations", () => {
 		expect(() => validateAndMap(input({ presentations: badCis }))).toThrow('CIS_CIP_bdpm.txt: line 5 has invalid CIS "6000228"');
 	});
 
+	it("keeps declaration dates from 1900 to 2100", () => {
+		const presentations = input().presentations;
+		presentations[2] = presentationRow(2).with(5, "19/05/1964");
+		presentations[3] = presentationRow(3).with(5, "01/01/1899");
+		const { presentations: rows } = validateAndMap(input({ presentations }));
+		expect(rows[2]?.declared_at).toBe("1964-05-19");
+		expect(rows[3]?.declared_at).toBeNull();
+	});
+
 	it("maps a row, with null optional fields and out-of-range dates", () => {
 		const presentations = input().presentations;
 		presentations[1] = ["60002283", "", "flacon", "Présentation abrogée", "", "29/11/2924", cip13(1), "", "", "", "1,466,29", "", "Traitement d'appoint"];

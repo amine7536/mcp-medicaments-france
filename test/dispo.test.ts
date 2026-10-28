@@ -46,6 +46,13 @@ describe("parseDispo", () => {
 		const line = "60000001\t\t2\tTension\t01/01/2026\t\t\thttps://ansm.sante.fr/a/b/";
 		expect(parseDispo(new TextEncoder().encode(`${line}\r\n\r\n${line}\n`), 2).map((r) => r.ansm_path)).toEqual(["/a/b", "/a/b"]);
 	});
+
+	it("keeps rejecting dates before 2000", () => {
+		const line = "60000001\t\t2\tTension\t31/12/1999\t01/01/2000\t\thttps://ansm.sante.fr/a/b";
+		const [row] = parseDispo(new TextEncoder().encode(line), 1);
+		expect(row?.date_debut).toBeNull();
+		expect(row?.date_maj).toBe("2000-01-01");
+	});
 });
 
 describe("ingestDispo", () => {

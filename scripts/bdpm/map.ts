@@ -83,6 +83,8 @@ export interface BdpmInput {
 const CIS_RE = /^\d{8}$/;
 const CIP13_RE = /^\d{13}$/;
 const PRICE_RE = /^\d+(,\d{3})*(,\d{1,2})?$/;
+/** Declaration dates go back to 1910. */
+const DECLARED_YEARS = { min: 1900, max: 2100 };
 const opt = (v: string | undefined): string | null => (v === undefined || v === "" ? null : v);
 const req = (v: string | undefined): string => v ?? "";
 
@@ -135,7 +137,7 @@ function mapPresentations(rows: string[][]): PresentationRow[] {
 		label: req(r[2]),
 		admin_status: opt(r[3]),
 		marketing_status: opt(r[4]),
-		declared_at: parseFrDate(req(r[5])),
+		declared_at: parseFrDate(req(r[5]), DECLARED_YEARS),
 		hospital_approval: parseApproval(req(r[7])),
 		reimbursement_rates: parseRates(req(r[8])),
 		price_eur: parsePrice(req(r[9])),
