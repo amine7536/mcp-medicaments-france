@@ -607,7 +607,6 @@ describe("get_medicine_info", () => {
 					"Current 2026-03 (https://ansm.sante.fr/actualites/c3); Current 2026-01 (https://ansm.sante.fr/actualites/c1); Current 2025-02 (http://ansm.sante.fr/Activites/c2). " +
 					"See the ANSM pages for details; do not stop or change a treatment without asking your doctor or pharmacist.",
 			);
-			expect(summary(result)).toContain(SAFETY_ADVICE);
 			expect(summary(result)).not.toContain(NO_SAFETY_INFORMATION);
 		}
 		// The filter follows the UTC date: just past midnight UTC on 2026-10-28, "Ends today" has ended and "Future item" has started.
