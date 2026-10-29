@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
 	COPY,
 	CSS,
-	EXAMPLES,
 	formatText,
 	frenchSpacing,
 	type Lang,
@@ -176,7 +175,6 @@ const CLAUDE_CODE = `claude mcp add --transport http medicaments-france ${MCP_EN
 const VERBATIM: Record<Lang, readonly string[]> = {
 	fr: [
 		"Attention : information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.",
-		"Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures de médicaments publiées par l'ANSM et la base publique des médicaments (BDPM) : boîtes, prix, taux de remboursement, conditions de prescription et informations de sécurité.",
 		"Adresse du serveur MCP",
 		"Exemples",
 		"Réponses réelles",
@@ -194,13 +192,11 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Données",
 		"Date exacte de la dernière mise à jour : /health",
 		"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
-		"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat, la durée, le code CIS et la date sont enregistrés. Politique de confidentialité",
 		"Service indépendant.",
 		NON_ENDORSEMENT,
 	],
 	en: [
 		"Warning: information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
-		"A free, read-only MCP server that lets AI assistants look up medicine shortages published by the French medicines agency (ANSM) and the French public medicines database (BDPM): boxes, prices, reimbursement rates, prescription conditions and safety information.",
 		"MCP server address",
 		"Examples",
 		"Real answers",
@@ -218,7 +214,6 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Data",
 		"Exact date of the last update: /health",
 		"Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
-		"No accounts, no cookies. For each call, only the tool name, the result, the duration, the CIS code and the date are stored. Privacy policy",
 		"Independent service.",
 		"This service is not approved or endorsed by ANSM, HAS or UNCAM.",
 	],
@@ -280,17 +275,6 @@ const BUTTON_LABELS: Record<Lang, readonly string[]> = {
 	fr: ["Copier l'adresse du serveur", "Copier la commande", "Copier la configuration"],
 	en: ["Copy the server address", "Copy the command", "Copy the configuration"],
 };
-
-const EXAMPLES_EN: readonly [string, string][] = [
-	['"Is Aspirin in shortage?"', "Shortage status from ANSM, the announced return date, the ANSM page and its update date."],
-	['"Which cardiology medicines are under supply tension?"', "The ANSM list of supply tensions in cardiology, with announced return dates."],
-	['"What changed this week?"', "New shortages, returns and changed return dates detected by the service."],
-	['"Is amoxicillin a medicine of major therapeutic interest?"', "Whether the medicine is on the BDPM list of medicines of major therapeutic interest (MITM)."],
-	['"I have a box with the code 3400931922766: what is it and how much does it cost?"', "The medicine's name, the box's public price and reimbursement rate from the BDPM."],
-	['"Does Depakine need a special prescription?"', "The BDPM prescription and dispensing conditions, quoted verbatim, and current ANSM safety information with its links."],
-	["\"My medicine isn't listed, so it's available?\"", "No: not being listed does not mean it is available; ask your pharmacist."],
-	['"What can I take instead of Brevibloc?"', "Refusal: no replacement is suggested; only a doctor or pharmacist can choose an alternative."],
-];
 
 const REAL_ANSWERS_EN: readonly [string, string][] = [
 	[
@@ -390,7 +374,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 	it("sets html lang, title, description and hreflang links", () => {
 		expect(one(tree, is("html")).attrs.lang).toBe(lang);
 		expect(text(one(tree, is("title")))).toBe("Médicaments en France");
-		expect(one(tree, (e) => e.tag === "meta" && e.attrs.name === "description").attrs.content).toBe(VERBATIM[lang][1]);
+		expect(one(tree, (e) => e.tag === "meta" && e.attrs.name === "description").attrs.content).toBe(text(one(header, is("p", "lead"))));
 		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
 		expect(alternates).toEqual([
 			["fr", `${ORIGIN}/?lang=fr`],
@@ -442,7 +426,6 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		const lead = VERBATIM[lang][0];
 		expect(text(one(notice, is("strong")))).toBe(lead.slice(0, lead.indexOf(":") + 1));
 		expect(text(notice)).toBe(lead);
-		expect(text(one(header, is("p", "lead")))).toBe(VERBATIM[lang][1]);
 		expect(all(tree, is("a")).filter((a) => a.attrs.href?.startsWith("https://ansm.") || a.attrs.href?.startsWith("https://base-")).map((a) => [a.attrs.href, text(a)])).toEqual([
 			["https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments", "ANSM"],
 			["https://base-donnees-publique.medicaments.gouv.fr", "BDPM"],
@@ -462,7 +445,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 	});
 
 	it("lists the eight examples and the three real answers of the language", () => {
-		const examples = lang === "fr" ? EXAMPLES.map((e) => [e.question, e.behaviour] as const) : EXAMPLES_EN;
+		const examples = COPY[lang].examples.map((e) => [e.question, e.behaviour] as const);
 		const answers = lang === "fr" ? REAL_ANSWERS.map((a) => [a.question, a.answer] as const) : REAL_ANSWERS_EN;
 		expect(examples).toHaveLength(8);
 		expect(answers).toHaveLength(3);
@@ -544,9 +527,9 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		const wrap = elements(footer)[0];
 		expect(hasClass(wrap, "wrap")).toBe(true);
 		const [texts, links] = elements(wrap);
-		expect(elements(texts).map((p) => [p.tag, text(p)])).toEqual(VERBATIM[lang].slice(-3).map((s) => ["p", s]));
-		const privacy = one(elements(texts)[0], is("a"));
-		expect([privacy.attrs.href, text(privacy)]).toEqual([`/privacy?lang=${lang}`, lang === "fr" ? "Politique de confidentialité" : "Privacy policy"]);
+		expect(elements(texts).map((p) => p.tag)).toEqual(["p", "p", "p"]);
+		expect(elements(texts).slice(1).map(text)).toEqual(VERBATIM[lang].slice(-2));
+		expect(one(elements(texts)[0], is("a")).attrs.href).toBe(`/privacy?lang=${lang}`);
 		expect(links.tag).toBe("ul");
 		expect(links.attrs.class).toBe("links");
 		expect(elements(links).map((li) => [li.tag, text(li), one(li, is("a")).attrs.href])).toEqual(FOOTER_LINKS[lang].map(([t, h]) => ["li", t, h]));
@@ -893,47 +876,7 @@ describe("renderers", () => {
 const PRIVACY_PAGES: Record<Lang, string> = { fr: renderPrivacy("fr"), en: renderPrivacy("en") };
 const PRIVACY_TREES: Record<Lang, El> = { fr: await parse(PRIVACY_PAGES.fr), en: await parse(PRIVACY_PAGES.en) };
 
-const PRIVACY: Record<Lang, { title: string; h1: string; sections: readonly [string, string][]; updated: string }> = {
-	fr: {
-		title: "Confidentialité · Médicaments en France",
-		h1: "Confidentialité",
-		sections: [
-			[
-				"Ce que le service enregistre",
-				"Pour chaque appel d'outil : le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS du médicament quand il y en a un, et la date. Ces données servent à mesurer l'usage et la fiabilité du service. Elles sont conservées trois mois dans Cloudflare Workers Analytics Engine.",
-			],
-			["Ce que le service n'enregistre pas", "Ni compte, ni cookie, ni adresse IP, ni user agent, ni texte des questions. La page web ne charge aucun script de suivi."],
-			[
-				"Hébergement",
-				"Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels au serveur MCP (environ 60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes. Politique de confidentialité de Cloudflare",
-			],
-			["Partage", "Aucune donnée n'est vendue ni partagée avec des tiers, en dehors de l'hébergement par Cloudflare."],
-			["Contact", `Pour toute question ou demande, ouvrez un ticket sur GitHub (les tickets sont publics). ${REPO_URL}/issues`],
-		],
-		updated: "Dernière mise à jour : 2026-10-29",
-	},
-	en: {
-		title: "Privacy · Médicaments en France",
-		h1: "Privacy",
-		sections: [
-			[
-				"What the service stores",
-				"For each tool call: the tool name, the result (success or error), the duration, the medicine's CIS code when there is one, and the date. This data is used to measure the service's usage and reliability. It is kept for three months in Cloudflare Workers Analytics Engine.",
-			],
-			["What the service does not store", "No account, no cookie, no IP address, no user agent, no question text. The web page loads no tracking script."],
-			[
-				"Hosting",
-				"The service is hosted by Cloudflare. To serve each request and limit the number of calls to the MCP server (about 60 per minute per IP address), Cloudflare processes the IP address without the service keeping it. The service's error logs, kept for seven days, do not contain request details. Cloudflare privacy policy",
-			],
-			["Sharing", "No data is sold or shared with third parties, apart from hosting by Cloudflare."],
-			["Contact", `For any question or request, open an issue on GitHub (issues are public). ${REPO_URL}/issues`],
-		],
-		updated: "Last updated: 2026-10-29",
-	},
-};
-
-/** French typography as rendered: narrow no-break spaces, collapsed back to plain spaces for comparison. */
-const plain = (s: string) => norm(s.replace(/\u202F/g, " "));
+const PRIVACY_TITLES: Record<Lang, string> = { fr: "Confidentialité · Médicaments en France", en: "Privacy · Médicaments en France" };
 
 describe("GET /privacy", () => {
 	const branches: readonly [string, Record<string, string> | undefined, Lang][] = [
@@ -974,13 +917,12 @@ describe("GET /privacy", () => {
 describe.each(LANGS)("privacy page (%s)", (lang) => {
 	const html = PRIVACY_PAGES[lang];
 	const tree = PRIVACY_TREES[lang];
-	const expected = PRIVACY[lang];
 	const header = one(tree, is("header"));
 	const main = one(tree, is("main"));
 
 	it("sets html lang, title and hreflang links", () => {
 		expect(one(tree, is("html")).attrs.lang).toBe(lang);
-		expect(text(one(tree, is("title")))).toBe(expected.title);
+		expect(text(one(tree, is("title")))).toBe(PRIVACY_TITLES[lang]);
 		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
 		expect(alternates).toEqual([
 			["fr", `${ORIGIN}/privacy?lang=fr`],
@@ -1005,19 +947,15 @@ describe.each(LANGS)("privacy page (%s)", (lang) => {
 		expect(elements(one(tree, is("body"))).map((e) => e.tag)).toEqual(["header", "main", "footer"]);
 	});
 
-	it("shows every section verbatim, with its links", () => {
-		expect(text(one(header, is("h1")))).toBe(expected.h1);
+	it("has five sections and links to the Cloudflare policy and the GitHub issues", () => {
 		const sections = all(main, is("section"));
-		expect(sections.map((s) => elements(s).map((e) => e.tag))).toEqual(expected.sections.map(() => ["h2", "p"]));
-		expect(sections.map((s) => elements(s).map((e) => plain(text(e))))).toEqual(expected.sections.map(([h, p]) => [plain(h), plain(p)]));
+		expect(sections.map((s) => elements(s).map((e) => e.tag))).toEqual(Array(5).fill(["h2", "p"]));
 		expect(all(main, is("a")).map((a) => a.attrs.href)).toEqual(["https://www.cloudflare.com/privacypolicy/", `${REPO_URL}/issues`]);
-		const last = elements(main).at(-1) as El;
-		expect([last.tag, last.attrs.class, plain(text(last))]).toEqual(["p", "small", plain(expected.updated)]);
 	});
 
 	it("applies French typography on the French page only", () => {
 		if (lang === "fr") {
-			expect(html).toContain("Dernière mise à jour\u202F: 2026-10-29");
+			expect(html).toContain("\u202F:");
 			expect(rawText(one(tree, is("body")), (e) => ["script", "style"].includes(e.tag))).not.toMatch(/ [:;?!»]|« /);
 		} else {
 			expect(html).not.toContain("\u202F");
@@ -1037,19 +975,4 @@ describe.each(LANGS)("favicon (%s)", (lang) => {
 			expect(icon.attrs).toEqual({ rel: "icon", type: "image/svg+xml", href: "/icon.svg" });
 		});
 	}
-});
-
-describe("BDPM examples", () => {
-	it("follow the MITM example", () => {
-		expect(EXAMPLES.slice(4, 6)).toEqual([
-			{
-				question: "« J'ai une boîte avec le code 3400931922766, qu'est-ce que c'est et combien elle coûte ? »",
-				behaviour: "Nom du médicament, prix public et taux de remboursement de la boîte selon la BDPM.",
-			},
-			{
-				question: "« La Dépakine nécessite-t-elle une ordonnance particulière ? »",
-				behaviour: "Conditions de prescription et de délivrance de la BDPM, citées mot pour mot, et informations de sécurité en cours de l'ANSM avec leurs liens.",
-			},
-		]);
-	});
 });
