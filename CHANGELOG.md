@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.6.0...v1.7.0) (2026-10-29)
+
+
+### Features
+
+* **scripts:** add a tool-call usage report ([#25](https://github.com/amine7536/mcp-medicaments-france/issues/25)) ([abc8c47](https://github.com/amine7536/mcp-medicaments-france/commit/abc8c479f5019d0a6ef3862c6930a52efa5b2b7a))
+
+
+### Bug Fixes
+
+* **landing:** describe the service by its medicines data first ([#27](https://github.com/amine7536/mcp-medicaments-france/issues/27)) ([c5c7407](https://github.com/amine7536/mcp-medicaments-france/commit/c5c740737dbbd3cc8bfb2786c3db165e967f506d))
+
 ## [1.6.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.5.0...v1.6.0) (2026-10-29)
 
 
