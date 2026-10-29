@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.8.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.7.0...v1.8.0) (2026-10-29)
+
+
+### Features
+
+* **scripts:** show why golden answers fail and isolate them from user settings ([#41](https://github.com/amine7536/mcp-medicaments-france/issues/41)) ([f6cb149](https://github.com/amine7536/mcp-medicaments-france/commit/f6cb149791fa74b397e50bcbe030a6a06cb49edb))
+
+
+### Bug Fixes
+
+* **mcp:** describe tools without instructing the model ([#38](https://github.com/amine7536/mcp-medicaments-france/issues/38)) ([7b847bd](https://github.com/amine7536/mcp-medicaments-france/commit/7b847bd7a37fd83b8004ce62d3332ca83439c573))
+
+
+### Reverts
+
+* describe tools without instructing the model ([#40](https://github.com/amine7536/mcp-medicaments-france/issues/40)) ([c12ae7b](https://github.com/amine7536/mcp-medicaments-france/commit/c12ae7bb419246b5c0d524388f6dd63ec1cc8bb4))
+
 ## [1.7.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.6.0...v1.7.0) (2026-10-29)
 
 
