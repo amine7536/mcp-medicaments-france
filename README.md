@@ -103,6 +103,7 @@ echo 'ADMIN_TOKEN=<token>' > .dev.vars
 pnpm dev
 curl -X POST -H 'Authorization: Bearer <token>' http://localhost:8787/admin/ingest
 pnpm match:report --local # match rate and unmatched entries (remote D1 without --local)
+pnpm usage                # tool calls per day and per tool from Analytics Engine, last 30 days (--days N, 1 to 90); uses your Wrangler login
 ```
 
 Substitution check: asks Claude Code the substitution questions 3 times each (`--runs N`) against an MCP URL and fails when an answer names another medicine or gives no pharmacist or doctor referral. Needs an authenticated Claude Code CLI (`claude`).

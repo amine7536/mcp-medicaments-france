@@ -18,6 +18,7 @@
     "bdpm:apply": "wrangler d1 execute ruptures --remote --file .bdpm/bdpm.sql --yes",
     "bdpm:apply:local": "wrangler d1 execute ruptures --local --file .bdpm/bdpm.sql --yes",
     "match:report": "tsx scripts/match-report.ts",
+    "usage": "tsx scripts/usage.ts",
     "golden": "tsx scripts/golden.ts"
   },
   "dependencies": {
