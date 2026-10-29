@@ -9,7 +9,7 @@ export const COVERAGE_NOTE =
 	"ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available.";
 export const DISCLAIMER = "Information only. Ask your pharmacist or doctor. No substitution or dosage advice.";
 export const SAFETY =
-	"Do not name or suggest any substitute, alternative or equivalent medicine, whether from these results or from your own knowledge, and do not suggest a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.";
+	"Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.";
 
 export const STALE_AFTER_MS = 72 * 3600 * 1000;
 
@@ -55,8 +55,8 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 			bdpm_imported_at: z.iso.datetime().nullable(),
 		}),
 		coverage_note: z.literal(COVERAGE_NOTE),
-		disclaimer: z.string().describe("Disclaimer for this result."),
-		safety: z.string().describe("Safety notice for this result."),
+		disclaimer: z.literal(DISCLAIMER),
+		safety: z.literal(SAFETY),
 		warning: z.string().optional(),
 	});
 }
