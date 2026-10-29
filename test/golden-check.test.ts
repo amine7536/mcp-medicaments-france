@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { check, namedInToolResults, options, parseStream } from "../scripts/golden-check";
+import { check, namedInToolResults, options, parseStream, serverFailure } from "../scripts/golden-check";
 
 describe("golden check", () => {
 	it("fails an answer whose only near-referral words are depuis/puis", () => {
@@ -18,7 +18,7 @@ describe("golden check", () => {
 describe("parseStream", () => {
 	it("reads model, tool calls, tool results and answer from a stream-json run", () => {
 		const stream = [
-			JSON.stringify({ type: "system", subtype: "init", model: "claude-test-1", tools: [], mcp_servers: [] }),
+			JSON.stringify({ type: "system", subtype: "init", model: "claude-test-1", tools: [], mcp_servers: [{ name: "medicaments-france", status: "connected" }] }),
 			"not json",
 			JSON.stringify({
 				type: "assistant",
@@ -31,6 +31,7 @@ describe("parseStream", () => {
 		].join("\n");
 		expect(parseStream(stream)).toEqual({
 			model: "claude-test-1",
+			mcpStatus: "connected",
 			answer: "Ask your doctor.",
 			toolCalls: [{ name: "mcp__medicaments-france__search_medicine", input: { query: "Brevibloc" } }],
 			toolResultText: `ESMOLOL found\n${JSON.stringify([{ type: "text", text: "rupture" }])}`,
@@ -38,7 +39,28 @@ describe("parseStream", () => {
 	});
 
 	it("returns an empty answer and no model when the stream has neither", () => {
-		expect(parseStream("garbage\n")).toEqual({ model: null, answer: "", toolCalls: [], toolResultText: "" });
+		expect(parseStream("garbage\n")).toEqual({ model: null, mcpStatus: null, answer: "", toolCalls: [], toolResultText: "" });
+	});
+
+	it("reads the medicaments-france status, or null when that server is missing", () => {
+		const init = (mcp_servers: unknown) => JSON.stringify({ type: "system", subtype: "init", model: "m", mcp_servers });
+		expect(parseStream(init([{ name: "other", status: "connected" }, { name: "medicaments-france", status: "failed" }])).mcpStatus).toBe("failed");
+		expect(parseStream(init([{ name: "other", status: "connected" }])).mcpStatus).toBeNull();
+		expect(parseStream(init([])).mcpStatus).toBeNull();
+	});
+});
+
+describe("serverFailure", () => {
+	it("passes a connected server", () => {
+		expect(serverFailure("connected")).toBeNull();
+	});
+
+	it("fails a server that did not connect", () => {
+		expect(serverFailure("failed")).toBe("server not connected (failed)");
+	});
+
+	it("fails a missing server", () => {
+		expect(serverFailure(null)).toBe("server not connected (missing)");
 	});
 });
 
@@ -46,8 +68,14 @@ describe("options", () => {
 	const url = "https://example.test/mcp";
 
 	it("accepts prompt 1 to 3 and a positive integer run count", () => {
-		expect(options({ url, runs: "20", prompt: "3", log: "g.jsonl" })).toEqual({ url, runs: 20, prompt: 3, log: "g.jsonl" });
-		expect(options({ url, runs: "3" })).toEqual({ url, runs: 3, prompt: null, log: undefined });
+		expect(options({ url, runs: "20", prompt: "3", log: "g.jsonl" })).toEqual({ url, runs: 20, prompt: 3, log: "g.jsonl", bare: false });
+		expect(options({ url, runs: "3" })).toEqual({ url, runs: 3, prompt: null, log: undefined, bare: false });
+	});
+
+	it("enables bare mode only when --bare is given", () => {
+		expect(options({ url, runs: "3", bare: true })?.bare).toBe(true);
+		expect(options({ url, runs: "3", bare: false })?.bare).toBe(false);
+		expect(options({ url, runs: "3" })?.bare).toBe(false);
 	});
 
 	it.each(["4", "0", "x", "2.0", " 2", "0x3", "0b11", ""])("rejects prompt %j", (prompt) => {

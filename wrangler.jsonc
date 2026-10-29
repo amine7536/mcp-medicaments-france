@@ -4,6 +4,8 @@
 	"main": "src/index.ts",
 	"account_id": "7806bdd95447f476c67e586e0421c666",
 	"compatibility_date": "2026-10-01",
+	"workers_dev": false,
+	"preview_urls": true,
 	"secrets": {
 		"required": ["ADMIN_TOKEN"]
 	},
