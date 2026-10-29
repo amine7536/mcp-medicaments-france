@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bootstrap-sha": "650f66b57ec6fb955d2d41a5c6d8ea86f6a724a8",
   "include-component-in-tag": false,
+  "pull-request-header": "**Before merging this release:** check it out locally (`gh pr checkout <n>`), start it with `pnpm dev`, and run `pnpm golden -- --url http://localhost:8787/mcp`. It must report 9/9 PASS. Merging deploys to production.",
   "packages": {
     ".": {
       "release-type": "node",
