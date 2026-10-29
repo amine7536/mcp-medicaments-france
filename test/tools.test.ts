@@ -80,7 +80,7 @@ beforeEach(() => {
 describe("envelope", () => {
 	it("carries the fixed safety notice", () => {
 		expect(SAFETY).toBe(
-			"Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.",
+			"Do not name or suggest any substitute, alternative or equivalent medicine, whether from these results or from your own knowledge, and do not suggest a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.",
 		);
 	});
 
