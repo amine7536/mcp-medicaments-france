@@ -12,7 +12,7 @@ const DAY_MS = 86_400_000;
 
 export const inputSchema = z.object({
 	cis: Cis.optional().describe("8-digit BDPM medicine code (CIS)."),
-	shortage_id: z.string().min(1).max(20).optional().describe("ANSM shortage id, as returned by the other tools."),
+	shortage_id: z.string().min(1).max(20).optional().describe("ANSM shortage id: the numeric id of an ANSM shortage entry."),
 	name: z.string().min(2).max(100).optional().describe("Medicine name; resolved to one CIS or a list of candidates."),
 });
 
