@@ -8,4 +8,10 @@ describe("worker", () => {
 		expect(res.headers.get("content-type")).toContain("application/json");
 		expect(await res.json()).toEqual({ error: "not_found" });
 	});
+
+	it("serves the site icon as SVG", async () => {
+		const res = await exports.default.fetch("https://example.com/icon.svg");
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-type")).toBe("image/svg+xml");
+	});
 });
