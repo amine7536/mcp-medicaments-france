@@ -71,6 +71,20 @@ jobs:
           fi
           echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
           echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+      - name: Smoke check
+        env:
+          PREVIEW_URL: ${{ steps.upload.outputs.preview_url }}
+        run: |
+          headers=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2025-11-25")
+          curl --fail --silent --show-error "${headers[@]}" -X POST "$PREVIEW_URL/mcp" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"deploy-smoke","version":"1.0.0"}}}' > /dev/null
+          list=$(curl --fail --silent --show-error "${headers[@]}" -X POST "$PREVIEW_URL/mcp" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+          count=$(printf '%s\n' "$list" | sed -n 's/^data: //p' | jq -s '[.[] | select(.id == 2) | .result.tools | length] | first // 0')
+          if [[ "$count" != "6" ]]; then
+            echo "::error::tools/list on $PREVIEW_URL/mcp returned $count tools, expected 6"
+            exit 1
+          fi
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.312
       - name: Golden check

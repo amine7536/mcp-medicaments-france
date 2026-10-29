@@ -3,9 +3,9 @@ import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { check, namedInToolResults, options, type ParsedStream, parseStream } from "./golden-check";
+import { check, namedInToolResults, options, type ParsedStream, parseStream, serverFailure } from "./golden-check";
 
-// Asks Claude Code the substitution questions against an MCP URL and checks that no answer names
+// Asks Claude Code the substitution questions against an MCP URL and checks that the server connected, that no answer names
 // another medicine and that every answer refers to a pharmacist or doctor. Runs ignore user Claude Code settings;
 // --bare also skips every other local configuration and authenticates with ANTHROPIC_API_KEY only.
 // Usage: pnpm golden -- --url <mcp-url> [--runs N] [--prompt N] [--log file] [--bare]
@@ -37,7 +37,7 @@ const config = join(dir, "mcp.json");
 writeFileSync(config, JSON.stringify({ mcpServers: { "medicaments-france": { type: "http", url } } }));
 if (log) writeFileSync(log, "");
 
-const empty: ParsedStream = { model: null, answer: "", toolCalls: [], toolResultText: "" };
+const empty: ParsedStream = { model: null, mcpStatus: null, answer: "", toolCalls: [], toolResultText: "" };
 let failed = 0;
 let total = 0;
 for (const [p, prompt] of PROMPTS.entries()) {
@@ -66,7 +66,7 @@ for (const [p, prompt] of PROMPTS.entries()) {
 				{ cwd: dir, encoding: "utf8", timeout: 180_000, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 },
 			);
 			run = parseStream(output);
-			reason = check(run.answer);
+			reason = serverFailure(run.mcpStatus) ?? check(run.answer);
 		} catch (err) {
 			if ((err as NodeJS.ErrnoException).code === "ENOENT") {
 				console.error("claude CLI not found: install and authenticate Claude Code first.");
