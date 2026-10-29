@@ -35,7 +35,6 @@ jobs:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   registry-publish:
     needs: [release-please, deploy]

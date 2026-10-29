@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bootstrap-sha": "650f66b57ec6fb955d2d41a5c6d8ea86f6a724a8",
   "include-component-in-tag": false,
-  "pull-request-header": "Merging this release runs the tests, applies the D1 migrations (additive only: the previous version keeps serving until the new one passes), uploads the build as a new version and runs the substitution check (pnpm golden) against it. The version is served and published only if every answer passes.",
+  "pull-request-header": "Before merge, CI runs the substitution check (pnpm golden) on this PR's build, deployed to a separate candidate Worker with its own database filled from the BDPM and ANSM sources. Merge only when the golden check passes. Merging tags the release, creates the GitHub release, applies the D1 migrations, serves the release in production and publishes server.json to the MCP registry.",
   "packages": {
     ".": {
       "release-type": "node",

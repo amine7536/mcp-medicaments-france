@@ -9,8 +9,6 @@ on:
     secrets:
       CLOUDFLARE_API_TOKEN:
         required: true
-      ANTHROPIC_API_KEY:
-        required: true
 
 permissions:
   contents: read
@@ -18,7 +16,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 15
     concurrency:
       group: deploy
       cancel-in-progress: false
@@ -64,41 +62,11 @@ jobs:
         run: |
           pnpm exec wrangler versions upload --tag "$TAG" --message "$TAG"
           version_id=$(jq -r 'select(.type=="version-upload") | .version_id // empty' "$WRANGLER_OUTPUT_FILE_PATH")
-          preview_url=$(jq -r 'select(.type=="version-upload") | .preview_url // empty' "$WRANGLER_OUTPUT_FILE_PATH")
-          if [[ -z "$version_id" || -z "$preview_url" ]]; then
-            echo "::error::wrangler versions upload reported no version_id or preview_url"
+          if [[ -z "$version_id" ]]; then
+            echo "::error::wrangler versions upload reported no version_id"
             exit 1
           fi
           echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
-          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
-      - name: Smoke check
-        env:
-          PREVIEW_URL: ${{ steps.upload.outputs.preview_url }}
-        run: |
-          headers=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2025-11-25")
-          curl --fail --silent --show-error "${headers[@]}" -X POST "$PREVIEW_URL/mcp" \
-            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"deploy-smoke","version":"1.0.0"}}}' > /dev/null
-          list=$(curl --fail --silent --show-error "${headers[@]}" -X POST "$PREVIEW_URL/mcp" \
-            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
-          count=$(printf '%s\n' "$list" | sed -n 's/^data: //p' | jq -s '[.[] | select(.id == 2) | .result.tools | length] | first // 0')
-          if [[ "$count" != "6" ]]; then
-            echo "::error::tools/list on $PREVIEW_URL/mcp returned $count tools, expected 6"
-            exit 1
-          fi
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.312
-      - name: Golden check
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PREVIEW_URL: ${{ steps.upload.outputs.preview_url }}
-          DISABLE_AUTOUPDATER: "1"
-        run: pnpm golden -- --url "$PREVIEW_URL/mcp" --bare --log "$RUNNER_TEMP/golden.jsonl"
-      - name: Upload golden log
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: golden-${{ inputs.tag }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/golden.jsonl
       - name: Promote version
         env:
           VERSION_ID: ${{ steps.upload.outputs.version_id }}
