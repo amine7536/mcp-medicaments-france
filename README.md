@@ -114,7 +114,7 @@ pnpm golden -- --url http://localhost:8787/mcp
 
 ## Releases
 
-Versions come from the Conventional Commits on `main`: release-please keeps a release PR open that bumps the version in `package.json`, `server.json` and `src/mcp/server.ts` and updates `CHANGELOG.md`. Merging that PR tags `vX.Y.Z`, creates the GitHub release and publishes `server.json` to the MCP registry. The deploy follows every push to `main`.
+Versions come from the Conventional Commits on `main`: release-please keeps a release PR open that bumps the version in `package.json`, `server.json` and `src/mcp/server.ts` and updates `CHANGELOG.md`. Merging that PR tags `vX.Y.Z`, creates the GitHub release and publishes `server.json` to the MCP registry. Production changes only through a release: merging the release PR tests the tagged commit, applies the D1 migrations, deploys the Worker, then publishes to the MCP registry. Pushes to main only run the tests. To redeploy or roll back to an existing release: gh workflow run deploy.yml -f tag=vX.Y.Z.
 
 ## Licence
 
