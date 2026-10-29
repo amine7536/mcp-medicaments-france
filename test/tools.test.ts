@@ -80,7 +80,7 @@ beforeEach(() => {
 describe("envelope", () => {
 	it("carries the fixed safety notice", () => {
 		expect(SAFETY).toBe(
-			"Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.",
+			"Do not name or suggest any substitute, alternative or equivalent medicine, whether from these results or from your own knowledge, and do not suggest a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.",
 		);
 	});
 
@@ -506,7 +506,7 @@ describe("get_medicine_info", () => {
 	it("has the description and the info-only suffix", () => {
 		expect(getMedicineInfo.description).toBe(
 			"Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions and its current ANSM safety information, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. " +
-				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
+				"Public data for information only; not medical advice.",
 		);
 	});
 
