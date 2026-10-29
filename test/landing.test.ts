@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
 	COPY,
 	CSS,
-	EXAMPLES,
 	formatText,
 	frenchSpacing,
 	type Lang,
@@ -15,6 +14,7 @@ import {
 	REPO_URL,
 	renderExamples,
 	renderLanding,
+	renderPrivacy,
 	renderRealAnswers,
 	resolveLang,
 } from "../src/landing";
@@ -108,6 +108,61 @@ const text = (n: El) => norm(rawText(n));
 /** Visible text of our own copy: no head, script, style, code, or Claude's real answers. */
 const ownText = (n: El) => norm(rawText(n, (e) => ["head", "script", "style", "pre", "code"].includes(e.tag) || is("div", "msg")(e)));
 
+/** The copy and asset guards every page passes; `scripts` is its number of inline scripts. */
+function slopGuards(html: string, tree: El, scripts: number): void {
+	describe("slop guards", () => {
+		const body = one(tree, is("body"));
+		it("(a) uses none of the banned words in our own copy", () => {
+			const visible = ownText(body);
+			for (const word of [
+				"unlock",
+				"seamless",
+				"seamlessly",
+				"effortless",
+				"effortlessly",
+				"supercharge",
+				"empower",
+				"robust",
+				"leverage",
+				"streamline",
+				"cutting-edge",
+				"revolutionize",
+				"game-changer",
+				"elevate",
+				"harness",
+				"révolutionner",
+				"révolutionnaire",
+				"sans effort",
+				"booster",
+				"optimisez",
+				"incontournable",
+				"en toute simplicité",
+			]) {
+				expect(visible, word).not.toMatch(new RegExp(`(?<![\\p{L}\\p{N}-])${word}(?![\\p{L}\\p{N}-])`, "iu"));
+			}
+		});
+
+		it("(b) has no em dash in our own copy", () => {
+			expect(ownText(body)).not.toContain("—");
+		});
+
+		it("(c) has no emoji", () => {
+			expect(html).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+		});
+
+		it("(e) loads only the favicon and its inline scripts", () => {
+			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
+			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
+			expect(all(tree, is("link")).map((e) => e.attrs.rel)).toEqual(["alternate", "alternate", "alternate", "icon"]);
+			expect(html).not.toMatch(/@import|url\(/i);
+			const found = all(tree, is("script"));
+			expect(found).toHaveLength(scripts);
+			for (const script of found) expect(script.attrs).toEqual({});
+			expect(all(tree, is("style"))).toHaveLength(1);
+		});
+	});
+}
+
 const CURSOR_JSON = `{
   "mcpServers": {
     "medicaments-france": {
@@ -120,7 +175,6 @@ const CLAUDE_CODE = `claude mcp add --transport http medicaments-france ${MCP_EN
 const VERBATIM: Record<Lang, readonly string[]> = {
 	fr: [
 		"Attention : information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.",
-		"Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures et tensions d'approvisionnement de médicaments publiées par l'ANSM, avec les codes officiels de la base publique des médicaments (BDPM).",
 		"Adresse du serveur MCP",
 		"Exemples",
 		"Réponses réelles",
@@ -138,13 +192,11 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Données",
 		"Date exacte de la dernière mise à jour : /health",
 		"Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.",
-		"Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS s'il y en a un et la date sont enregistrés. Ni adresse IP, ni texte des questions.",
 		"Service indépendant.",
 		NON_ENDORSEMENT,
 	],
 	en: [
 		"Warning: information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
-		"A free, read-only MCP server that lets AI assistants look up the medicine shortages and supply problems published by the French medicines agency (ANSM), with the official codes from the French public medicines database (BDPM).",
 		"MCP server address",
 		"Examples",
 		"Real answers",
@@ -162,7 +214,6 @@ const VERBATIM: Record<Lang, readonly string[]> = {
 		"Data",
 		"Exact date of the last update: /health",
 		"Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.",
-		"No accounts, no cookies. For each call, only the tool name, the result (success or error), the duration, the CIS code when there is one and the date are stored. No IP address, no question text.",
 		"Independent service.",
 		"This service is not approved or endorsed by ANSM, HAS or UNCAM.",
 	],
@@ -224,15 +275,6 @@ const BUTTON_LABELS: Record<Lang, readonly string[]> = {
 	fr: ["Copier l'adresse du serveur", "Copier la commande", "Copier la configuration"],
 	en: ["Copy the server address", "Copy the command", "Copy the configuration"],
 };
-
-const EXAMPLES_EN: readonly [string, string][] = [
-	['"Is Aspirin in shortage?"', "Shortage status from ANSM, the announced return date, the ANSM page and its update date."],
-	['"Which cardiology medicines are under supply tension?"', "The ANSM list of supply tensions in cardiology, with announced return dates."],
-	['"What changed this week?"', "New shortages, returns and changed return dates detected by the service."],
-	['"Is amoxicillin a medicine of major therapeutic interest?"', "Whether the medicine is on the BDPM list of medicines of major therapeutic interest (MITM)."],
-	["\"My medicine isn't listed, so it's available?\"", "No: not being listed does not mean it is available; ask your pharmacist."],
-	['"What can I take instead of Brevibloc?"', "Refusal: no replacement is suggested; only a doctor or pharmacist can choose an alternative."],
-];
 
 const REAL_ANSWERS_EN: readonly [string, string][] = [
 	[
@@ -332,7 +374,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 	it("sets html lang, title, description and hreflang links", () => {
 		expect(one(tree, is("html")).attrs.lang).toBe(lang);
 		expect(text(one(tree, is("title")))).toBe("Médicaments en France");
-		expect(one(tree, (e) => e.tag === "meta" && e.attrs.name === "description").attrs.content).toBe(VERBATIM[lang][1]);
+		expect(one(tree, (e) => e.tag === "meta" && e.attrs.name === "description").attrs.content).toBe(text(one(header, is("p", "lead"))));
 		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
 		expect(alternates).toEqual([
 			["fr", `${ORIGIN}/?lang=fr`],
@@ -384,7 +426,6 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		const lead = VERBATIM[lang][0];
 		expect(text(one(notice, is("strong")))).toBe(lead.slice(0, lead.indexOf(":") + 1));
 		expect(text(notice)).toBe(lead);
-		expect(text(one(header, is("p", "lead")))).toBe(VERBATIM[lang][1]);
 		expect(all(tree, is("a")).filter((a) => a.attrs.href?.startsWith("https://ansm.") || a.attrs.href?.startsWith("https://base-")).map((a) => [a.attrs.href, text(a)])).toEqual([
 			["https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments", "ANSM"],
 			["https://base-donnees-publique.medicaments.gouv.fr", "BDPM"],
@@ -403,10 +444,10 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		}
 	});
 
-	it("lists the six examples and the three real answers of the language", () => {
-		const examples = lang === "fr" ? EXAMPLES.map((e) => [e.question, e.behaviour] as const) : EXAMPLES_EN;
+	it("lists the eight examples and the three real answers of the language", () => {
+		const examples = COPY[lang].examples.map((e) => [e.question, e.behaviour] as const);
 		const answers = lang === "fr" ? REAL_ANSWERS.map((a) => [a.question, a.answer] as const) : REAL_ANSWERS_EN;
-		expect(examples).toHaveLength(6);
+		expect(examples).toHaveLength(8);
 		expect(answers).toHaveLength(3);
 		const dl = one(tree, is("dl"));
 		expect(elements(dl).map((e) => [e.tag, text(e)])).toEqual(examples.flatMap(([q, b]) => [
@@ -486,7 +527,9 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		const wrap = elements(footer)[0];
 		expect(hasClass(wrap, "wrap")).toBe(true);
 		const [texts, links] = elements(wrap);
-		expect(elements(texts).map((p) => [p.tag, text(p)])).toEqual(VERBATIM[lang].slice(-3).map((s) => ["p", s]));
+		expect(elements(texts).map((p) => p.tag)).toEqual(["p", "p", "p"]);
+		expect(elements(texts).slice(1).map(text)).toEqual(VERBATIM[lang].slice(-2));
+		expect(one(elements(texts)[0], is("a")).attrs.href).toBe(`/privacy?lang=${lang}`);
 		expect(links.tag).toBe("ul");
 		expect(links.attrs.class).toBe("links");
 		expect(elements(links).map((li) => [li.tag, text(li), one(li, is("a")).attrs.href])).toEqual(FOOTER_LINKS[lang].map(([t, h]) => ["li", t, h]));
@@ -561,55 +604,7 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 		expect(live[0].children).toEqual([]);
 	});
 
-	describe("slop guards", () => {
-		it("(a) uses none of the banned words in our own copy", () => {
-			const visible = ownText(body);
-			for (const word of [
-				"unlock",
-				"seamless",
-				"seamlessly",
-				"effortless",
-				"effortlessly",
-				"supercharge",
-				"empower",
-				"robust",
-				"leverage",
-				"streamline",
-				"cutting-edge",
-				"revolutionize",
-				"game-changer",
-				"elevate",
-				"harness",
-				"révolutionner",
-				"révolutionnaire",
-				"sans effort",
-				"booster",
-				"optimisez",
-				"incontournable",
-				"en toute simplicité",
-			]) {
-				expect(visible, word).not.toMatch(new RegExp(`(?<![\\p{L}\\p{N}-])${word}(?![\\p{L}\\p{N}-])`, "iu"));
-			}
-		});
-
-		it("(b) has no em dash in our own copy", () => {
-			expect(ownText(body)).not.toContain("—");
-		});
-
-		it("(c) has no emoji", () => {
-			expect(html).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
-		});
-
-		it("(e) loads no asset and has exactly one inline script", () => {
-			expect(all(tree, (e) => e.tag === "img" || e.tag === "svg")).toHaveLength(0);
-			expect(all(tree, (e) => e.tag === "link" && e.attrs.rel === "stylesheet")).toHaveLength(0);
-			expect(html).not.toMatch(/@import|url\(/i);
-			const scripts = all(tree, is("script"));
-			expect(scripts).toHaveLength(1);
-			expect(scripts[0].attrs).toEqual({});
-			expect(all(tree, is("style"))).toHaveLength(1);
-		});
-	});
+	slopGuards(html, tree, 1);
 });
 
 /** CSS rules, top level and inside `@media` blocks. */
@@ -876,4 +871,108 @@ describe("renderers", () => {
 		expect(formatText("fr")("« <b> ? »")).toBe("« &lt;b&gt; ? »");
 		expect(formatText("en")("A : B")).toBe("A : B");
 	});
+});
+
+const PRIVACY_PAGES: Record<Lang, string> = { fr: renderPrivacy("fr"), en: renderPrivacy("en") };
+const PRIVACY_TREES: Record<Lang, El> = { fr: await parse(PRIVACY_PAGES.fr), en: await parse(PRIVACY_PAGES.en) };
+
+const PRIVACY_TITLES: Record<Lang, string> = { fr: "Confidentialité · Médicaments en France", en: "Privacy · Médicaments en France" };
+
+describe("GET /privacy", () => {
+	const branches: readonly [string, Record<string, string> | undefined, Lang][] = [
+		["/privacy?lang=en", { "Accept-Language": "fr-FR" }, "en"],
+		["/privacy?lang=fr", { "Accept-Language": "en-GB,en;q=0.9" }, "fr"],
+		["/privacy", { "Accept-Language": "en-GB,en;q=0.9" }, "en"],
+		["/privacy", { "Accept-Language": "fr-FR" }, "fr"],
+		["/privacy", undefined, "fr"],
+	];
+	for (const [path, headers, lang] of branches) {
+		it(`serves ${lang} for ${path} with ${JSON.stringify(headers ?? {})}`, async () => {
+			const res = await get(path, headers);
+			expect(res.status).toBe(200);
+			expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+			expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+			expect(res.headers.get("vary")).toBe("Accept-Language");
+			expect(res.headers.get("content-language")).toBe(lang);
+			expect(res.headers.get("set-cookie")).toBeNull();
+			expect(await res.text()).toBe(PRIVACY_PAGES[lang]);
+		});
+	}
+
+	it("answers HEAD with 200 and an empty body", async () => {
+		const res = await exports.default.fetch(`${ORIGIN}/privacy`, { method: "HEAD" });
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+		expect(await res.text()).toBe("");
+	});
+
+	it("rejects POST with 405", async () => {
+		const res = await exports.default.fetch(`${ORIGIN}/privacy`, { method: "POST" });
+		expect(res.status).toBe(405);
+		expect(res.headers.get("allow")).toBe("GET, HEAD");
+		expect(await res.json()).toEqual({ error: "method_not_allowed" });
+	});
+});
+
+describe.each(LANGS)("privacy page (%s)", (lang) => {
+	const html = PRIVACY_PAGES[lang];
+	const tree = PRIVACY_TREES[lang];
+	const header = one(tree, is("header"));
+	const main = one(tree, is("main"));
+
+	it("sets html lang, title and hreflang links", () => {
+		expect(one(tree, is("html")).attrs.lang).toBe(lang);
+		expect(text(one(tree, is("title")))).toBe(PRIVACY_TITLES[lang]);
+		const alternates = all(tree, (e) => e.tag === "link" && e.attrs.rel === "alternate").map((e) => [e.attrs.hreflang, e.attrs.href]);
+		expect(alternates).toEqual([
+			["fr", `${ORIGIN}/privacy?lang=fr`],
+			["en", `${ORIGIN}/privacy?lang=en`],
+			["x-default", `${ORIGIN}/privacy`],
+		]);
+		expect(html).toContain(`<style>\n${CSS}\n</style>`);
+	});
+
+	it("shares the landing header and footer", () => {
+		const wrap = elements(header)[0];
+		expect(elements(wrap).map((e) => `${e.tag}.${e.attrs.class ?? ""}`)).toEqual(["div.top", "h1."]);
+		const [site, nav] = elements(elements(wrap)[0]);
+		expect([site.attrs.class, site.attrs.href, site.attrs.lang, text(site)]).toEqual(["site", `/?lang=${lang}`, lang === "en" ? "fr" : undefined, "Médicaments en France"]);
+		const links = all(nav, is("a"));
+		expect(links.map((a) => [a.attrs.href, a.attrs.hreflang, a.attrs["aria-current"], text(a)])).toEqual([
+			["/privacy?lang=fr", "fr", lang === "fr" ? "true" : undefined, "FR"],
+			["/privacy?lang=en", "en", lang === "en" ? "true" : undefined, "EN"],
+		]);
+		const landingFooter = PAGES[lang].slice(PAGES[lang].indexOf("<footer>"), PAGES[lang].indexOf("</footer>") + 9);
+		expect(html).toContain(landingFooter);
+		expect(elements(one(tree, is("body"))).map((e) => e.tag)).toEqual(["header", "main", "footer"]);
+	});
+
+	it("has five sections and links to the Cloudflare policy and the GitHub issues", () => {
+		const sections = all(main, is("section"));
+		expect(sections.map((s) => elements(s).map((e) => e.tag))).toEqual(Array(5).fill(["h2", "p"]));
+		expect(all(main, is("a")).map((a) => a.attrs.href)).toEqual(["https://www.cloudflare.com/privacypolicy/", `${REPO_URL}/issues`]);
+	});
+
+	it("applies French typography on the French page only", () => {
+		if (lang === "fr") {
+			expect(html).toContain("\u202F:");
+			expect(rawText(one(tree, is("body")), (e) => ["script", "style"].includes(e.tag))).not.toMatch(/ [:;?!»]|« /);
+		} else {
+			expect(html).not.toContain("\u202F");
+		}
+	});
+
+	slopGuards(html, tree, 0);
+});
+
+describe.each(LANGS)("favicon (%s)", (lang) => {
+	for (const [page, tree] of [
+		["landing", TREES[lang]],
+		["privacy", PRIVACY_TREES[lang]],
+	] as const) {
+		it(`links the SVG icon from the ${page} page`, () => {
+			const icon = one(tree, (e) => e.tag === "link" && e.attrs.rel === "icon");
+			expect(icon.attrs).toEqual({ rel: "icon", type: "image/svg+xml", href: "/icon.svg" });
+		});
+	}
 });
