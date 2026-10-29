@@ -23,5 +23,6 @@ export default defineConfig({
 	],
 	test: {
 		setupFiles: ["./test/apply-migrations.ts"],
+		coverage: { provider: "istanbul", include: ["src/**", "scripts/**"], reporter: ["text", "text-summary"] },
 	},
 });
