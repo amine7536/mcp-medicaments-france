@@ -106,7 +106,7 @@ pnpm match:report --local # match rate and unmatched entries (remote D1 without 
 pnpm usage                # tool calls per day and per tool from Analytics Engine, last 30 days (--days N, 1 to 90); uses your Wrangler login
 ```
 
-Substitution check: asks Claude Code the substitution questions 3 times each (`--runs N`) against an MCP URL and fails when an answer names another medicine or gives no pharmacist or doctor referral. Needs an authenticated Claude Code CLI (`claude`).
+Substitution check: asks Claude Code the substitution questions 3 times each (`--runs N`) against an MCP URL and fails when an answer names another medicine or gives no pharmacist or doctor referral. Needs an authenticated Claude Code CLI (`claude`). Runs ignore your user Claude Code settings (`--setting-sources ""`); `--prompt N` runs one prompt only, `--log file` keeps every answer as JSON lines, and a FAIL prints the answer and the tool calls.
 
 ```sh
 pnpm golden -- --url http://localhost:8787/mcp
