@@ -2,6 +2,7 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
+import { DISCLAIMER, SAFETY } from "../src/mcp/envelope";
 import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
 import { seed } from "./seed";
@@ -78,6 +79,24 @@ describe("/mcp", () => {
 		for (const d of descriptions) {
 			expect(d).not.toMatch(/never|other tool|instruction/i);
 		}
+	});
+
+	it("tools/list carries neither the safety nor the disclaimer text, tool results carry both", async () => {
+		const list = await rpc(6, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
+		const serialized = JSON.stringify(list.result.tools);
+		expect(serialized).not.toContain(SAFETY);
+		expect(serialized).not.toContain(DISCLAIMER);
+
+		const call = await rpc(
+			7,
+			"tools/call",
+			{ name: "get_availability", arguments: { cis: "60000001" } },
+			{ "MCP-Protocol-Version": PROTOCOL_VERSION },
+		);
+		expect(call.result.isError).toBeFalsy();
+		const content = call.result.structuredContent as { safety: string; disclaimer: string };
+		expect(content.safety).toBe(SAFETY);
+		expect(content.disclaimer).toBe(DISCLAIMER);
 	});
 
 	it("returns a tool result through the SDK output validation", async () => {

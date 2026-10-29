@@ -55,8 +55,8 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 			bdpm_imported_at: z.iso.datetime().nullable(),
 		}),
 		coverage_note: z.literal(COVERAGE_NOTE),
-		disclaimer: z.literal(DISCLAIMER),
-		safety: z.literal(SAFETY),
+		disclaimer: z.string().describe("Disclaimer for this result."),
+		safety: z.string().describe("Safety notice for this result."),
 		warning: z.string().optional(),
 	});
 }
