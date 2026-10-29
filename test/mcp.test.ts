@@ -13,8 +13,7 @@ const SUBSTITUTION_RULE =
 	"Substitution, dosage and stopping questions: if the user asks what to take instead, for a substitute, an alternative, an equivalent or a replacement, or whether to change a dose or stop a treatment, do not name or list any other medicine, brand, presentation or active substance, whether from your own knowledge or from tool results. Other medicines returned by the tools, including products with the same active substance, are not alternatives. Answer only with the shortage status of the medicine asked about, say that only a pharmacist or doctor can choose an alternative or change a treatment, and give that medicine's ANSM page link when there is one.";
 const OPENING =
 	"Data on medicines in France from the ANSM (Agence nationale de sécurité du médicament) and the BDPM (Base de données publique des médicaments): reference information on boxes, prices, reimbursement, prescription and dispensing conditions and ANSM safety information, and medicine shortages. The shortage list covers mainly medicines of major therapeutic interest declared by manufacturers.";
-const NEW_INFO_ONLY =
-	"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.";
+const NEW_INFO_ONLY = "Public data for information only; not medical advice.";
 
 const TOOLS = ["search_medicine", "get_availability", "list_current_shortages", "recent_changes", "is_major_therapeutic_interest", "get_medicine_info"];
 
@@ -68,6 +67,16 @@ describe("/mcp", () => {
 			expect(t.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 			expect(t.outputSchema).toMatchObject({ type: "object" });
 			expect(t.description.endsWith(NEW_INFO_ONLY)).toBe(true);
+		}
+	});
+
+	it("tool and input descriptions give no instruction to the model", async () => {
+		const list = await rpc(5, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
+		const tools = list.result.tools as Array<{ name: string; description: string; inputSchema: { properties?: Record<string, { description?: string }> } }>;
+		const descriptions = tools.flatMap((t) => [t.description, ...Object.values(t.inputSchema.properties ?? {}).map((p) => p.description ?? "")]);
+		expect(descriptions.filter((d) => d !== "").length).toBeGreaterThan(tools.length);
+		for (const d of descriptions) {
+			expect(d).not.toMatch(/never|other tool|instruction/i);
 		}
 	});
 
