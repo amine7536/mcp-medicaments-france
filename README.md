@@ -85,6 +85,7 @@ Requires Node 24 and pnpm.
 pnpm install
 pnpm dev     # wrangler dev on http://localhost:8787
 pnpm test
+pnpm coverage  # tests with a per-file coverage report
 ```
 
 The D1 database is created in the EU jurisdiction:
