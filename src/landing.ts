@@ -127,7 +127,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		noticeLead: "Attention :",
 		notice:
 			"information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.",
-		lead: "Un serveur MCP gratuit, en lecture seule, qui permet aux assistants IA de consulter les ruptures de médicaments publiées par l'ANSM et la base publique des médicaments (BDPM) : boîtes, prix, taux de remboursement, conditions de prescription et informations de sécurité.",
+		lead: "Un serveur MCP gratuit, en lecture seule, sur les médicaments en France : boîtes et codes CIP13, prix et remboursement, conditions de prescription, informations de sécurité et ruptures de stock. Données publiques de l'ANSM et de la base publique des médicaments (BDPM).",
 		endpointLabel: "Adresse du serveur MCP",
 		copy: "Copier",
 		copied: "Copié",
@@ -187,7 +187,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		noticeLead: "Warning:",
 		notice:
 			"information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
-		lead: "A free, read-only MCP server that lets AI assistants look up medicine shortages published by the French medicines agency (ANSM) and the French public medicines database (BDPM): boxes, prices, reimbursement rates, prescription conditions and safety information.",
+		lead: "A free, read-only MCP server about medicines in France: boxes and CIP13 codes, prices and reimbursement, prescription conditions, safety information and shortages. Public data from the ANSM and the French public medicines database (BDPM).",
 		endpointLabel: "MCP server address",
 		copy: "Copy",
 		copied: "Copied",
