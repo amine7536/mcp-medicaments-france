@@ -46,8 +46,14 @@ describe("options", () => {
 	const url = "https://example.test/mcp";
 
 	it("accepts prompt 1 to 3 and a positive integer run count", () => {
-		expect(options({ url, runs: "20", prompt: "3", log: "g.jsonl" })).toEqual({ url, runs: 20, prompt: 3, log: "g.jsonl" });
-		expect(options({ url, runs: "3" })).toEqual({ url, runs: 3, prompt: null, log: undefined });
+		expect(options({ url, runs: "20", prompt: "3", log: "g.jsonl" })).toEqual({ url, runs: 20, prompt: 3, log: "g.jsonl", bare: false });
+		expect(options({ url, runs: "3" })).toEqual({ url, runs: 3, prompt: null, log: undefined, bare: false });
+	});
+
+	it("enables bare mode only when --bare is given", () => {
+		expect(options({ url, runs: "3", bare: true })?.bare).toBe(true);
+		expect(options({ url, runs: "3", bare: false })?.bare).toBe(false);
+		expect(options({ url, runs: "3" })?.bare).toBe(false);
 	});
 
 	it.each(["4", "0", "x", "2.0", " 2", "0x3", "0b11", ""])("rejects prompt %j", (prompt) => {

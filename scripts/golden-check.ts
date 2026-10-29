@@ -43,14 +43,14 @@ export function parseStream(output: string): ParsedStream {
 	return parsed;
 }
 
-export type Options = { url: string; runs: number; prompt: number | null; log: string | undefined };
+export type Options = { url: string; runs: number; prompt: number | null; log: string | undefined; bare: boolean };
 
 /** Validated golden options, or null when any value is missing or malformed. */
-export function options(values: { url?: string; runs?: string; prompt?: string; log?: string }): Options | null {
+export function options(values: { url?: string; runs?: string; prompt?: string; log?: string; bare?: boolean }): Options | null {
 	if (!values.url) return null;
 	if (values.runs === undefined || !/^[1-9][0-9]*$/.test(values.runs)) return null;
 	if (values.prompt !== undefined && !/^[1-3]$/.test(values.prompt)) return null;
-	return { url: values.url, runs: Number(values.runs), prompt: values.prompt === undefined ? null : Number(values.prompt), log: values.log };
+	return { url: values.url, runs: Number(values.runs), prompt: values.prompt === undefined ? null : Number(values.prompt), log: values.log, bare: values.bare === true };
 }
 
 /** Whether the medicine a `names X` reason names appears in the tool results, or null for any other reason. */
