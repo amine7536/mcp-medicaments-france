@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.5.0...v1.6.0) (2026-10-29)
+
+
+### Features
+
+* **landing:** add the privacy page and site icon ([#23](https://github.com/amine7536/mcp-medicaments-france/issues/23)) ([e2617ba](https://github.com/amine7536/mcp-medicaments-france/commit/e2617ba25a620ba16012baa10ef5241a4615f389))
+
 ## [1.5.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.4.0...v1.5.0) (2026-10-28)
 
 
