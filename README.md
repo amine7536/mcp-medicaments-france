@@ -1,6 +1,6 @@
 # Médicaments en France
 
-MCP server for medicines in France (ANSM + BDPM): shortages, boxes and prices, prescription conditions and ANSM safety information. Ruptures, boîtes, prix, conditions de prescription et informations de sécurité des médicaments, pour Claude, ChatGPT, Cursor.
+MCP server about medicines in France: boxes and CIP13 codes, prices and reimbursement, prescription conditions, safety information and shortages (ANSM + BDPM). Les médicaments en France : boîtes et codes CIP13, prix et remboursement, conditions de prescription, informations de sécurité et ruptures de stock, pour Claude, ChatGPT, Cursor.
 
 > **Information uniquement, pas un avis médical.** Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.
 >
