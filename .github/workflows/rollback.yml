@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag whose uploaded version to serve again, e.g. v1.8.0
+        description: Release tag to serve again, e.g. v1.8.0
         type: string
         required: true
 
@@ -37,9 +37,20 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Serve the tagged version
+      - name: Find the deployed version
+        id: find
         env:
           TAG: ${{ inputs.tag }}
-        run: pnpm exec wrangler versions deploy --version-tag "$TAG" --percentage 100 --message "rollback $TAG" --yes
-      - name: Apply triggers
-        run: pnpm exec wrangler triggers deploy
+        run: |
+          pnpm exec wrangler deployments list --json > "$RUNNER_TEMP/deployments.json"
+          version_id=$(jq -r --arg tag "$TAG" '[.[] | select(.annotations["workers/message"] == $tag)] | sort_by(.created_on) | last | .versions[0].version_id // empty' "$RUNNER_TEMP/deployments.json")
+          if [[ -z "$version_id" ]]; then
+            echo "::error::no deployment of $TAG among the 10 most recent; use npx wrangler rollback <version-id>"
+            exit 1
+          fi
+          echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
+      - name: Serve the version
+        env:
+          TAG: ${{ inputs.tag }}
+          VERSION_ID: ${{ steps.find.outputs.version_id }}
+        run: pnpm exec wrangler versions deploy --version-id "$VERSION_ID" --percentage 100 --message "rollback $TAG" --yes
