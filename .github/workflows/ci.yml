@@ -58,7 +58,7 @@ jobs:
       - name: Ingest ANSM into the candidate
         run: |
           token=$(cat "$RUNNER_TEMP/candidate.token")
-          if ! body=$(curl --silent --show-error --fail-with-body --retry 6 --retry-delay 10 --retry-all-errors --max-time 120 \
+          if ! body=$(curl --silent --show-error --fail-with-body --retry 12 --retry-delay 10 --retry-all-errors --max-time 120 \
             -X POST -H "Authorization: Bearer $token" "$CANDIDATE_URL/admin/ingest"); then
             printf '%s\n' "$body"
             echo "::error::candidate ingest request failed after retries"
@@ -95,3 +95,7 @@ jobs:
         with:
           name: golden-pr${{ github.event.pull_request.number }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/golden.jsonl
+      - name: Delete candidate
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: pnpm exec wrangler delete --env candidate
