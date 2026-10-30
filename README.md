@@ -16,7 +16,7 @@ Streamable HTTP, read-only, no authentication. Status and data dates: <https://m
 
 ## Connect
 
-- **Claude:** add a custom connector with the URL `https://medicaments-france.a3e.dev/mcp`.
+- **Claude:** add it from the [Claude connectors directory](https://claude.ai/directory/connectors/medicaments-france), or add a custom connector with the URL `https://medicaments-france.a3e.dev/mcp`.
 - **Cursor:** add it to `mcp.json`:
 
   ```json

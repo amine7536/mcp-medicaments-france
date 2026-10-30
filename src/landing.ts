@@ -4,6 +4,7 @@ import { ANSM_SOURCE_URL, BDPM_SOURCE_URL } from "./mcp/envelope";
 export const SITE_URL = "https://medicaments-france.a3e.dev";
 export const MCP_ENDPOINT = `${SITE_URL}/mcp`;
 export const REPO_URL = "https://github.com/amine7536/mcp-medicaments-france";
+export const DIRECTORY_URL = "https://claude.ai/directory/connectors/medicaments-france";
 export const NON_ENDORSEMENT = "Ce service n'est ni approuvé ni soutenu par l'ANSM, la HAS ou l'UNCAM.";
 
 /** Example questions with the expected behaviour of the assistant. */
@@ -90,6 +91,7 @@ export interface LandingCopy {
 	chatDate: string;
 	connectHeading: string;
 	clientsLabel: string;
+	claudeDirectory: string;
 	connectClaude: string;
 	connectClaudeCode: string;
 	connectCursor: string;
@@ -144,8 +146,9 @@ export const COPY: Record<Lang, LandingCopy> = {
 		chatDate: "28/10/2026",
 		connectHeading: "Ajouter le serveur",
 		clientsLabel: "Clients MCP",
+		claudeDirectory: "Ajouter depuis l'annuaire des connecteurs Claude",
 		connectClaude:
-			"Dans Claude, ouvrez Customize > Connectors, choisissez Add custom connector, collez l'adresse ci-dessus et sélectionnez No sign-in.",
+			"Ou, dans Claude, ouvrez Customize > Connectors, choisissez Add custom connector, collez l'adresse ci-dessus et sélectionnez No sign-in.",
 		connectClaudeCode: "Dans un terminal :",
 		connectCursor: "Dans le fichier mcp.json :",
 		connectOther: "Tout autre client MCP compatible Streamable HTTP fonctionne avec l'adresse ci-dessus.",
@@ -254,7 +257,8 @@ export const COPY: Record<Lang, LandingCopy> = {
 		chatDate: "28 Oct 2026",
 		connectHeading: "Add the server",
 		clientsLabel: "MCP clients",
-		connectClaude: "In Claude, open Customize > Connectors, choose Add custom connector, paste the address above and select No sign-in.",
+		claudeDirectory: "Add it from the Claude connectors directory",
+		connectClaude: "Or, in Claude, open Customize > Connectors, choose Add custom connector, paste the address above and select No sign-in.",
 		connectClaudeCode: "In a terminal:",
 		connectCursor: "In mcp.json:",
 		connectOther: "Any other MCP client that supports Streamable HTTP works with the address above.",
@@ -537,8 +541,8 @@ const CLIENTS = [
 
 /** The install snippets as tabs; without JS the tablist and the copy button stay hidden and every panel shows. */
 function installTabs(c: LandingCopy, t: (s: string) => string): string {
-	const panels: Record<(typeof CLIENTS)[number]["key"], { sentence: string; code?: { value: string; label: string } }> = {
-		claude: { sentence: c.connectClaude },
+	const panels: Record<(typeof CLIENTS)[number]["key"], { sentence: string; link?: { href: string; label: string }; code?: { value: string; label: string } }> = {
+		claude: { sentence: c.connectClaude, link: { href: DIRECTORY_URL, label: c.claudeDirectory } },
 		"claude-code": { sentence: c.connectClaudeCode, code: { value: CLAUDE_CODE_COMMAND, label: c.copyCommandLabel } },
 		cursor: { sentence: c.connectCursor, code: { value: CURSOR_CONFIG, label: c.copyConfigLabel } },
 	};
@@ -546,10 +550,11 @@ function installTabs(c: LandingCopy, t: (s: string) => string): string {
 		({ key, name }, i) => `<button type="button" role="tab" id="tab-${key}" aria-controls="panel-${key}" aria-selected="${i === 0}">${name}</button>`,
 	).join("\n");
 	const body = CLIENTS.map(({ key, name }) => {
-		const { sentence, code } = panels[key];
+		const { sentence, link, code } = panels[key];
 		const label = code ? ` data-label="${escapeAttribute(code.label)}"` : "";
+		const anchor = link ? `\n<p><a href="${escapeAttribute(link.href)}">${t(link.label)}</a></p>` : "";
 		const pre = code ? `\n<pre><code>${escapeText(code.value)}</code></pre>` : "";
-		return `<div role="tabpanel" id="panel-${key}" aria-labelledby="tab-${key}"${label}>\n<h3 class="panel-title">${name}</h3>\n<p>${t(sentence)}</p>${pre}\n</div>`;
+		return `<div role="tabpanel" id="panel-${key}" aria-labelledby="tab-${key}"${label}>\n<h3 class="panel-title">${name}</h3>${anchor}\n<p>${t(sentence)}</p>${pre}\n</div>`;
 	}).join("\n");
 	const copy = `<button type="button" class="copy secondary" data-done="${escapeAttribute(c.copied)}" hidden>${escapeText(c.copy)}</button>`;
 	return `<div class="tabs">\n<div class="tabbar">\n<div role="tablist" aria-label="${escapeAttribute(c.clientsLabel)}" hidden>\n${tabs}\n</div>\n${copy}\n</div>\n${body}\n</div>`;
