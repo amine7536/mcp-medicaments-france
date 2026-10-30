@@ -3,7 +3,7 @@
   "name": "io.github.amine7536/medicaments-france",
   "title": "Médicaments en France",
   "description": "French medicines (ANSM + BDPM): boxes and prices, prescription conditions, safety info, shortages.",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "websiteUrl": "https://medicaments-france.a3e.dev/",
   "repository": {
     "url": "https://github.com/amine7536/mcp-medicaments-france",
