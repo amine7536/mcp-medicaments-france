@@ -4,6 +4,17 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Runs per prompt
+        type: string
+        default: "3"
+      prompt:
+        description: Prompt to run
+        type: choice
+        options: [all, "1", "2", "3"]
+        default: all
 
 permissions:
   contents: read
@@ -26,10 +37,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     needs: test
-    if: startsWith(github.head_ref, 'release-please--')
+    if: startsWith(github.head_ref, 'release-please--') || github.event_name == 'workflow_dispatch'
     concurrency:
       group: candidate
-      cancel-in-progress: true
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CANDIDATE_URL: https://mcp-medicaments-france-candidate.pixelfactory.workers.dev
@@ -88,12 +99,17 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DISABLE_AUTOUPDATER: "1"
-        run: pnpm golden -- --url "$CANDIDATE_URL/mcp" --bare --log "$RUNNER_TEMP/golden.jsonl"
+          RUNS: ${{ inputs.runs || '3' }}
+          PROMPT: ${{ inputs.prompt || 'all' }}
+        run: |
+          args=(--url "$CANDIDATE_URL/mcp" --bare --log "$RUNNER_TEMP/golden.jsonl" --runs "$RUNS")
+          if [[ "$PROMPT" != "all" ]]; then args+=(--prompt "$PROMPT"); fi
+          pnpm golden -- "${args[@]}"
       - name: Upload golden log
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: golden-pr${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          name: golden-${{ github.event.pull_request.number && format('pr{0}', github.event.pull_request.number) || format('run{0}', github.run_id) }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/golden.jsonl
       - name: Delete candidate
         if: ${{ !cancelled() }}
