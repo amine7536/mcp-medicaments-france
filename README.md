@@ -113,6 +113,12 @@ Substitution check: asks Claude Code the substitution questions 3 times each (`-
 pnpm golden -- --url http://localhost:8787/mcp
 ```
 
+Local runs load the tools lazily and can behave differently from CI, which runs `--bare`. To run the check as CI does, on the candidate Worker built from any branch (the log is kept as a run artifact):
+
+```sh
+gh workflow run ci.yml --ref <branch> -f runs=10 -f prompt=all
+```
+
 ## Releases
 
 Versions come from the Conventional Commits on `main`: release-please keeps a release PR open that bumps the version in `package.json`, `server.json` and `src/mcp/server.ts` and updates `CHANGELOG.md`. On that PR, CI deploys the build to a separate candidate Worker (mcp-medicaments-france-candidate, its own D1 database ruptures-candidate, filled by the migrations, the BDPM import and an ANSM ingest) and runs `pnpm golden` against it with Claude Code (--bare, ANTHROPIC_API_KEY secret), then deletes the candidate Worker (its database stays); golden is a required check, so a failing answer blocks the merge and nothing is tagged, released or deployed. Merging the release PR tags vX.Y.Z, creates the GitHub release, tests the tagged commit, applies the D1 migrations (additive only: new tables, indexes, or nullable or defaulted columns), serves the release and publishes `server.json` to the MCP registry. Pushes to main only run the tests. To serve an earlier release again: `gh workflow run rollback.yml -f tag=vX.Y.Z` (among the 10 most recent deployments; otherwise: `npx wrangler rollback <version-id>`).
