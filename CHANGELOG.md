@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.8.1...v1.9.0) (2026-10-30)
+
+
+### Features
+
+* **landing:** link the claude directory listing ([#52](https://github.com/amine7536/mcp-medicaments-france/issues/52)) ([7572e4d](https://github.com/amine7536/mcp-medicaments-france/commit/7572e4df0cbbe74f25d874b9018e6fe144ed147c))
+
 ## [1.8.1](https://github.com/amine7536/mcp-medicaments-france/compare/v1.8.0...v1.8.1) (2026-10-30)
 
 
