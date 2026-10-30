@@ -1,7 +1,7 @@
 import { exports } from "cloudflare:workers";
 import { decodeHTML, decodeHTMLAttribute } from "entities/decode";
 import { describe, expect, it } from "vitest";
-import { formatText, frenchSpacing, type Lang, REPO_URL, renderExamples, renderLanding, renderPrivacy, renderRealAnswers, resolveLang } from "../src/landing";
+import { DIRECTORY_URL, formatText, frenchSpacing, type Lang, REPO_URL, renderExamples, renderLanding, renderPrivacy, renderRealAnswers, resolveLang } from "../src/landing";
 import { consume } from "../src/lib/html";
 
 const ORIGIN = "https://medicaments-france.a3e.dev";
@@ -170,6 +170,11 @@ describe.each(LANGS)("landing page (%s)", (lang) => {
 			["en", `${ORIGIN}/?lang=en`],
 			["x-default", `${ORIGIN}/`],
 		]);
+	});
+
+	it("links the Claude install panel to the directory listing", () => {
+		const panel = one(tree, (e) => e.attrs.id === "panel-claude");
+		expect(all(panel, is("a")).map((a) => a.attrs.href)).toEqual([DIRECTORY_URL]);
 	});
 
 	it("applies French typography on the French page only", () => {
