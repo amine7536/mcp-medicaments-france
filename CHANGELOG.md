@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.1](https://github.com/amine7536/mcp-medicaments-france/compare/v1.8.0...v1.8.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **mcp:** describe shortage_id by its value ([#50](https://github.com/amine7536/mcp-medicaments-france/issues/50)) ([ade9408](https://github.com/amine7536/mcp-medicaments-france/commit/ade94086442205df8b440729d17fea9220862615))
+* **mcp:** describe tools without instructing the model ([#46](https://github.com/amine7536/mcp-medicaments-france/issues/46)) ([3879a87](https://github.com/amine7536/mcp-medicaments-france/commit/3879a871d215b25172a4ab7b4890c8273a62f766))
+
+
+### Reverts
+
+* describe tools without instructing the model ([#48](https://github.com/amine7536/mcp-medicaments-france/issues/48)) ([a9d4dd1](https://github.com/amine7536/mcp-medicaments-france/commit/a9d4dd107f69199591b5c2598621f7f5cb30eecc))
+
 ## [1.8.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.7.0...v1.8.0) (2026-10-29)
 
 
