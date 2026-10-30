@@ -76,7 +76,8 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$body"
-          status=$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null || true)
+          # A retried request also prints the failed answers' bodies; read the last JSON answer.
+          status=$(printf '%s\n' "$body" | jq -Rr 'fromjson? | .status // empty' | tail -n1)
           if [[ "$status" != "ok" ]]; then
             echo "::error::candidate ingest did not return status ok"
             exit 1
