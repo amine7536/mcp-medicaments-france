@@ -294,10 +294,9 @@ describe("get_availability", () => {
 	it("not listed: names possibly related entries sharing the brand token", async () => {
 		const { data, result } = await call(getAvailability, { cis: MEDICINES.dolipraneCapsule.cis });
 		expect(data.listed).toBe(false);
-		expect(data.possibly_related_shortages.map((s: { shortage_id: string }) => s.shortage_id)).toEqual([SHORTAGES.dolipraneUnmatched.id]);
-		expect(summary(result)).toContain(
-			`No shortage is linked to this medicine with certainty, but ANSM lists possibly related entries: ${SHORTAGES.dolipraneUnmatched.name} (tension). This does not guarantee availability in your pharmacy.`,
-		);
+		const related = [SHORTAGES.dolipraneRupture, SHORTAGES.dolipraneTension, SHORTAGES.dolipraneUnmatched];
+		expect(data.possibly_related_shortages.map((s: { shortage_id: string }) => s.shortage_id)).toEqual(related.map((s) => s.id));
+		for (const s of related) expect(summary(result)).toContain(s.name);
 		expect(summary(result)).not.toContain(NOT_LISTED);
 	});
 

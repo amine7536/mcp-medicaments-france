@@ -145,7 +145,7 @@ const result = (dates: SourceDates, now: Date, out: { data: Data; summary: strin
 export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_availability",
 	title: "Get availability",
-	description: `Current ANSM shortage status of one medicine, given exactly one of: its CIS code, an ANSM shortage id or a name. Returns the status, the expected return in ANSM's wording, the change history and possibly related unlinked entries. ${INFO_ONLY}`,
+	description: `Current ANSM shortage status of one medicine, given exactly one of: its CIS code, an ANSM shortage id or a name. Returns the status, the expected return in ANSM's wording, the change history and possibly related entries. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, shortage_id, name }): Promise<ToolOutcome> {

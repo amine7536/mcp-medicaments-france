@@ -111,6 +111,18 @@ export async function currentShortages(db: D1Database, cis: readonly string[]): 
 	return out;
 }
 
+/** Listed shortages, matched or not, whose normalized name contains every token. */
+export async function relatedShortages(db: D1Database, toks: readonly string[], limit: number): Promise<ShortageRow[]> {
+	if (toks.length === 0) return [];
+	return all<ShortageRow>(
+		db
+			.prepare(
+				`SELECT ${SHORTAGE_COLUMNS}, NULL AS match_confidence FROM shortages s WHERE s.listed = 1 AND NOT EXISTS (SELECT 1 FROM json_each(?) t WHERE instr(s.raw_name_norm, t.value) = 0) ORDER BY ${SHORTAGE_ORDER} LIMIT ?`,
+			)
+			.bind(json(toks), limit),
+	);
+}
+
 /** Listed, unmatched shortages whose normalized name contains every token. */
 export async function unmatchedShortages(db: D1Database, toks: readonly string[], limit: number): Promise<ShortageRow[]> {
 	if (toks.length === 0) return [];
