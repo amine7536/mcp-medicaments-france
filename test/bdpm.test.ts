@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fetchBytes } from "../scripts/bdpm/download";
-import { parseAnchor, parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
+import { cleanIndications, parseAnchor, parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
 import { decodeCp1252, decodeUtf8, parseBanner, parseTsv } from "../scripts/bdpm/parse";
 import { buildImportSql, insertStatements, sqlLiteral } from "../scripts/bdpm/sql";
 import { USER_AGENT } from "../src/ingest/http";
@@ -269,6 +269,21 @@ describe("presentations", () => {
 			dispensing_fee_eur: null,
 			reimbursement_indications: "Traitement d'appoint",
 		});
+	});
+});
+
+describe("reimbursement indications", () => {
+	it("turns <br> tags into newlines, trimmed, and an empty result into null", () => {
+		expect(cleanIndications("A<br><br>- B")).toBe("A\n\n- B");
+		expect(cleanIndications("A<BR/>B<br />C")).toBe("A\nB\nC");
+		expect(cleanIndications("<br>")).toBeNull();
+		expect(cleanIndications(null)).toBeNull();
+	});
+
+	it("is applied by the presentations mapper", () => {
+		const presentations = input().presentations;
+		presentations[0] = presentationRow(0).with(12, "A<br>B");
+		expect(validateAndMap(input({ presentations })).presentations[0]?.reimbursement_indications).toBe("A\nB");
 	});
 });
 

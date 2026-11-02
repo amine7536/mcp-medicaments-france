@@ -173,7 +173,7 @@ function mapPresentations(rows: string[][]): PresentationRow[] {
 		price_eur: parsePrice(req(r[9])),
 		public_price_eur: parsePrice(req(r[10])),
 		dispensing_fee_eur: parsePrice(req(r[11])),
-		reimbursement_indications: opt(r[12]),
+		reimbursement_indications: cleanIndications(opt(r[12])),
 	}));
 }
 
@@ -194,6 +194,13 @@ function mapPrescriptionConditions(rows: string[][]): PrescriptionConditionRow[]
 		out.push({ cis, condition, position: conditions.size });
 	});
 	return out;
+}
+
+/** Reimbursement indications with each `<br>` (any case, `<br/>`, `<br />`) as a newline, trimmed; null when nothing is left. */
+export function cleanIndications(v: string | null): string | null {
+	if (v === null) return null;
+	const text = v.replace(/<br\s*\/?>/gi, "\n").trim();
+	return text === "" ? null : text;
 }
 
 /** Title and URL of the ANSM page linked by an anchor cell; null when the cell has no `<a>` with an `href`. */
