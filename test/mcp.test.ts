@@ -57,8 +57,7 @@ describe("/mcp", () => {
 			instructions: INSTRUCTIONS,
 			capabilities: { tools: {} },
 		});
-		expect(SERVER_DESCRIPTION.startsWith(`${COPY.fr.lead}\n\n`)).toBe(true);
-		expect(SERVER_DESCRIPTION).toContain("oriente vers le pharmacien ou le médecin.");
+		expect(SERVER_DESCRIPTION).toBe(COPY.fr.lead);
 		expect(INSTRUCTIONS.startsWith(`${OPENING} "Not listed" does not mean "available".`)).toBe(true);
 		expect(init.result.instructions).toContain(SUBSTITUTION_RULE);
 		expect(INFO_ONLY).toBe(NEW_INFO_ONLY);

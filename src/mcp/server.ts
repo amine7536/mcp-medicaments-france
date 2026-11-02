@@ -12,7 +12,7 @@ import { searchMedicine } from "./tools/searchMedicine";
 export const SERVER_NAME = "medicaments-france";
 export const SERVER_VERSION = "1.9.0"; // x-release-please-version
 export const SERVER_TITLE = "Médicaments en France";
-export const SERVER_DESCRIPTION = `${COPY.fr.lead}\n\nDonnées publiques en lecture seule de l'ANSM et de la BDPM (Licence Ouverte) ; chaque réponse cite sa source et sa date de mise à jour. Information uniquement, pas un avis médical : le serveur ne propose jamais de substitution, de changement de dosage ou d'arrêt de traitement, et oriente vers le pharmacien ou le médecin.`;
+export const SERVER_DESCRIPTION = COPY.fr.lead;
 export const SERVER_WEBSITE_URL = `${SITE_URL}/`;
 
 export const INSTRUCTIONS =
