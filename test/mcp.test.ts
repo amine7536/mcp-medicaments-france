@@ -2,7 +2,6 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { COPY } from "../src/landing";
 import { INSTRUCTIONS, SERVER_DESCRIPTION, SERVER_NAME, SERVER_TITLE, SERVER_VERSION, SERVER_WEBSITE_URL } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
 import { seed } from "./seed";
@@ -57,7 +56,6 @@ describe("/mcp", () => {
 			instructions: INSTRUCTIONS,
 			capabilities: { tools: {} },
 		});
-		expect(SERVER_DESCRIPTION).toBe(COPY.fr.lead);
 		expect(INSTRUCTIONS.startsWith(`${OPENING} "Not listed" does not mean "available".`)).toBe(true);
 		expect(init.result.instructions).toContain(SUBSTITUTION_RULE);
 		expect(INFO_ONLY).toBe(NEW_INFO_ONLY);

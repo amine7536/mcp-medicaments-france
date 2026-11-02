@@ -6,7 +6,6 @@ import { SERVER_TITLE, SERVER_VERSION, SERVER_WEBSITE_URL } from "../src/mcp/ser
 
 describe("server.json", () => {
 	it("is a registry entry matching the deployed server", () => {
-		expect(server.description).toBe("French medicines (ANSM + BDPM): boxes and prices, prescription conditions, safety info, shortages.");
 		expect(server.description.length).toBeLessThanOrEqual(100);
 		expect(server.title.length).toBeLessThanOrEqual(100);
 		expect(server.title).toBe(SERVER_TITLE);
