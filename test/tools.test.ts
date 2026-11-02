@@ -25,6 +25,7 @@ const ctx: ToolContext = { db: env.DB, now: NOW };
 const text = (r: CallToolResult): string => (r.content[0] as { text: string }).text;
 /** The summary part of a result's text (before the JSON). */
 const summary = (r: CallToolResult): string => text(r).split("\n\n")[0] as string;
+const firstLine = (r: CallToolResult): string => summary(r).split("\n")[0] as string;
 
 /** A D1 binding whose every query throws. */
 const brokenDb = (): D1Database =>
@@ -425,6 +426,7 @@ describe("recent_changes", () => {
 		const { data } = await call(recentChanges, {});
 		expect(data.since).toBe("2026-10-20T12:00:00.000Z");
 		expect(data.counts).toEqual({ new: 1, status_change: 0, return_date_change: 1, delisted: 1, relisted: 0 });
+		expect(data.tracking_since).toBe(ANSM_LAST_INGEST);
 		expect(data.items.map((i: { shortage_id: string; change: string }) => `${i.shortage_id}:${i.change}`)).toEqual([
 			"1008:delisted",
 			"1002:new",
@@ -440,10 +442,37 @@ describe("recent_changes", () => {
 		expect(data.note).toBe(CHANGES_NOTE);
 	});
 
-	it("filters by change type and limit; counts stay over the whole window", async () => {
+	it("filters items and counts by change type; the limit applies to items only", async () => {
 		const { data } = await call(recentChanges, { days: 90, change_types: ["new"], limit: 1 });
-		expect(data.counts).toEqual({ new: 3, status_change: 1, return_date_change: 1, delisted: 1, relisted: 0 });
+		expect(data.counts).toEqual({ new: 3 });
 		expect(data.items.map((i: { shortage_id: string }) => i.shortage_id)).toEqual(["1002"]);
+	});
+
+	it("returns the end of the earliest successful ANSM run as tracking_since, and says when the window starts before it", async () => {
+		const earliest = "2026-10-10T05:10:00.000Z";
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO ingest_runs (source, started_at, finished_at, status) VALUES ('ansm', ?, ?, 'ok')").bind("2026-10-10T05:00:00.000Z", earliest),
+			env.DB.prepare("INSERT INTO ingest_runs (source, started_at, finished_at, status) VALUES ('ansm', ?, ?, 'error')").bind("2026-10-01T05:00:00.000Z", "2026-10-01T05:10:00.000Z"),
+			env.DB.prepare("INSERT INTO ingest_runs (source, started_at, finished_at, status) VALUES ('bdpm', ?, ?, 'ok')").bind("2026-09-01T05:00:00.000Z", "2026-09-01T05:10:00.000Z"),
+		]);
+		try {
+			const before = await call(recentChanges, { days: 30 });
+			expect(before.data.tracking_since).toBe(earliest);
+			expect(Date.parse(before.data.since)).toBeLessThan(Date.parse(earliest));
+			expect(firstLine(before.result)).toContain(earliest.slice(0, 10));
+
+			const after = await call(recentChanges, { days: 7 });
+			expect(after.data.tracking_since).toBe(earliest);
+			expect(Date.parse(after.data.since)).toBeGreaterThan(Date.parse(earliest));
+			expect(firstLine(after.result)).not.toContain(earliest.slice(0, 10));
+
+			await env.DB.prepare("DELETE FROM ingest_runs WHERE source = 'ansm'").run();
+			const none = await call(recentChanges, { days: 7 });
+			expect(none.data.tracking_since).toBeNull();
+			expect(firstLine(none.result).length).toBeGreaterThan(firstLine(after.result).length);
+		} finally {
+			await seed();
+		}
 	});
 });
 

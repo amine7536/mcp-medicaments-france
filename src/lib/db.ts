@@ -219,24 +219,31 @@ export interface ChangeRow extends HistoryRow {
 	ansm_path: string;
 }
 
-/** Changes detected since `since`: counts per type over the window, and the latest items of the given types. */
+/**
+ * Changes of the given types detected since `since`: counts per type over the window and the latest items,
+ * with the end of the first successful ANSM run (`tracking_since`, null when none): no change is recorded before it.
+ */
 export async function recentChanges(
 	db: D1Database,
 	since: string,
 	types: readonly string[],
 	limit: number,
-): Promise<{ counts: Map<string, number>; items: ChangeRow[] }> {
-	const [counts, items] = await db.batch([
-		db.prepare("SELECT change_type, COUNT(*) AS n FROM status_history WHERE detected_at >= ? GROUP BY change_type").bind(since),
+): Promise<{ counts: Map<string, number>; items: ChangeRow[]; tracking_since: string | null }> {
+	const [counts, items, tracking] = await db.batch([
+		db
+			.prepare("SELECT change_type, COUNT(*) AS n FROM status_history WHERE detected_at >= ? AND change_type IN (SELECT value FROM json_each(?)) GROUP BY change_type")
+			.bind(since, json(types)),
 		db
 			.prepare(
 				"SELECT h.id, h.shortage_id, h.change_type, h.old_status, h.new_status, h.old_expected_return, h.new_expected_return, h.detected_at, s.raw_name AS name, s.ansm_path FROM status_history h JOIN shortages s ON s.id = h.shortage_id WHERE h.detected_at >= ? AND h.change_type IN (SELECT value FROM json_each(?)) ORDER BY h.detected_at DESC, h.id DESC LIMIT ?",
 			)
 			.bind(since, json(types), limit),
+		db.prepare("SELECT MIN(finished_at) AS first_ok FROM ingest_runs WHERE source = 'ansm' AND status = 'ok'"),
 	]);
 	return {
 		counts: new Map(((counts?.results ?? []) as Array<{ change_type: string; n: number }>).map((r) => [r.change_type, r.n])),
 		items: (items?.results ?? []) as ChangeRow[],
+		tracking_since: (tracking?.results[0] as { first_ok: string | null } | undefined)?.first_ok ?? null,
 	};
 }
 
