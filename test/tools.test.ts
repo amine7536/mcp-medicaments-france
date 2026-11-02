@@ -3,12 +3,12 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
-import { getMedicineInfo as loadInfo } from "../src/lib/db";
+import { type HistoryRow, getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { Medicine, Presentation, SafetyInformation } from "../src/mcp/schemas";
+import { Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
 import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
-import { getAvailability, NOT_LISTED } from "../src/mcp/tools/getAvailability";
+import { getAvailability, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
@@ -231,7 +231,7 @@ describe("get_availability", () => {
 		expect(getAvailability.inputSchema.safeParse({ name: "a" }).success).toBe(false);
 	});
 
-	it("availability by CIS: current shortage, history, days, other ids, linked medicines", async () => {
+	it("availability by CIS: current shortage, history, status date, other ids, linked medicines", async () => {
 		const { data, result } = await call(getAvailability, { cis: MEDICINES.dolipraneTablet.cis });
 		expect(data).toMatchObject({
 			kind: "availability",
@@ -240,7 +240,8 @@ describe("get_availability", () => {
 			listed: true,
 			shortage: { shortage_id: SHORTAGES.dolipraneRupture.id, status: "rupture", expected_return: { precision: "month", raw: MONTH_RAW, passed: false } },
 			first_seen_at: "2026-10-01",
-			days_in_current_status: 7,
+			status_since: "2026-10-20",
+			status_since_source: "service",
 			other_shortage_ids: [SHORTAGES.dolipraneTension.id],
 			possibly_related_shortages: [],
 		});
@@ -258,20 +259,41 @@ describe("get_availability", () => {
 	it("flags a passed return date and a probable match", async () => {
 		const { data, result } = await call(getAvailability, { cis: MEDICINES.amoxicilline.cis });
 		expect(data.shortage).toMatchObject({ match_confidence: 0.6, match_note: "probable match", expected_return: { passed: true, raw: PASSED_RAW } });
-		expect(data.days_in_current_status).toBe(2);
+		expect(data).toMatchObject({ status_since: SHORTAGES.amoxicilline.situation_start, status_since_source: "ansm" });
 		expect(summary(result)).toContain("The announced return date has passed.");
 		expect(summary(result)).toContain("probable match");
 	});
 
-	it("counts days from the situation start, then first seen, without a status event", async () => {
+	it("dates the status from the situation start, then first seen, without a status event", async () => {
 		await env.DB.prepare("DELETE FROM status_history WHERE shortage_id = ?").bind(SHORTAGES.amoxicilline.id).run();
 		await env.DB.prepare("DELETE FROM status_history WHERE shortage_id = ?").bind(SHORTAGES.zymad.id).run();
 		try {
-			expect((await call(getAvailability, { cis: MEDICINES.amoxicilline.cis })).data.days_in_current_status).toBe(42);
-			expect((await call(getAvailability, { cis: MEDICINES.zymad.cis })).data.days_in_current_status).toBe(56);
+			const amoxicilline = await call(getAvailability, { cis: MEDICINES.amoxicilline.cis });
+			expect(amoxicilline.data).toMatchObject({ status_since: SHORTAGES.amoxicilline.situation_start, status_since_source: "ansm" });
+			const zymad = await call(getAvailability, { cis: MEDICINES.zymad.cis });
+			expect(zymad.data).toMatchObject({ status_since: zymad.data.first_seen_at, status_since_source: "service" });
 		} finally {
 			await seed();
 		}
+	});
+
+	it("statusSince takes the latest status change or relisting, else the ANSM situation start, else first seen", () => {
+		const row = (change_type: HistoryRow["change_type"], detected_at: string): HistoryRow => ({
+			change_type,
+			old_status: null,
+			new_status: null,
+			old_expected_return: null,
+			new_expected_return: null,
+			detected_at,
+		});
+		const shortage = { situation_start: "2024-03-22", first_seen_at: "2026-10-27T19:42:46.788Z" } as ShortageRow;
+		const unknownStart = { ...shortage, situation_start: null };
+		const events = [row("new", "2026-10-27T19:42:46.788Z"), row("status_change", "2026-10-28T05:00:00.000Z"), row("relisted", "2026-10-30T05:00:00.000Z")];
+		expect(statusSince(events, shortage)).toEqual({ date: "2026-10-30", source: "service" });
+		expect(statusSince(events.slice(0, 2), shortage)).toEqual({ date: "2026-10-28", source: "service" });
+		const noStatusEvent = [row("new", "2026-10-28T05:00:00.000Z"), row("return_date_change", "2026-10-31T05:00:00.000Z"), row("delisted", "2026-11-01T05:00:00.000Z")];
+		expect(statusSince(noStatusEvent, shortage)).toEqual({ date: "2024-03-22", source: "ansm" });
+		expect(statusSince(noStatusEvent, unknownStart)).toEqual({ date: "2026-10-27", source: "service" });
 	});
 
 	it("not listed: the exact sentence when nothing is possibly related", async () => {
@@ -282,7 +304,8 @@ describe("get_availability", () => {
 			listed: false,
 			shortage: null,
 			first_seen_at: null,
-			days_in_current_status: null,
+			status_since: null,
+			status_since_source: null,
 			history: [],
 			possibly_related_shortages: [],
 		});
