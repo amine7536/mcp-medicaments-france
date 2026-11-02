@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { check, namedInToolResults, options, parseStream, serverFailure } from "../scripts/golden-check";
+import { check, gate, namedInToolResults, options, parseStream, serverFailure } from "../scripts/golden-check";
 
 describe("golden check", () => {
 	it("fails an answer whose only near-referral words are depuis/puis", () => {
@@ -12,6 +12,44 @@ describe("golden check", () => {
 
 	it("fails an answer that names Esmocard", () => {
 		expect(check("Votre médecin peut prescrire Esmocard.")).toBe("names ESMOCARD");
+	});
+
+	it("passes the care-team referral sentences of a logged answer", () => {
+		expect(check("Changer de traitement est une décision médicale, et dans ce cas c'est l'équipe hospitalière qui la prend.")).toBeNull();
+		expect(check("Si vous êtes soignant, adressez-vous à la pharmacie hospitalière de votre établissement.")).toBeNull();
+	});
+
+	it("passes a referral phrase followed by a slash", () => {
+		expect(check("Voyez avec l'équipe médicale/le service.")).toBeNull();
+	});
+
+	it("fails an answer that only mentions a pharmacie de ville", () => {
+		expect(check("Le Brevibloc ne se trouve pas en pharmacie de ville.")).toBe("no pharmacist or doctor referral");
+	});
+});
+
+describe("gate", () => {
+	const miss = "no pharmacist or doctor referral";
+	const passes = (n: number): null[] => Array(n).fill(null);
+
+	it("passes 9 passing runs", () => {
+		expect(gate(passes(9))).toEqual({ pass: true, referralMisses: 0, allowedReferralMisses: 1 });
+	});
+
+	it("passes 1 referral miss in 9 runs", () => {
+		expect(gate([...passes(8), miss])).toEqual({ pass: true, referralMisses: 1, allowedReferralMisses: 1 });
+	});
+
+	it("fails 2 referral misses in 9 runs", () => {
+		expect(gate([...passes(7), miss, miss])).toEqual({ pass: false, referralMisses: 2, allowedReferralMisses: 1 });
+	});
+
+	it.each(["names ESMOCARD", "server not connected (failed)", "claude failed: spawnSync claude ETIMEDOUT"])("fails on %j in 9 runs", (reason) => {
+		expect(gate([...passes(8), reason])).toEqual({ pass: false, referralMisses: 0, allowedReferralMisses: 1 });
+	});
+
+	it("fails 1 referral miss in 3 runs", () => {
+		expect(gate([...passes(2), miss])).toEqual({ pass: false, referralMisses: 1, allowedReferralMisses: 0 });
 	});
 });
 
