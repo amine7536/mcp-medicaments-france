@@ -11,7 +11,7 @@ const DAY_MS = 86_400_000;
 
 export const inputSchema = z.object({
 	days: z.int().min(1).max(90).default(7),
-	change_types: z.array(ChangeType).default([...CHANGE_TYPES]),
+	change_types: z.array(ChangeType).min(1).default([...CHANGE_TYPES]),
 	limit: z.int().min(1).max(50).default(50),
 });
 

@@ -443,6 +443,7 @@ describe("recent_changes", () => {
 		});
 		expect(recentChanges.inputSchema.safeParse({ days: 91 }).success).toBe(false);
 		expect(recentChanges.inputSchema.safeParse({ days: 0 }).success).toBe(false);
+		expect(recentChanges.inputSchema.safeParse({ change_types: [] }).success).toBe(false);
 	});
 
 	it("returns the window, counts with all keys, items latest first and the note", async () => {
