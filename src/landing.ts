@@ -129,7 +129,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		noticeLead: "Attention :",
 		notice:
 			"information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.",
-		lead: "Un serveur MCP gratuit, en lecture seule, sur les médicaments en France : boîtes et codes CIP13, prix et remboursement, conditions de prescription, informations de sécurité et ruptures de stock. Données publiques de l'ANSM et de la base publique des médicaments (BDPM).",
+		lead: "Recherchez un médicament vendu en France par nom (ex. Doliprane, amoxicilline), code CIS ou code CIP13 (sur la boîte) : présentations, prix, taux de remboursement Sécurité sociale, conditions de prescription et de délivrance (ordonnance), informations de sécurité ANSM et statut de médicament d'intérêt thérapeutique majeur (MITM). Vérifiez s'il est en rupture de stock ou en tension d'approvisionnement, avec la date de retour prévue, et consultez les ruptures en cours et les changements récents.",
 		endpointLabel: "Adresse du serveur MCP",
 		copy: "Copier",
 		copied: "Copié",
@@ -190,7 +190,7 @@ export const COPY: Record<Lang, LandingCopy> = {
 		noticeLead: "Warning:",
 		notice:
 			"information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.",
-		lead: "A free, read-only MCP server about medicines in France: boxes and CIP13 codes, prices and reimbursement, prescription conditions, safety information and shortages. Public data from the ANSM and the French public medicines database (BDPM).",
+		lead: "Look up a medicine sold in France by name (e.g. Doliprane, amoxicillin), CIS code or CIP13 code (on the box): presentations, prices, Social Security reimbursement rate, prescription and dispensing conditions (prescription required or not), ANSM safety information and status as a medicine of major therapeutic interest (MITM). Check whether it is out of stock or under supply tension, with the expected return date, and browse current shortages and recent changes.",
 		endpointLabel: "MCP server address",
 		copy: "Copy",
 		copied: "Copied",
