@@ -2,7 +2,7 @@ import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicines, searchCis, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
-import { Cip13, Cis, describeShortage, ShortageSummary, toShortageSummary } from "../schemas";
+import { Cip13, Cis, describeShortage, isValidEan13, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
 export const SEARCH_LIMIT = 100;
@@ -41,6 +41,7 @@ export const Data = z.discriminatedUnion("kind", [
 			}),
 		),
 		unmatched_shortages: z.array(ShortageSummary),
+		invalid_cip13: z.literal(true).optional(),
 	}),
 ]);
 
@@ -56,6 +57,11 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 	outputSchema,
 	async handler({ db, now }, { query, only_in_shortage, limit }) {
 		const dates = await loadSourceDates(db);
+		const q = query.trim();
+		if (Cip13.safeParse(q).success && !isValidEan13(q)) {
+			const data = { kind: "results" as const, results: [], unmatched_shortages: [], invalid_cip13: true as const };
+			return { result: toolResult(`"${query}" is not a valid CIP13 barcode: its EAN-13 check digit does not match.`, envelope(data, dates, now)) };
+		}
 		const cis = await findCis(db, query);
 		const [meds, shortages, unmatched] = await Promise.all([
 			getMedicines(db, cis),

@@ -11,6 +11,16 @@ export const ChangeType = z.enum(CHANGE_TYPES);
 export const Cis = z.string().regex(/^\d{8}$/);
 export const Cip13 = z.string().regex(/^\d{13}$/);
 
+/** EAN-13 check digit of the first 12 digits of a code: weights 1 and 3 alternating from the left. */
+export function ean13CheckDigit(first12: string): number {
+	let sum = 0;
+	for (let i = 0; i < 12; i++) sum += Number(first12[i]) * (i % 2 === 0 ? 1 : 3);
+	return (10 - (sum % 10)) % 10;
+}
+
+/** Whether `code` is 13 digits whose last digit is the EAN-13 check digit of the first 12. */
+export const isValidEan13 = (code: string): boolean => /^\d{13}$/.test(code) && ean13CheckDigit(code) === Number(code[12]);
+
 /** Below this match confidence a shortage is reported as a probable match. */
 export const PROBABLE_MATCH_BELOW = 0.8;
 

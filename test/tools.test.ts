@@ -6,9 +6,9 @@ import { log } from "../src/ingest/http";
 import { type HistoryRow, getMedicineInfo as loadInfo } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
-import { runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
-import { getAvailability, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
+import { isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
+import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
@@ -19,6 +19,10 @@ import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, MEDICINES, MONTH_RAW,
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}, imported 2026-10-05).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown, imported unknown).";
 const SAFETY_LINE = `Safety: ${SAFETY}`;
+/** 13 digits with a correct EAN-13 check digit, absent from the seed. */
+const UNKNOWN_CIP13 = "3400999999991";
+/** 13 digits with a wrong EAN-13 check digit. */
+const INVALID_CIP13 = "3400999999999";
 
 const ctx: ToolContext = { db: env.DB, now: NOW };
 
@@ -76,6 +80,22 @@ beforeAll(async () => {
 
 beforeEach(() => {
 	vi.restoreAllMocks();
+});
+
+describe("isValidEan13", () => {
+	const real = PRESENTATIONS.dolipraneBoxOf8.cip13;
+
+	it("accepts a real CIP13 and rejects a wrong check digit or a 12-digit code", () => {
+		expect(isValidEan13(real)).toBe(true);
+		expect(isValidEan13(real.slice(0, 12) + String((Number(real[12]) + 1) % 10))).toBe(false);
+		expect(isValidEan13(real.slice(0, 12))).toBe(false);
+		expect(isValidEan13(UNKNOWN_CIP13)).toBe(true);
+		expect(isValidEan13(INVALID_CIP13)).toBe(false);
+	});
+
+	it("passes every seeded CIP13", () => {
+		for (const p of Object.values(PRESENTATIONS)) expect(isValidEan13(p.cip13), p.cip13).toBe(true);
+	});
 });
 
 describe("envelope", () => {
@@ -198,8 +218,15 @@ describe("search_medicine", () => {
 	it("resolves a 13-digit query as a CIP13", async () => {
 		const { data } = await call(searchMedicine, { query: ` ${PRESENTATIONS.dolipraneBoxOf100.cip13} ` });
 		expect(data.results.map((r: { cis: string }) => r.cis)).toEqual([MEDICINES.dolipraneTablet.cis]);
-		const unknown = await call(searchMedicine, { query: "3400999999999" });
+		const unknown = await call(searchMedicine, { query: UNKNOWN_CIP13 });
 		expect(unknown.data.results).toEqual([]);
+		expect(unknown.data).not.toHaveProperty("invalid_cip13");
+	});
+
+	it("flags a 13-digit query with a wrong check digit as an invalid barcode", async () => {
+		const { data, result } = await call(searchMedicine, { query: INVALID_CIP13 });
+		expect(data).toMatchObject({ results: [], unmatched_shortages: [], invalid_cip13: true });
+		expect(summary(result)).not.toContain(NOT_FOUND_HINT);
 	});
 
 	it("quotes the ANSM wording of a month-precision return, never a bare ISO date", async () => {
@@ -228,6 +255,9 @@ describe("get_availability", () => {
 		expect(getAvailability.inputSchema.safeParse({ cis: "1234567" }).success).toBe(false);
 		expect(getAvailability.inputSchema.safeParse({ shortage_id: "" }).success).toBe(false);
 		expect(getAvailability.inputSchema.safeParse({ shortage_id: "x".repeat(21) }).success).toBe(false);
+		expect(getAvailability.inputSchema.safeParse({ shortage_id: "12a" }).success).toBe(false);
+		expect(getAvailability.inputSchema.safeParse({ shortage_id: "1".repeat(7) }).success).toBe(false);
+		expect(getAvailability.inputSchema.safeParse({ shortage_id: SHORTAGES.dolipraneRupture.id }).success).toBe(true);
 		expect(getAvailability.inputSchema.safeParse({ name: "a" }).success).toBe(false);
 	});
 
@@ -380,7 +410,40 @@ describe("get_availability", () => {
 
 	it("not_found: unknown CIS, unknown shortage id", async () => {
 		expect((await call(getAvailability, { cis: "69999999" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
-		expect((await call(getAvailability, { shortage_id: "999999" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		const unknownId = await call(getAvailability, { shortage_id: "999999" });
+		expect(unknownId.data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		expect(summary(unknownId.result)).not.toContain(NOT_FOUND_HINT);
+	});
+
+	it("caps linked_medicines and reports the full count", async () => {
+		const total = LINKED_LIMIT + 1;
+		const cis = Array.from({ length: total }, (_, i) => String(61_000_000 + i));
+		const stmts = [
+			env.DB.prepare(
+				`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, scope_raw, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
+				VALUES ('1010', '/disponibilites-des-produits-de-sante/medicaments/entry-1010', 'GAMME Y', ?, 'rupture', 'Rupture de stock', 'ville', 'Ville', '2026-10-23', 'h', ?, ?, 1)`,
+			).bind(normalize("GAMME Y"), "2026-10-23T05:00:00.000Z", ANSM_LAST_INGEST),
+			...cis.flatMap((c, i) => [
+				env.DB.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, form, bdpm_updated_at) VALUES (?, ?, ?, 'comprimé', ?)").bind(
+					c,
+					`GAMME Y ${i} mg, comprimé`,
+					normalize(`GAMME Y ${i} mg, comprimé`),
+					BDPM_RELEASE,
+				),
+				env.DB.prepare("INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES ('1010', ?, 'exact', 1, 1)").bind(c),
+			]),
+		];
+		await env.DB.batch(stmts);
+		try {
+			const { data } = await call(getAvailability, { shortage_id: "1010" });
+			expect(data.linked_medicines).toHaveLength(LINKED_LIMIT);
+			expect(data.linked_medicines.map((m: { cis: string }) => m.cis)).toEqual(cis.slice(0, LINKED_LIMIT));
+			expect(data.linked_medicines_total).toBe(total);
+		} finally {
+			await seed();
+		}
+		const none = await call(getAvailability, { cis: MEDICINES.kardegic.cis });
+		expect(none.data).toMatchObject({ shortage: null, linked_medicines: [], linked_medicines_total: 0 });
 	});
 });
 
@@ -424,8 +487,24 @@ describe("list_current_shortages", () => {
 	it("filters by therapeutic area and update date", async () => {
 		const area = await call(listCurrentShortages, { status: ["rupture", "tension", "remise_a_disposition"], therapeutic_area: "gastro" });
 		expect(area.data.items.map((i: { shortage_id: string }) => i.shortage_id)).toEqual(["1004"]);
+		expect(area.data).not.toHaveProperty("available_areas");
 		const since = await call(listCurrentShortages, { updated_since: "2026-10-25" });
 		expect(since.data.items.map((i: { shortage_id: string }) => i.shortage_id)).toEqual(["1006", "1002"]);
+	});
+
+	it("lists the areas in use only when the therapeutic area matches no listed entry", async () => {
+		const labels = [
+			...new Set(
+				(Object.values(SHORTAGES) as Array<{ areas?: string; listed?: number }>)
+					.filter((s) => s.listed !== 0 && s.areas !== undefined)
+					.flatMap((s) => (s.areas as string).split(", ")),
+			),
+		].sort((a, b) => a.localeCompare(b, "fr"));
+		const unknown = await call(listCurrentShortages, { therapeutic_area: "zzzunknown" });
+		expect(unknown.data).toMatchObject({ total: 0, items: [], available_areas: labels });
+		const filteredOut = await call(listCurrentShortages, { status: ["rupture"], therapeutic_area: "gastro" });
+		expect(filteredOut.data.total).toBe(0);
+		expect(filteredOut.data).not.toHaveProperty("available_areas");
 	});
 
 	it("returns an empty list when the therapeutic area normalizes to nothing", async () => {
@@ -552,6 +631,7 @@ describe("get_medicine_info", () => {
 			expect(text(result)).toBe(`Provide exactly one of cis, cip13 or name.\n${SAFETY_LINE}\n${SOURCE_LINE}`);
 		}
 		expect(getMedicineInfo.inputSchema.safeParse({ cip13: "340093000001" }).success).toBe(false);
+		expect(getMedicineInfo.inputSchema.safeParse({ cip13: INVALID_CIP13 }).success).toBe(false);
 		expect(getMedicineInfo.inputSchema.safeParse({ cis: "6000000" }).success).toBe(false);
 	});
 
@@ -716,7 +796,7 @@ describe("get_medicine_info", () => {
 
 	it("candidates and not_found variants", async () => {
 		expect((await call(getMedicineInfo, { name: "doliprane" })).data.kind).toBe("candidates");
-		for (const args of [{ cis: "69999999" }, { cip13: "3400999999999" }, { name: "zzzunknown" }]) {
+		for (const args of [{ cis: "69999999" }, { cip13: UNKNOWN_CIP13 }, { name: "zzzunknown" }]) {
 			const { data, result } = await call(getMedicineInfo, args);
 			expect(data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
 			expect(summary(result)).toContain("Check the spelling or search by active substance");
