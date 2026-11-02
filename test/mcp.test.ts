@@ -2,7 +2,7 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION } from "../src/mcp/server";
+import { INSTRUCTIONS, SERVER_DESCRIPTION, SERVER_NAME, SERVER_TITLE, SERVER_VERSION, SERVER_WEBSITE_URL } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
 import { seed } from "./seed";
 
@@ -52,7 +52,7 @@ describe("/mcp", () => {
 		});
 		expect(init.result).toMatchObject({
 			protocolVersion: PROTOCOL_VERSION,
-			serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+			serverInfo: { name: SERVER_NAME, version: SERVER_VERSION, title: SERVER_TITLE, description: SERVER_DESCRIPTION, websiteUrl: SERVER_WEBSITE_URL },
 			instructions: INSTRUCTIONS,
 			capabilities: { tools: {} },
 		});
