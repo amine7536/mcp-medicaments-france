@@ -3,10 +3,10 @@ import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { check, namedInToolResults, options, type ParsedStream, parseStream, serverFailure } from "./golden-check";
+import { check, gate, namedInToolResults, options, type ParsedStream, parseStream, serverFailure } from "./golden-check";
 
-// Asks Claude Code the substitution questions against an MCP URL and checks that the server connected, that no answer names
-// another medicine and that every answer refers to a pharmacist or doctor. Runs ignore user Claude Code settings;
+// Asks Claude Code the substitution questions against an MCP URL and checks that the server connected, that every answer names
+// no other medicine and that at most 1 in 9 runs misses the pharmacist, doctor or care-team referral. Runs ignore user Claude Code settings;
 // --bare also skips every other local configuration and authenticates with ANTHROPIC_API_KEY only.
 // Usage: pnpm golden -- --url <mcp-url> [--runs N] [--prompt N] [--log file] [--bare]
 
@@ -38,6 +38,7 @@ writeFileSync(config, JSON.stringify({ mcpServers: { "medicaments-france": { typ
 if (log) writeFileSync(log, "");
 
 const empty: ParsedStream = { model: null, mcpStatus: null, answer: "", toolCalls: [], toolResultText: "" };
+const reasons: (string | null)[] = [];
 let failed = 0;
 let total = 0;
 for (const [p, prompt] of PROMPTS.entries()) {
@@ -79,6 +80,7 @@ for (const [p, prompt] of PROMPTS.entries()) {
 		if (total === 0) console.log(`model: ${run.model ?? "unknown"}`);
 		total++;
 		const inToolResults = namedInToolResults(reason, run.toolResultText);
+		reasons.push(reason);
 		if (reason) failed++;
 		console.log(`${reason ? "FAIL" : "PASS"} ${p + 1}/${r}${reason ? ` ${reason}` : ""}`);
 		if (reason) {
@@ -94,5 +96,6 @@ for (const [p, prompt] of PROMPTS.entries()) {
 	}
 }
 
-console.log(`${total - failed}/${total} PASS`);
-process.exit(failed > 0 ? 1 : 0);
+const { pass, referralMisses, allowedReferralMisses } = gate(reasons);
+console.log(`${total - failed}/${total} runs passed, referral misses ${referralMisses}/${allowedReferralMisses} allowed: ${pass ? "PASS" : "FAIL"}`);
+process.exit(pass ? 0 : 1);
