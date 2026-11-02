@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.2](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.1...v1.10.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* **mcp:** correct change history and recent_changes reporting ([#59](https://github.com/amine7536/mcp-medicaments-france/issues/59)) ([65fe4d2](https://github.com/amine7536/mcp-medicaments-france/commit/65fe4d234162f9fe674e9e6d8fdf2d57674ea1b0))
+
 ## [1.10.1](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.0...v1.10.1) (2026-11-02)
 
 
