@@ -1,4 +1,4 @@
-import { getMedicines, type MedicineRow, searchCis, unmatchedShortages } from "../lib/db";
+import { getMedicines, type MedicineRow, relatedShortages, searchCis } from "../lib/db";
 import { normalize, tokens } from "../lib/normalize";
 import type * as z from "zod";
 import type { NotFound, ShortageRow, ShortageSummary } from "./schemas";
@@ -31,10 +31,10 @@ export function brandToken(norm: string): string | null {
 	return first !== undefined && first.length >= 3 && !/^\d+$/.test(first) ? first : null;
 }
 
-/** Listed, unmatched shortages whose name contains the brand token of `norm`. */
+/** Listed shortages, linked to other medicines or to none, whose name contains the brand token of `norm`. */
 export async function possiblyRelated(db: D1Database, norm: string): Promise<ShortageRow[]> {
 	const brand = brandToken(norm);
-	return brand === null ? [] : unmatchedShortages(db, [brand], RELATED_LIMIT);
+	return brand === null ? [] : relatedShortages(db, [brand], RELATED_LIMIT);
 }
 
 export const NO_GUARANTEE = "This does not guarantee availability in your pharmacy.";

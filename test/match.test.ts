@@ -5,6 +5,7 @@ import { parseDispo } from "../src/ingest/dispo";
 import { afterIngest } from "../src/ingest/hooks";
 import {
 	buildMatchInputs,
+	doseVariants,
 	type ListedShortage,
 	type Medicine,
 	matchAll,
@@ -25,7 +26,12 @@ const shortage = (id: string, name: string, path = `/p/${id}`): ListedShortage =
 	raw_name: name,
 	raw_name_norm: normalize(name),
 });
-const med = (cis: string, name: string): Medicine => ({ cis, denomination_norm: normalize(name) });
+const med = (cis: string, name: string, form: string | null = null, holder: string | null = null): Medicine => ({
+	cis,
+	denomination_norm: normalize(name),
+	form,
+	holder,
+});
 
 describe("strategies", () => {
 	it("manual: overrides at confidence 1, unknown CIS dropped", () => {
@@ -156,6 +162,107 @@ describe("matchShortage", () => {
 	});
 });
 
+describe("regressions", () => {
+	const byCis = <T extends { cis: string }>(rows: T[]): T[] => [...rows].sort((a, b) => a.cis.localeCompare(b.cis));
+
+	it("dose list: AMIKACINE VIATRIS 250 MG 500 MG ET 1 G links each dose, not the 50 MG/1 ML solution", () => {
+		const powder = "poudre pour solution injectable";
+		const meds = [
+			med("62048906", "AMIKACINE VIATRIS 250 MG POUDRE POUR SOLUTION INJECTABLE", powder, "VIATRIS SANTE"),
+			med("68502148", "AMIKACINE VIATRIS 500 MG POUDRE POUR SOLUTION INJECTABLE", powder, "VIATRIS SANTE"),
+			med("62516778", "AMIKACINE VIATRIS 1 G POUDRE POUR SOLUTION INJECTABLE EN FLACON", powder, "VIATRIS SANTE"),
+			med("62000612", "AMIKACINE VIATRIS 50 MG/1 ML SOLUTION INJECTABLE", "solution injectable", "VIATRIS SANTE"),
+		];
+		const s = shortage("1035", "AMIKACINE VIATRIS 250 MG 500 MG ET 1 G POUDRE POUR SOLUTION INJECTABLE EN FLACON");
+		const rows = matchShortage(buildMatchInputs([s], [], meds, {}), s);
+		expect(byCis(rows).map((r) => [r.cis, r.method])).toEqual([
+			["62048906", "exact"],
+			["62516778", "exact"],
+			["68502148", "exact"],
+		]);
+	});
+
+	it("sibling: the LP 50 MG of a holder already linked to a dispo entry is linked", () => {
+		const lp = "comprimé à libération prolongée";
+		const meds = [
+			med("60000150", "QUETIAPINE ACCORD HEALTHCARE LP 50 MG COMPRIME A LIBERATION PROLONGEE", lp, "ACCORD HEALTHCARE FRANCE"),
+			med("66086110", "QUETIAPINE ARROW LP 300 MG COMPRIME A LIBERATION PROLONGEE", lp, "ARROW GENERIQUES"),
+			med("64633851", "QUETIAPINE ARROW LP 400 MG COMPRIME A LIBERATION PROLONGEE", lp, "ARROW GENERIQUES"),
+			med("61334872", "QUETIAPINE ARROW LP 50 MG COMPRIME A LIBERATION PROLONGEE", lp, "ARROW GENERIQUES"),
+		];
+		const s = shortage("1128", "QUETIAPINE LP 50 MG 300 MG ET 400 MG COMPRIMES A LIBERATION PROLONGEE");
+		const dispo = ["60000150", "66086110", "64633851"].map((cis) => ({ ansm_path: s.ansm_path, cis }));
+		const rows = matchShortage(buildMatchInputs([s], dispo, meds, {}), s);
+		expect(rows.find((r) => r.cis === "61334872")).toEqual({ shortage_id: "1128", cis: "61334872", method: "sibling", confidence: 1, is_best: 1 });
+		expect(rows).toHaveLength(4);
+	});
+});
+
+describe("doseVariants", () => {
+	it("expands the first dose list, one name per dose in list order", () => {
+		expect(doseVariants("AMIKACINE VIATRIS 250 MG 500 MG ET 1 G POUDRE POUR SOLUTION INJECTABLE EN FLACON")).toEqual([
+			"AMIKACINE VIATRIS 250 MG POUDRE POUR SOLUTION INJECTABLE EN FLACON",
+			"AMIKACINE VIATRIS 500 MG POUDRE POUR SOLUTION INJECTABLE EN FLACON",
+			"AMIKACINE VIATRIS 1 G POUDRE POUR SOLUTION INJECTABLE EN FLACON",
+		]);
+	});
+
+	it("needs ET before the last dose, unit-delimited doses and a unit on every dose", () => {
+		expect(doseVariants("COLI GENTA AP HP 135 MG 100 MG GELULE ADULTE")).toEqual([]);
+		expect(doseVariants("IOMERON 250 350 ET 400 MG IODE/ML SOLUTION INJECTABLE EN 50 100 200 ET 500 ML")).toEqual([]);
+		expect(doseVariants("X 250 MG ET 500 MG/5 ML")).toEqual([]);
+	});
+});
+
+describe("sibling pass", () => {
+	const lp = "comprimé à libération prolongée";
+	const s = shortage("20", "QUETIAPINE LP 50 MG ET 300 MG COMPRIMES A LIBERATION PROLONGEE");
+	const linked = [
+		med("1", "QUETIAPINE ACCORD LP 50 MG COMPRIME A LIBERATION PROLONGEE", lp),
+		med("2", "QUETIAPINE ARROW LP 300 MG COMPRIME A LIBERATION PROLONGEE", lp),
+	];
+	const dispo = linked.map((m) => ({ ansm_path: s.ansm_path, cis: m.cis }));
+	const siblings = (extra: Medicine[], manual: Record<string, string[]> = {}) =>
+		matchShortage(buildMatchInputs([s], dispo, [...linked, ...extra], manual), s).filter((r) => r.method === "sibling");
+
+	it("skips a name that differs by more than its numbers", () => {
+		expect(siblings([med("3", "QUETIAPINE BIOGARAN LP 50 MG COMPRIME A LIBERATION PROLONGEE", lp)])).toEqual([]);
+		expect(siblings([med("3", "QUETIAPINE ARROW LAB LP 50 MG COMPRIME A LIBERATION PROLONGEE", lp)])).toEqual([]);
+	});
+
+	it("skips a dose absent from the linked medicines", () => {
+		expect(siblings([med("3", "QUETIAPINE ARROW LP 400 MG COMPRIME A LIBERATION PROLONGEE", lp)])).toEqual([]);
+	});
+
+	it("skips another form and a medicine without form", () => {
+		expect(siblings([med("3", "QUETIAPINE ARROW LP 50 MG COMPRIME A LIBERATION PROLONGEE", "comprimé pelliculé")])).toEqual([]);
+		expect(siblings([med("4", "QUETIAPINE ARROW LP 50 MG COMPRIME A LIBERATION PROLONGEE")])).toEqual([]);
+	});
+
+	it("adds no sibling to a manual entry", () => {
+		const arrow50 = med("3", "QUETIAPINE ARROW LP 50 MG COMPRIME A LIBERATION PROLONGEE", lp);
+		expect(siblings([arrow50])).toHaveLength(1);
+		expect(siblings([arrow50], { "20": ["1", "2"] })).toEqual([]);
+	});
+
+	it("does not link another device of the same product (PUMPCART entry, FLEXPEN medicine)", () => {
+		const sol = "solution injectable";
+		const pumpcart = med("1", "NOVORAPID PUMPCART 100 UNITES/ML SOLUTION INJECTABLE EN CARTOUCHE", sol);
+		const flexpen = med("2", "NOVORAPID FLEXPEN 100 UNITES/ML SOLUTION INJECTABLE EN STYLO PREREMPLI", sol);
+		const e = shortage("30", "NOVORAPID PUMPCART 100 UNITES/ML SOLUTION INJECTABLE EN CARTOUCHE");
+		const rows = matchShortage(buildMatchInputs([e], [{ ansm_path: e.ansm_path, cis: "1" }], [pumpcart, flexpen], {}), e);
+		expect(rows.map((r) => r.cis)).toEqual(["1"]);
+	});
+});
+
+describe("fuzzy and dose lists", () => {
+	it("does not fuzzy-match a dose-list variant to another product (ALYOSTAL POLISTES vs VESPULA)", () => {
+		const s = shortage("125", "ALYOSTAL VENIN DE GUEPE POLISTES 110 MCG ET 550 MCG POUDRE ET SOLVANT POUR SOLUTION INJECTABLE");
+		const vespula = med("1", "ALYOSTAL VENIN DE GUEPE VESPULA 110 MCG POUDRE ET SOLVANT POUR SOLUTION INJECTABLE", "poudre et solvant pour solution injectable");
+		expect(matchShortage(buildMatchInputs([s], [], [vespula], {}), s)).toEqual([]);
+	});
+});
+
 function seedShortage(s: ListedShortage, listed = 1): D1PreparedStatement {
 	return env.DB.prepare(
 		"INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, list_hash, first_seen_at, last_seen_at, listed) VALUES (?, ?, ?, ?, 'rupture', 'Rupture de stock', 'h', 't', 't', ?)",
@@ -197,7 +304,7 @@ describe("matchAll", () => {
 		await seed();
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const counted = queryCount();
-		expect(await matchAll(env)).toEqual({ manual: 0, dispo: 1, exact: 1, fuzzy: 0, none: 1 });
+		expect(await matchAll(env)).toEqual({ manual: 0, dispo: 1, exact: 1, fuzzy: 0, sibling: 0, none: 1 });
 		expect(counted.queries()).toBe(4);
 		expect(counted.batches()).toBe(1);
 		expect(await matches()).toEqual([
@@ -225,7 +332,10 @@ describe("matchAll", () => {
 	it("the hook returns the per-method fragment", async () => {
 		await seed();
 		vi.spyOn(console, "log").mockImplementation(() => {});
-		expect(await afterIngest(env, { id: 1, bootstrap: false })).toBe("match: manual=0 dispo=1 exact=1 fuzzy=0 none=1");
+		const { sibling } = await matchAll(env);
+		const fragment = await afterIngest(env, { id: 1, bootstrap: false });
+		expect(fragment.startsWith("match: ")).toBe(true);
+		for (const part of ["manual=0", "dispo=1", "exact=1", "fuzzy=0", `sibling=${sibling}`]) expect(fragment.split(" ")).toContain(part);
 	});
 
 	it("a full ingest appends the match fragment to the run message", { timeout: 30_000 }, async () => {
@@ -237,6 +347,8 @@ describe("matchAll", () => {
 		await seedMedicine({ cis: row.cis, name: "SEEDED MEDICINE" }).run();
 		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0 }));
 		expect(res.status).toBe("ok");
-		expect(res.message).toBe(`bootstrap; dispo=ok; match: manual=0 dispo=1 exact=0 fuzzy=0 none=${rows.length - 1}`);
+		const fragment = res.message.split("; ").find((p) => p.startsWith("match: "));
+		expect(fragment?.split(" ")).toEqual(expect.arrayContaining(["dispo=1", `none=${rows.length - 1}`]));
+		expect(fragment).toMatch(/ sibling=\d+(\s|$)/);
 	});
 });
