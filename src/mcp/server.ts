@@ -10,7 +10,7 @@ import { recentChanges } from "./tools/recentChanges";
 import { searchMedicine } from "./tools/searchMedicine";
 
 export const SERVER_NAME = "medicaments-france";
-export const SERVER_VERSION = "1.9.0"; // x-release-please-version
+export const SERVER_VERSION = "1.10.0"; // x-release-please-version
 export const SERVER_TITLE = "Médicaments en France";
 export const SERVER_DESCRIPTION = COPY.fr.lead;
 export const SERVER_WEBSITE_URL = `${SITE_URL}/`;
