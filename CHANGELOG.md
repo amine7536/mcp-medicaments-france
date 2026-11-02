@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.9.0...v1.10.0) (2026-11-02)
+
+
+### Features
+
+* **mcp:** add title, description and website url to server info ([#54](https://github.com/amine7536/mcp-medicaments-france/issues/54)) ([1f900aa](https://github.com/amine7536/mcp-medicaments-france/commit/1f900aaaa680bed34d32f7d06b40e8e203f2726a))
+
 ## [1.9.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.8.1...v1.9.0) (2026-10-30)
 
 
