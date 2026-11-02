@@ -69,6 +69,15 @@ const LIST_KEYS = [
 	"list_hash",
 ] as const satisfies readonly (keyof ListRow)[];
 
+/** Characters ANSM adds or drops when it rewords an unchanged expected return ("prévue X" -> "prévue : X."). */
+const RETURN_WORDING_NOISE = /[ \t\n\r\u00a0\u2009\u202f.:;,]/g;
+
+/** True when both expected-return texts are null, or equal once lowercased and stripped of spacing and punctuation. */
+export function sameReturnWording(a: string | null, b: string | null): boolean {
+	if (a === null || b === null) return a === b;
+	return a.toLowerCase().replace(RETURN_WORDING_NOISE, "") === b.toLowerCase().replace(RETURN_WORDING_NOISE, "");
+}
+
 /** Loads every stored shortage in one query. */
 export async function loadShortages(db: D1Database): Promise<Map<string, StoredShortage>> {
 	const { results } = await db
@@ -145,7 +154,7 @@ export async function applyDiff(
 			counts.entries_changed++;
 			history(row.id, "status_change", { old_status: old.status, new_status: row.status });
 		}
-		if (RETURN_TRACKED.has(old.status) && RETURN_TRACKED.has(row.status) && old.expected_return_raw !== detail.expected_return_raw) {
+		if (RETURN_TRACKED.has(old.status) && RETURN_TRACKED.has(row.status) && !sameReturnWording(old.expected_return_raw, detail.expected_return_raw)) {
 			counts.entries_changed++;
 			history(row.id, "return_date_change", { old_status: old.status, new_status: row.status, old_er: old.expected_return_raw, new_er: detail.expected_return_raw });
 		}

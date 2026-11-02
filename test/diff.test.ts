@@ -144,6 +144,37 @@ describe("diff", { timeout: 30_000 }, () => {
 		expect(await shortage("1566")).toMatchObject({ expected_return_earliest: "2026-12-01", ansm_updated_at: "2026-10-27" });
 	});
 
+	it("writes no return_date_change when ANSM only rewords punctuation", async () => {
+		const detail = fixtureText("ansm/detail-1566.html");
+		const before = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue ind&eacute;termin&eacute;e");
+		const after = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue : ind&eacute;termin&eacute;e.");
+		const serve = (html: string) => (path: string) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined);
+		await run({ detail: serve(before) });
+		expect((await shortage("1566"))?.expected_return_raw).toBe("Date de remise à disposition prévue indéterminée");
+		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serve(after) });
+		expect(await history()).toEqual([]);
+		expect(res.counts.entries_changed).toBe(0);
+		expect((await shortage("1566"))?.expected_return_raw).toBe("Date de remise à disposition prévue : indéterminée.");
+	});
+
+	it("records a return_date_change when the date changes along with the wording", async () => {
+		const detail = fixtureText("ansm/detail-1566.html");
+		const before = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue fin octobre 2026.");
+		const after = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue : fin novembre 2026.");
+		const serve = (html: string) => (path: string) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined);
+		await run({ detail: serve(before) });
+		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serve(after) });
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				shortage_id: "1566",
+				change_type: "return_date_change",
+				old_expected_return: "Date de remise à disposition prévue fin octobre 2026.",
+				new_expected_return: "Date de remise à disposition prévue : fin novembre 2026.",
+			}),
+		]);
+	});
+
 	it("writes no return_date_change on tension -> remise", async () => {
 		await run();
 		const { res } = await run({ list: setLabel(LIST_HTML, "1624", "Remise à disposition") });
