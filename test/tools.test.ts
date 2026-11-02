@@ -507,6 +507,32 @@ describe("list_current_shortages", () => {
 		expect(filteredOut.data).not.toHaveProperty("available_areas");
 	});
 
+	it("available_areas splits multi-label entries, dedups labels and ignores delisted entries", async () => {
+		const delistedOnly = "Ophtalmologie";
+		const added = "Pneumologie";
+		const repeated = SHORTAGES.amoxicilline.areas;
+		const insert = (id: string, name: string, areas: string, listed: number) =>
+			env.DB.prepare(
+				`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, scope_raw, therapeutic_areas, therapeutic_areas_norm, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
+				VALUES (?, ?, ?, ?, 'rupture', 'Rupture de stock', 'ville', 'Ville', ?, ?, '2026-10-23', 'h', ?, ?, ?)`,
+			).bind(id, `/disponibilites-des-produits-de-sante/medicaments/entry-${id}`, name, normalize(name), areas, normalize(areas), "2026-10-23T05:00:00.000Z", ANSM_LAST_INGEST, listed);
+		await env.DB.batch([insert("1011", "COLLYRE Z 1 mg/ml", delistedOnly, 0), insert("1012", "SIROP W 5 mg/ml", `${added}, ${repeated}`, 1)]);
+		try {
+			const { data } = await call(listCurrentShortages, { therapeutic_area: delistedOnly });
+			expect(data.total).toBe(0);
+			const areas = data.available_areas as string[];
+			expect(areas.filter((a) => a === added)).toHaveLength(1);
+			expect(areas.filter((a) => a === repeated)).toHaveLength(1);
+			expect(areas).not.toContain(delistedOnly);
+			const seeded = (Object.values(SHORTAGES) as Array<{ areas?: string; listed?: number }>)
+				.filter((s) => s.listed !== 0 && s.areas !== undefined)
+				.map((s) => s.areas as string);
+			expect(areas).toEqual([...new Set([...seeded, added])].sort((a, b) => a.localeCompare(b, "fr")));
+		} finally {
+			await seed();
+		}
+	});
+
 	it("returns an empty list when the therapeutic area normalizes to nothing", async () => {
 		const { data } = await call(listCurrentShortages, { therapeutic_area: "--" });
 		expect(data).toEqual({ kind: "list", total: 0, items: [], next_offset: null });
