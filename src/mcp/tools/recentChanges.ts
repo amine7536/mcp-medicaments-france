@@ -11,7 +11,7 @@ const DAY_MS = 86_400_000;
 
 export const inputSchema = z.object({
 	days: z.int().min(1).max(90).default(7),
-	change_types: z.array(ChangeType).default([...CHANGE_TYPES]),
+	change_types: z.array(ChangeType).min(1).default([...CHANGE_TYPES]),
 	limit: z.int().min(1).max(50).default(50),
 });
 
@@ -19,7 +19,8 @@ export const Data = z.discriminatedUnion("kind", [
 	z.object({
 		kind: z.literal("changes"),
 		since: z.iso.datetime(),
-		counts: z.record(ChangeType, z.int().min(0)),
+		counts: z.partialRecord(ChangeType, z.int().min(0)),
+		tracking_since: z.iso.datetime().nullable(),
 		items: z.array(
 			z.object({
 				date: z.iso.datetime(),
@@ -39,6 +40,13 @@ export const Data = z.discriminatedUnion("kind", [
 
 export const outputSchema = envelopeSchema(Data);
 
+/** Says when the window starts before change tracking did: earlier days have no data. */
+function trackingSentence(since: string, tracking_since: string | null): string {
+	if (tracking_since === null) return " Changes are not tracked yet: there is no data for this window.";
+	if (Date.parse(tracking_since) <= Date.parse(since)) return "";
+	return ` Changes are tracked since ${tracking_since.slice(0, 10)}: earlier days of this window have no data.`;
+}
+
 export const recentChanges: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "recent_changes",
 	title: "Recent changes",
@@ -48,8 +56,9 @@ export const recentChanges: Tool<typeof inputSchema, typeof outputSchema> = {
 	async handler({ db, now }, { days, change_types, limit }) {
 		const dates = await loadSourceDates(db);
 		const since = new Date(now.getTime() - days * DAY_MS).toISOString();
-		const { counts: byType, items: rows } = await loadChanges(db, since, change_types, limit);
-		const counts = Object.fromEntries(CHANGE_TYPES.map((t) => [t, byType.get(t) ?? 0])) as Record<(typeof CHANGE_TYPES)[number], number>;
+		const types = [...new Set(change_types)];
+		const { counts: byType, items: rows, tracking_since } = await loadChanges(db, since, types, limit);
+		const counts: Partial<Record<z.infer<typeof ChangeType>, number>> = Object.fromEntries(types.map((t) => [t, byType.get(t) ?? 0]));
 		const items = rows.map((r) => ({
 			date: r.detected_at,
 			change: r.change_type,
@@ -62,7 +71,7 @@ export const recentChanges: Tool<typeof inputSchema, typeof outputSchema> = {
 			new_expected_return: r.new_expected_return,
 		}));
 		const lines = [
-			`Changes detected in the last ${days} day(s): ${CHANGE_TYPES.map((t) => `${counts[t]} ${t}`).join(", ")}. ${CHANGES_NOTE}`,
+			`Changes detected in the last ${days} day(s): ${types.map((t) => `${counts[t]} ${t}`).join(", ")}. ${CHANGES_NOTE}${trackingSentence(since, tracking_since)}`,
 			...items.map((i) => {
 				const detail =
 					i.change === "status_change"
@@ -73,6 +82,6 @@ export const recentChanges: Tool<typeof inputSchema, typeof outputSchema> = {
 				return `- ${i.date.slice(0, 10)} ${i.change}: ${i.name}${detail}`;
 			}),
 		];
-		return { result: toolResult(lines.join("\n"), envelope({ kind: "changes" as const, since, counts, items, note: CHANGES_NOTE }, dates, now)) };
+		return { result: toolResult(lines.join("\n"), envelope({ kind: "changes" as const, since, counts, tracking_since, items, note: CHANGES_NOTE }, dates, now)) };
 	},
 };

@@ -8,8 +8,6 @@ import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 export const NOT_LISTED = `No shortage currently listed by ANSM for this medicine. ${NO_GUARANTEE}`;
 
-const DAY_MS = 86_400_000;
-
 export const inputSchema = z.object({
 	cis: Cis.optional().describe("8-digit BDPM medicine code (CIS)."),
 	shortage_id: z.string().min(1).max(20).optional().describe("ANSM shortage id: the numeric id of an ANSM shortage entry."),
@@ -25,6 +23,8 @@ const HistoryItem = z.discriminatedUnion("change", [
 ]);
 type HistoryItem = z.infer<typeof HistoryItem>;
 
+const StatusSinceSource = z.enum(["ansm", "service"]);
+
 export const Data = z.discriminatedUnion("kind", [
 	z.object({
 		kind: z.literal("availability"),
@@ -33,7 +33,8 @@ export const Data = z.discriminatedUnion("kind", [
 		listed: z.boolean(),
 		shortage: ShortageSummary.nullable(),
 		first_seen_at: z.iso.date().nullable(),
-		days_in_current_status: z.int().min(0).nullable(),
+		status_since: z.iso.date().nullable(),
+		status_since_source: StatusSinceSource.nullable(),
 		history: z.array(HistoryItem),
 		other_shortage_ids: z.array(z.string()),
 		possibly_related_shortages: z.array(ShortageSummary),
@@ -60,11 +61,15 @@ function toHistoryItem(h: HistoryRow): HistoryItem {
 	}
 }
 
-/** Whole days since the latest status-setting event, else since the situation start, else since first seen. */
-export function daysInCurrentStatus(history: HistoryRow[], shortage: ShortageRow, now: Date): number {
-	const last = history.findLast((h) => h.change_type === "new" || h.change_type === "status_change" || h.change_type === "relisted");
-	const from = last?.detected_at ?? shortage.situation_start ?? shortage.first_seen_at;
-	return Math.max(0, Math.floor((now.getTime() - Date.parse(from)) / DAY_MS));
+/**
+ * Date (`YYYY-MM-DD`) the shortage entered its current status, and who dated it: the latest status change or relisting
+ * detected by this service, else ANSM's situation start, else the day this service first saw the entry.
+ */
+export function statusSince(history: HistoryRow[], shortage: ShortageRow): { date: string; source: z.infer<typeof StatusSinceSource> } {
+	const last = history.findLast((h) => h.change_type === "status_change" || h.change_type === "relisted");
+	if (last !== undefined) return { date: last.detected_at.slice(0, 10), source: "service" };
+	if (shortage.situation_start !== null) return { date: shortage.situation_start.slice(0, 10), source: "ansm" };
+	return { date: shortage.first_seen_at.slice(0, 10), source: "service" };
 }
 
 const medicineLabel = (m: Pick<MedicineRow, "cis" | "name" | "is_mitm">): string => `${m.name} (CIS ${m.cis}${m.is_mitm ? ", MITM" : ""})`;
@@ -91,7 +96,8 @@ async function availability(
 				listed: false,
 				shortage: null,
 				first_seen_at: null,
-				days_in_current_status: null,
+				status_since: null,
+				status_since_source: null,
 				history: [],
 				other_shortage_ids: [],
 				possibly_related_shortages: related,
@@ -101,11 +107,11 @@ async function availability(
 	}
 	const [history, detail] = await Promise.all([getHistory(db, shortage.id), getShortage(db, shortage.id)]);
 	const summary = toShortageSummary(shortage, now);
-	const days = daysInCurrentStatus(history, shortage, now);
+	const since = statusSince(history, shortage);
 	const listed = shortage.listed === 1;
 	const lines = [
 		`${med ? medicineLabel(med) : `ANSM entry ${shortage.id}, not linked to a BDPM medicine`}: ANSM lists ${describeShortage(summary)}`,
-		`In this status for ${days} day(s).${listed ? "" : " This entry is no longer listed by ANSM."}`,
+		`In this status since ${since.date} (${since.source === "ansm" ? "ANSM situation date" : "detected by this service"}).${listed ? "" : " This entry is no longer listed by ANSM."}`,
 	];
 	if (other_shortage_ids.length > 0) lines.push(`Other listed ANSM entries for this medicine: ${other_shortage_ids.join(", ")}.`);
 	return {
@@ -116,7 +122,8 @@ async function availability(
 			listed,
 			shortage: summary,
 			first_seen_at: shortage.first_seen_at.slice(0, 10),
-			days_in_current_status: days,
+			status_since: since.date,
+			status_since_source: since.source,
 			history: history.map(toHistoryItem),
 			other_shortage_ids,
 			possibly_related_shortages: [],
