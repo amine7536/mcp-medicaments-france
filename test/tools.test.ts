@@ -354,19 +354,37 @@ describe("get_availability", () => {
 		expect(summary(result)).not.toContain(NOT_LISTED);
 	});
 
-	it("by shortage id: best-linked medicine, or none when unmatched", async () => {
+	it("by shortage id: no medicine for a linked entry, none when unmatched", async () => {
 		const linked = await call(getAvailability, { shortage_id: SHORTAGES.dolipraneTension.id });
 		expect(linked.data).toMatchObject({
 			kind: "availability",
-			medicine: { cis: MEDICINES.dolipraneTablet.cis },
+			medicine: null,
 			shortage: { shortage_id: SHORTAGES.dolipraneTension.id, status: "tension" },
-			other_shortage_ids: [SHORTAGES.dolipraneRupture.id],
+			other_shortage_ids: [],
 		});
 		const unmatched = await call(getAvailability, { shortage_id: SHORTAGES.dolipraneUnmatched.id });
 		expect(unmatched.data).toMatchObject({ medicine: null, linked_medicines: [], listed: true, shortage: { match_confidence: null } });
 		const delisted = await call(getAvailability, { shortage_id: SHORTAGES.delisted.id });
 		expect(delisted.data).toMatchObject({ listed: false, shortage: { shortage_id: SHORTAGES.delisted.id } });
 		expect(summary(delisted.result)).toContain("no longer listed");
+	});
+
+	it("by shortage id: no medicine is picked for an entry linked to several medicines", async () => {
+		const entry = SHORTAGES.dolipraneTension;
+		await env.DB.prepare("INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES (?, ?, 'exact', 1, 1)")
+			.bind(entry.id, MEDICINES.dolipraneCapsule.cis)
+			.run();
+		try {
+			const { data, result } = await call(getAvailability, { shortage_id: entry.id });
+			expect(data).toMatchObject({ kind: "availability", medicine: null, other_shortage_ids: [], linked_medicines_total: 2 });
+			const line = firstLine(result);
+			expect(line).toContain(entry.id);
+			expect(line).toContain(entry.name);
+			expect(line).not.toContain(MEDICINES.dolipraneTablet.cis);
+			expect(line).not.toContain(MEDICINES.dolipraneCapsule.cis);
+		} finally {
+			await seed();
+		}
 	});
 
 	it("by name: resolves one, lists candidates, or not_found", async () => {
