@@ -230,6 +230,15 @@ export async function getMedicines(db: D1Database, cis: readonly string[]): Prom
 	return out;
 }
 
+/** ATC code per CIS (null when the CIS is not on the MITM list); unknown CIS are absent. */
+export async function mitmCodes(db: D1Database, cis: readonly string[]): Promise<Map<string, string | null>> {
+	if (cis.length === 0) return new Map();
+	const rows = await all<{ cis: string; atc_code: string | null }>(
+		db.prepare("SELECT m.cis, t.atc_code FROM medicines m LEFT JOIN mitm t ON t.cis = m.cis WHERE m.cis IN (SELECT value FROM json_each(?))").bind(json(cis)),
+	);
+	return new Map(rows.map((r) => [r.cis, r.atc_code]));
+}
+
 export interface CisShortages {
 	current: ShortageRow;
 	/** The other listed shortages linked to the CIS, in the same order. */

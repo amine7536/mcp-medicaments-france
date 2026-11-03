@@ -27,14 +27,24 @@ export async function resolveName(db: D1Database, name: string, cap: number = MA
 	return { kind: "candidates", total: search.total, capped: search.capped, cis: search.matches.map((m) => m.cis) };
 }
 
-/** The `candidates` data of a resolution: the first `RESOLVE_LIMIT` in rank order, with holder, marketing and shortage status. */
+/** The `candidates` data of a resolution: the first `RESOLVE_LIMIT` in rank order, with holder, marketing and shortage status, MITM status and ATC code. */
 export async function candidatesData(db: D1Database, resolved: Extract<Resolution, { kind: "candidates" }>): Promise<z.infer<typeof Candidates>> {
 	const shown = resolved.cis.slice(0, RESOLVE_LIMIT);
 	const [meds, shortages] = await Promise.all([getMedicines(db, shown), currentShortages(db, shown)]);
 	const candidates = shown.flatMap((c) => {
 		const m = meds.get(c);
 		return m
-			? [{ cis: m.cis, name: m.name, holder: m.holder, marketing_status: m.marketing_status, shortage_status: shortages.get(c)?.current.status ?? null }]
+			? [
+					{
+						cis: m.cis,
+						name: m.name,
+						holder: m.holder,
+						marketing_status: m.marketing_status,
+						shortage_status: shortages.get(c)?.current.status ?? null,
+						is_mitm: m.is_mitm,
+						atc_code: m.atc_code,
+					},
+				]
 			: [];
 	});
 	return { kind: "candidates", total: resolved.total, capped: resolved.capped, candidates };

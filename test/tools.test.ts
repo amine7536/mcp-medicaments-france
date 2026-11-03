@@ -1008,6 +1008,8 @@ describe("name search across tools", () => {
 		{ cis: "60100010", name: "IOMERONTEST 250 mg, solution injectable", substance: "IOMEPROL", holder: "LAB E", marketing_status: MEDICINE_MARKETED },
 		{ cis: "60100011", name: "IOMERONTEST 350 mg, solution injectable", substance: "IOMEPROL", holder: "LAB E", marketing_status: MEDICINE_MARKETED },
 	];
+	/** ATC code shared by the two OTHERBRAND medicines, both on the MITM list. */
+	const otherbrandAtc = "C09AA05";
 	/** A listed entry matched to no medicine whose name carries the IOMERONTEST brand. */
 	const unmatchedEntry = { id: "1020", name: "Iomerontest 250 et 350 mg, solution injectable" };
 
@@ -1027,6 +1029,7 @@ describe("name search across tools", () => {
 					: []),
 			]),
 		);
+		await db.batch(["60100007", "60100008"].map((cis) => db.prepare("INSERT INTO mitm (cis, atc_code) VALUES (?, ?)").bind(cis, otherbrandAtc)));
 		await db
 			.prepare(
 				`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
@@ -1092,8 +1095,17 @@ describe("name search across tools", () => {
 		const { data } = await call(getAvailability, { name: "otherbrand" });
 		expect(data).toMatchObject({ kind: "candidates", total: 2, capped: false });
 		expect(data.candidates).toEqual([
-			{ cis: "60100007", name: "OTHERBRAND 10 mg, comprimé", holder: "LAB B", marketing_status: MEDICINE_MARKETED, shortage_status: "rupture" },
-			{ cis: "60100008", name: "OTHERBRAND 20 mg, comprimé", holder: "LAB C", marketing_status: "Non commercialisée", shortage_status: "tension" },
+			{ cis: "60100007", name: "OTHERBRAND 10 mg, comprimé", holder: "LAB B", marketing_status: MEDICINE_MARKETED, shortage_status: "rupture", is_mitm: true, atc_code: otherbrandAtc },
+			{ cis: "60100008", name: "OTHERBRAND 20 mg, comprimé", holder: "LAB C", marketing_status: "Non commercialisée", shortage_status: "tension", is_mitm: true, atc_code: otherbrandAtc },
+		]);
+	});
+
+	it("get_medicine_info candidates carry the MITM status and ATC code", async () => {
+		const { data } = await call(getMedicineInfo, { name: "otherbrand" });
+		expect(data.kind).toBe("candidates");
+		expect(data.candidates.map((c: { is_mitm: boolean; atc_code: string | null }) => [c.is_mitm, c.atc_code])).toEqual([
+			[true, otherbrandAtc],
+			[true, otherbrandAtc],
 		]);
 	});
 
@@ -1101,12 +1113,28 @@ describe("name search across tools", () => {
 		expect((await call(getAvailability, { name: "doliprame" })).data).toMatchObject({ kind: "not_found", did_you_mean: normalize("doliprane") });
 	});
 
-	it("get_medicine_info and is_major_therapeutic_interest list candidates, never an aggregated answer, and suggest a spelling", async () => {
-		const candidates = { kind: "candidates", total: 2, capped: false };
+	it("get_medicine_info lists candidates and never aggregates; both tools suggest a spelling", async () => {
 		const suggestion = { kind: "not_found", did_you_mean: normalize("doliprane") };
-		expect((await call(getMedicineInfo, { name: "testbrand" })).data).toMatchObject(candidates);
+		expect((await call(getMedicineInfo, { name: "testbrand" })).data).toMatchObject({ kind: "candidates", total: 2, capped: false });
 		expect((await call(getMedicineInfo, { name: "doliprame" })).data).toMatchObject(suggestion);
-		expect((await call(isMajorTherapeuticInterest, { name: "testbrand" })).data).toMatchObject(candidates);
 		expect((await call(isMajorTherapeuticInterest, { name: "doliprame" })).data).toMatchObject(suggestion);
+	});
+
+	it("is_major_therapeutic_interest answers once when every match shares one ATC code", async () => {
+		const { data } = await call(isMajorTherapeuticInterest, { name: "otherbrand" });
+		expect(data).toMatchObject({ kind: "aggregated", total: 2, is_mitm: true, atc_code: otherbrandAtc });
+		// Rank order: same tier, the marketed OTHERBRAND 10 mg first.
+		expect(data.medicines.map((m: { cis: string }) => m.cis)).toEqual(["60100007", "60100008"]);
+	});
+
+	it("is_major_therapeutic_interest answers once when no match is on the MITM list", async () => {
+		expect((await call(isMajorTherapeuticInterest, { name: "testbrand" })).data).toMatchObject({ kind: "aggregated", total: 2, is_mitm: false, atc_code: null });
+	});
+
+	it("is_major_therapeutic_interest lists candidates with their MITM status when the matches differ", async () => {
+		const { data } = await call(isMajorTherapeuticInterest, { name: "doliprane" });
+		expect(data).toMatchObject({ kind: "candidates", total: 2 });
+		const byCis = Object.fromEntries(data.candidates.map((c: { cis: string; is_mitm: boolean; atc_code: string | null }) => [c.cis, [c.is_mitm, c.atc_code]]));
+		expect(byCis).toEqual({ [MEDICINES.dolipraneTablet.cis]: [true, MEDICINES.dolipraneTablet.atc], [MEDICINES.dolipraneCapsule.cis]: [false, null] });
 	});
 });

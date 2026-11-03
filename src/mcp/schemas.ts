@@ -58,6 +58,8 @@ export const Candidate = z.object({
 	holder: z.string().nullable(),
 	marketing_status: z.string().nullable(),
 	shortage_status: Status.nullable(),
+	is_mitm: z.boolean(),
+	atc_code: z.string().nullable(),
 });
 export const Candidates = z.object({
 	kind: z.literal("candidates"),
