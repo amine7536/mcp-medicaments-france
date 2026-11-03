@@ -92,12 +92,21 @@ export interface ImportSqlInput extends Mapped {
 }
 
 /** Full import file: deletes, size-capped inserts, then the ingest_runs row. No BEGIN/COMMIT. */
+/** Creates the trigram index when missing (same statement as migration 0006), so the import works before or after that migration. */
+export const TRGM_CREATE =
+	"CREATE VIRTUAL TABLE IF NOT EXISTS medicines_trgm USING fts5(cis UNINDEXED, denomination_norm, substances_norm, tokenize='trigram')";
+/** Refills the trigram index from the full-text rows just inserted. */
+export const TRGM_FILL =
+	"INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) SELECT cis, denomination_norm, substances_norm FROM medicines_fts";
+
 export function buildImportSql(input: ImportSqlInput): string {
 	const { medicines, substances, mitm, fts, presentations, prescription_conditions, safety_information, skipped, release, startedAt, finishedAt } = input;
 	const skippedTotal = skipped.medicines + skipped.substances + skipped.mitm;
 	const message = `medicines=${medicines.length} substances=${substances.length} mitm=${mitm.length} presentations=${presentations.length} prescription_conditions=${prescription_conditions.length} safety_information=${safety_information.length} skipped=${skippedTotal}`;
 	const statements = [
+		`${TRGM_CREATE};`,
 		"DELETE FROM medicines_fts;",
+		"DELETE FROM medicines_trgm;",
 		"DELETE FROM mitm;",
 		"DELETE FROM substances;",
 		"DELETE FROM medicines;",
@@ -108,6 +117,7 @@ export function buildImportSql(input: ImportSqlInput): string {
 		...insertStatements("substances", COLS.substances, values(substances, COLS.substances)),
 		...insertStatements("mitm", COLS.mitm, values(mitm, COLS.mitm)),
 		...insertStatements("medicines_fts", COLS.medicines_fts, values(fts, COLS.medicines_fts)),
+		`${TRGM_FILL};`,
 		...insertStatements("presentations", COLS.presentations, values(presentations, COLS.presentations)),
 		...insertStatements("prescription_conditions", COLS.prescription_conditions, values(prescription_conditions, COLS.prescription_conditions)),
 		...insertStatements("safety_information", COLS.safety_information, values(safety_information, COLS.safety_information)),

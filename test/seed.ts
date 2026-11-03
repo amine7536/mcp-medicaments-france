@@ -236,7 +236,7 @@ const HISTORY: Array<[shortage: string, type: string, old_status: string | null,
 export async function seed(): Promise<void> {
 	await resetDb();
 	const db = env.DB;
-	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "presentations", "prescription_conditions", "safety_information"].map((t) => db.prepare(`DELETE FROM ${t}`));
+	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "medicines_trgm", "presentations", "prescription_conditions", "safety_information"].map((t) => db.prepare(`DELETE FROM ${t}`));
 	for (const m of Object.values(MEDICINES) as Med[]) {
 		stmts.push(
 			db
@@ -254,6 +254,11 @@ export async function seed(): Promise<void> {
 		stmts.push(
 			db
 				.prepare("INSERT INTO medicines_fts (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)")
+				.bind(m.cis, normalize(m.name), m.substances.map(([n]) => normalize(n)).join(" ")),
+		);
+		stmts.push(
+			db
+				.prepare("INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)")
 				.bind(m.cis, normalize(m.name), m.substances.map(([n]) => normalize(n)).join(" ")),
 		);
 	}

@@ -6,6 +6,7 @@ const TABLES = [
 	"ingest_runs",
 	"medicines",
 	"medicines_fts",
+	"medicines_trgm",
 	"mitm",
 	"shortage_matches",
 	"shortages",
@@ -48,5 +49,22 @@ describe("schema", () => {
 		for (const query of migration.queries) await env.DB.prepare(query).run();
 		const { results } = await env.DB.prepare("SELECT id FROM status_history WHERE id IN (?, ?)").bind(reworded, changed).all<{ id: number }>();
 		expect(results.map((r) => r.id)).toEqual([changed]);
+	});
+
+	it("the trigram migration creates and backfills medicines_trgm from medicines_fts, and re-runs without duplicates", async () => {
+		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0006_medicines_trgm.sql");
+		if (migration === undefined) throw new Error("migration 0006_medicines_trgm.sql not loaded");
+		await env.DB.batch([
+			env.DB.prepare("DELETE FROM medicines_fts"),
+			env.DB.prepare("INSERT INTO medicines_fts (cis, denomination_norm, substances_norm) VALUES ('60009001', 'DOLIPRANE 1000 MG COMPRIME', 'PARACETAMOL')"),
+			env.DB.prepare("DROP TABLE medicines_trgm"),
+		]);
+		const run = async () => {
+			for (const query of migration.queries) await env.DB.prepare(query).run();
+		};
+		await run();
+		await run();
+		const { results } = await env.DB.prepare("SELECT cis FROM medicines_trgm WHERE medicines_trgm MATCH ?").bind('"OLI"').all<{ cis: string }>();
+		expect(results.map((r) => r.cis)).toEqual(["60009001"]);
 	});
 });
