@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.3...v1.11.0) (2026-11-03)
+
+
+### Features
+
+* **mcp:** rank name matches, suggest spellings and aggregate candidates by shortage entry ([#65](https://github.com/amine7536/mcp-medicaments-france/issues/65)) ([5259567](https://github.com/amine7536/mcp-medicaments-france/commit/5259567253f30068d9b267f0fcb09f7654b65875))
+
 ## [1.10.3](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.2...v1.10.3) (2026-11-03)
 
 
