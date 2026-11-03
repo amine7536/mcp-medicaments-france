@@ -117,12 +117,16 @@ async function availability(
 	const summary = toShortageSummary(shortage, now);
 	const since = statusSince(history, shortage);
 	const listed = shortage.listed === 1;
+	const links = detail?.links ?? [];
+	const entry =
+		links.length === 0
+			? `ANSM entry ${shortage.id}, not linked to a BDPM medicine`
+			: `ANSM entry ${shortage.id}, linked to ${links.length} BDPM medicine(s)`;
 	const lines = [
-		`${med ? medicineLabel(med) : `ANSM entry ${shortage.id}, not linked to a BDPM medicine`}: ANSM lists ${describeShortage(summary)}`,
+		`${med ? medicineLabel(med) : entry}: ANSM lists ${describeShortage(summary)}`,
 		`In this status since ${since.date} (${since.source === "ansm" ? "ANSM situation date" : "detected by this service"}).${listed ? "" : " This entry is no longer listed by ANSM."}`,
 	];
 	if (other_shortage_ids.length > 0) lines.push(`Other listed ANSM entries for this medicine: ${other_shortage_ids.join(", ")}.`);
-	const links = detail?.links ?? [];
 	return {
 		data: {
 			kind: "availability",
@@ -156,11 +160,7 @@ async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ da
 			cis: null,
 		};
 	}
-	const best = found.links.find((l) => l.is_best === 1) ?? null;
-	const medicine = best && ((await getMedicines(db, [best.cis])).get(best.cis) ?? null);
-	const others = medicine ? ((await currentShortages(db, [medicine.cis])).get(medicine.cis) ?? null) : null;
-	const otherIds = others ? [others.current.id, ...others.other_shortage_ids].filter((x) => x !== id) : [];
-	return { ...(await availability(db, now, medicine, found.shortage, otherIds)), cis: medicine?.cis ?? null };
+	return { ...(await availability(db, now, null, found.shortage, [])), cis: null };
 }
 
 const result = (dates: SourceDates, now: Date, out: { data: Data; summary: string }) => toolResult(out.summary, envelope(out.data, dates, now));
