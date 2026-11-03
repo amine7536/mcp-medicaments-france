@@ -3,10 +3,10 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
-import { type HistoryRow, getMedicineInfo as loadInfo } from "../src/lib/db";
+import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
 import { NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
@@ -818,6 +818,29 @@ describe("get_medicine_info", () => {
 		const lines = summary(result).split("\n");
 		expect(lines.filter((l) => l.startsWith("- "))).toHaveLength(SUMMARY_LIMIT);
 		expect(lines).toContain("2 more marketed box(es) in the structured content.");
+	});
+
+	it("get_medicine_info: a marketed medicine linked to an ANSM marketing stop reports the entry and a status conflict", async () => {
+		const first12 = "340093000005";
+		const cip13 = `${first12}${ean13CheckDigit(first12)}`;
+		expect(isValidEan13(cip13)).toBe(true);
+		await env.DB.prepare(
+			"INSERT INTO presentations (cip13, cip7, cis, label, admin_status, marketing_status, declared_at, hospital_approval, reimbursement_rates, public_price_eur) VALUES (?, ?, ?, 'ampoule(s) de 2 ml', 'Présentation active', ?, '2011-03-16', 1, '[65]', 2.5)",
+		)
+			.bind(cip13, cip13.slice(5, 12), MEDICINES.zymad.cis, MARKETED)
+			.run();
+		try {
+			for (const args of [{ cis: MEDICINES.zymad.cis }, { cip13 }, { name: "zymad" }]) {
+				const { data, result } = await call(getMedicineInfo, args);
+				expect(data.kind).toBe("info");
+				expect(data.ansm_shortage).toMatchObject({ shortage_id: SHORTAGES.zymad.id, status: "arret_commercialisation" });
+				expect(typeof data.status_conflict).toBe("string");
+				expect(data.status_conflict).toContain(SHORTAGES.zymad.id);
+				expect(summary(result).split("\n")).toContain(data.status_conflict);
+			}
+		} finally {
+			await seed();
+		}
 	});
 
 	it("candidates and not_found variants", async () => {
