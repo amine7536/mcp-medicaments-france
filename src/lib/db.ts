@@ -1,5 +1,5 @@
 import type { Presentation, SafetyInformation, ShortageRow } from "../mcp/schemas";
-import { ftsTokens, normalize } from "./normalize";
+import { ftsTokens, normalize, tokens } from "./normalize";
 
 const SHORTAGE_COLUMNS = [
 	"id",
@@ -42,14 +42,131 @@ export function ftsQuery(text: string): string | null {
 	return toks.length === 0 ? null : toks.map((t) => `"${t}"*`).join(" ");
 }
 
-/** CIS matching `text`, best FTS rank first. */
-export async function searchCis(db: D1Database, text: string, limit: number): Promise<string[]> {
-	const query = ftsQuery(text);
-	if (query === null) return [];
-	const rows = await all<{ cis: string }>(
-		db.prepare("SELECT cis FROM medicines_fts WHERE medicines_fts MATCH ? ORDER BY rank LIMIT ?").bind(query, limit),
+/** Exact matches fetched per name query; `total` still counts every match. */
+export const MATCH_CAP = 1000;
+/** Trigram rows fetched for the misspelling fallback. */
+export const FUZZY_ROWS = 50;
+/** Minimum share of the query trigrams a fallback row must contain. */
+export const FUZZY_MIN_SIMILARITY = 0.5;
+/** The BDPM marketing status of a medicine on the market. */
+export const MEDICINE_MARKETED = "Commercialisée";
+
+export interface NameRow {
+	cis: string;
+	denomination_norm: string;
+	marketing_status: string | null;
+}
+
+export interface NameMatch extends NameRow {
+	tier: 0 | 1 | 2;
+}
+
+export interface NameSearch {
+	/** Ranked: exact matches, or fallback matches when nothing matches exactly. */
+	matches: NameMatch[];
+	/** Every exact match (not only the fetched ones), or the number of kept fallback matches. */
+	total: number;
+	/** More exact matches than `MATCH_CAP`: only the fetched ones are ranked. */
+	capped: boolean;
+	/** The matches come from the trigram fallback. */
+	fuzzy: boolean;
+	/** The name token closest to a misspelled query; fallback only. */
+	did_you_mean: string | null;
+}
+
+const EMPTY_SEARCH: NameSearch = { matches: [], total: 0, capped: false, fuzzy: false, did_you_mean: null };
+
+/** 0: same brand token as the query; 1: brand prefix of or prefixed by the query; 2: any other match (other tokens, substances). */
+function tier(q: string | undefined, name: string): 0 | 1 | 2 {
+	const b = tokens(name)[0];
+	if (q === undefined || b === undefined) return 2;
+	if (b === q) return 0;
+	if (b.startsWith(q) || (b.length >= 5 && q.startsWith(b))) return 1;
+	return 2;
+}
+
+/** Ranks name matches by tier, then marketed first, then shorter name, then CIS. */
+export function rankMatches(query: string, rows: readonly NameRow[]): NameMatch[] {
+	const q = tokens(normalize(query))[0];
+	return rows
+		.map((r) => ({ ...r, tier: tier(q, r.denomination_norm) }))
+		.sort(
+			(a, b) =>
+				a.tier - b.tier ||
+				Number(b.marketing_status === MEDICINE_MARKETED) - Number(a.marketing_status === MEDICINE_MARKETED) ||
+				a.denomination_norm.length - b.denomination_norm.length ||
+				a.cis.localeCompare(b.cis),
+		);
+}
+
+/** The distinct 3-character substrings of the query tokens of 3+ characters, in order of appearance. */
+export function queryTrigrams(norm: string): string[] {
+	const out = new Set<string>();
+	for (const t of tokens(norm)) for (let i = 0; i + 3 <= t.length; i++) out.add(t.slice(i, i + 3));
+	return [...out];
+}
+
+const shared = (trigrams: readonly string[], text: string): number => trigrams.filter((t) => text.includes(t)).length;
+
+/** Trigram fallback: rows sharing at least `FUZZY_MIN_SIMILARITY` of the query trigrams, closest first, and the closest token. */
+async function fuzzySearch(db: D1Database, norm: string): Promise<NameSearch> {
+	const trigrams = queryTrigrams(norm);
+	if (trigrams.length === 0) return EMPTY_SEARCH;
+	const rows = await all<NameRow & { substances_norm: string | null }>(
+		db
+			.prepare(
+				"SELECT f.cis, f.denomination_norm, f.substances_norm, m.marketing_status FROM medicines_trgm f JOIN medicines m ON m.cis = f.cis WHERE medicines_trgm MATCH ?1 ORDER BY bm25(medicines_trgm) LIMIT ?2",
+			)
+			.bind(trigrams.map((t) => `"${t}"`).join(" OR "), FUZZY_ROWS),
 	);
-	return rows.map((r) => r.cis);
+	const kept = rows
+		.map((r, rank) => ({ r, rank, similarity: shared(trigrams, `${r.denomination_norm} ${r.substances_norm ?? ""}`) / trigrams.length }))
+		.filter((x) => x.similarity >= FUZZY_MIN_SIMILARITY)
+		.sort((a, b) => b.similarity - a.similarity || a.rank - b.rank);
+	const best = kept[0];
+	if (best === undefined) return EMPTY_SEARCH;
+	const candidates = [...tokens(best.r.denomination_norm), ...tokens(best.r.substances_norm ?? "")];
+	let suggestion: string | null = null;
+	let top = 0;
+	for (const t of candidates) {
+		const n = shared(trigrams, t);
+		if (n > top) [suggestion, top] = [t, n];
+	}
+	return {
+		matches: kept.map(({ r }) => ({ cis: r.cis, denomination_norm: r.denomination_norm, marketing_status: r.marketing_status, tier: 2 as const })),
+		total: kept.length,
+		capped: false,
+		fuzzy: true,
+		did_you_mean: suggestion,
+	};
+}
+
+/**
+ * The current listed entry shared by every medicine of a complete match set: its id, `null` when none is linked to a
+ * listed entry, `undefined` when the set is capped, empty or split across entries.
+ */
+export function aggregationGroup(capped: boolean, entryIds: ReadonlyArray<string | null>): string | null | undefined {
+	if (capped || entryIds.length === 0) return undefined;
+	const groups = new Set(entryIds);
+	return groups.size === 1 ? (entryIds[0] as string | null) : undefined;
+}
+
+/** Name search: every exact FTS match (up to `MATCH_CAP`) ranked, or the trigram fallback when nothing matches exactly. */
+export async function searchNames(db: D1Database, text: string): Promise<NameSearch> {
+	const query = ftsQuery(text);
+	if (query === null) return EMPTY_SEARCH;
+	const [rows, count] = await db.batch([
+		db
+			.prepare(
+				"SELECT f.cis, f.denomination_norm, m.marketing_status FROM medicines_fts f JOIN medicines m ON m.cis = f.cis WHERE medicines_fts MATCH ?1 LIMIT ?2",
+			)
+			.bind(query, MATCH_CAP),
+		db.prepare("SELECT COUNT(*) AS n FROM medicines_fts WHERE medicines_fts MATCH ?1").bind(query),
+	]);
+	const found = (rows?.results ?? []) as NameRow[];
+	if (found.length === 0) return fuzzySearch(db, normalize(text));
+	const total = Number((count?.results[0] as { n: number } | undefined)?.n ?? found.length);
+	return { matches: rankMatches(text, found), total, capped: total > MATCH_CAP, fuzzy: false, did_you_mean: null };
 }
 
 export interface MedicineRow {

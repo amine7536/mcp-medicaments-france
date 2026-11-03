@@ -1,9 +1,9 @@
 import { env } from "cloudflare:workers";
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
-import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED } from "../src/lib/db";
+import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
 import { describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
@@ -403,15 +403,15 @@ describe("get_availability", () => {
 		const many = await call(getAvailability, { name: "doliprane" });
 		expect(many.data.kind).toBe("candidates");
 		expect(many.data.candidates).toHaveLength(2);
+		expect(many.data).toMatchObject({ total: 2, capped: false });
 		expect(many.data.candidates).toEqual(
 			expect.arrayContaining([
-				{ cis: MEDICINES.dolipraneTablet.cis, name: MEDICINES.dolipraneTablet.name },
-				{ cis: MEDICINES.dolipraneCapsule.cis, name: MEDICINES.dolipraneCapsule.name },
+				expect.objectContaining({ cis: MEDICINES.dolipraneTablet.cis, name: MEDICINES.dolipraneTablet.name, shortage_status: "rupture" }),
+				expect.objectContaining({ cis: MEDICINES.dolipraneCapsule.cis, name: MEDICINES.dolipraneCapsule.name, shortage_status: null }),
 			]),
 		);
-		expect(summary(many.result)).toContain('Several medicines match "doliprane"; call again with one cis.');
 		const none = await call(getAvailability, { name: "zzzunknown" });
-		expect(none.data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		expect(none.data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
 		expect(summary(none.result)).toContain("Check the spelling or search by active substance");
 	});
 
@@ -428,16 +428,16 @@ describe("get_availability", () => {
 			expect(data.possibly_related_shortages).toHaveLength(1);
 			expect(data.possibly_related_shortages[0]).toMatchObject({ shortage_id: "1009", name: "COLI-GENTA AP-HP", status: "rupture", match_confidence: null });
 			expect(summary(result)).toContain("ANSM lists possibly related entries: COLI-GENTA AP-HP (rupture). This does not guarantee availability in your pharmacy.");
-			expect((await call(getAvailability, { name: "co injectable" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+			expect((await call(getAvailability, { name: "co injectable" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
 		} finally {
 			await seed();
 		}
 	});
 
 	it("not_found: unknown CIS, unknown shortage id", async () => {
-		expect((await call(getAvailability, { cis: "69999999" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		expect((await call(getAvailability, { cis: "69999999" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
 		const unknownId = await call(getAvailability, { shortage_id: "999999" });
-		expect(unknownId.data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		expect(unknownId.data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
 		expect(summary(unknownId.result)).not.toContain(NOT_FOUND_HINT);
 	});
 
@@ -664,10 +664,11 @@ describe("is_major_therapeutic_interest", () => {
 
 	it("candidates and not_found variants", async () => {
 		expect((await call(isMajorTherapeuticInterest, { name: "doliprane" })).data.kind).toBe("candidates");
-		expect((await call(isMajorTherapeuticInterest, { cis: "69999999" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+		expect((await call(isMajorTherapeuticInterest, { cis: "69999999" })).data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
 		expect((await call(isMajorTherapeuticInterest, { name: "doliprane suppositoire" })).data).toEqual({
 			kind: "not_found",
 			possibly_related_shortages: [],
+			did_you_mean: null,
 		});
 	});
 });
@@ -912,7 +913,7 @@ describe("get_medicine_info", () => {
 		expect((await call(getMedicineInfo, { name: "doliprane" })).data.kind).toBe("candidates");
 		for (const args of [{ cis: "69999999" }, { cip13: UNKNOWN_CIP13 }, { name: "zzzunknown" }]) {
 			const { data, result } = await call(getMedicineInfo, args);
-			expect(data).toEqual({ kind: "not_found", possibly_related_shortages: [] });
+			expect(data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
 			expect(summary(result)).toContain("Check the spelling or search by active substance");
 		}
 	});
@@ -988,5 +989,100 @@ describe("log", () => {
 		log("tool_error", { tool: "x" }, "error");
 		expect(error).toHaveBeenCalledWith('{"event":"tool_error","tool":"x"}');
 		expect(info).toHaveBeenCalledOnce();
+	});
+});
+
+describe("name search across tools", () => {
+	const levothyroxine = "LÉVOTHYROXINE SODIQUE";
+	const extra: Array<{ cis: string; name: string; substance: string; holder: string; marketing_status: string; link?: string }> = [
+		{ cis: "60100001", name: "LEVOTHYROX 100 microgrammes, comprimé sécable", substance: levothyroxine, holder: "MERCK", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100002", name: "THYROFIX 100 microgrammes, comprimé", substance: levothyroxine, holder: "UNIPHARMA", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100003", name: "LEVOTHYROX 50 microgrammes, comprimé sécable", substance: levothyroxine, holder: "MERCK", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100004", name: "LEVOTHYROX 75 microgrammes, comprimé sécable", substance: levothyroxine, holder: "MERCK", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100005", name: "TESTBRAND 10 mg, comprimé", substance: "TESTINE", holder: "LAB A", marketing_status: MEDICINE_MARKETED, link: SHORTAGES.dolipraneRupture.id },
+		{ cis: "60100006", name: "TESTBRAND 20 mg, comprimé", substance: "TESTINE", holder: "LAB A", marketing_status: MEDICINE_MARKETED, link: SHORTAGES.dolipraneRupture.id },
+		{ cis: "60100007", name: "OTHERBRAND 10 mg, comprimé", substance: "OTHERINE", holder: "LAB B", marketing_status: MEDICINE_MARKETED, link: SHORTAGES.dolipraneRupture.id },
+		{ cis: "60100008", name: "OTHERBRAND 20 mg, comprimé", substance: "OTHERINE", holder: "LAB C", marketing_status: "Non commercialisée", link: SHORTAGES.dolipraneTension.id },
+		{ cis: "60100009", name: "PARACETAMOL TEST 500 mg, comprimé", substance: "PARACÉTAMOL", holder: "LAB D", marketing_status: MEDICINE_MARKETED },
+	];
+
+	beforeAll(async () => {
+		await seed();
+		const db = env.DB;
+		await db.batch(
+			extra.flatMap((m) => [
+				db
+					.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, form, holder, marketing_status, bdpm_updated_at) VALUES (?, ?, ?, 'comprimé', ?, ?, ?)")
+					.bind(m.cis, m.name, normalize(m.name), m.holder, m.marketing_status, BDPM_RELEASE),
+				db.prepare("INSERT INTO substances (cis, substance_name, substance_norm, nature) VALUES (?, ?, ?, 'SA')").bind(m.cis, m.substance, normalize(m.substance)),
+				db.prepare("INSERT INTO medicines_fts (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)").bind(m.cis, normalize(m.name), normalize(m.substance)),
+				db.prepare("INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)").bind(m.cis, normalize(m.name), normalize(m.substance)),
+				...(m.link
+					? [db.prepare("INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES (?, ?, 'exact', 1, 1)").bind(m.link, m.cis)]
+					: []),
+			]),
+		);
+	});
+
+	afterAll(seed);
+
+	const resultCis = (data: { results: Array<{ cis: string }> }) => data.results.map((r) => r.cis);
+
+	it("search_medicine ranks a brand prefix of the query before a substance-only match", async () => {
+		const ids = resultCis((await call(searchMedicine, { query: "lévothyroxine", limit: 25 })).data);
+		expect(ids.indexOf("60100001")).toBeGreaterThanOrEqual(0);
+		expect(ids.indexOf("60100001")).toBeLessThan(ids.indexOf("60100002"));
+	});
+
+	it("search_medicine ranks an exact brand before a substance-only match among medicines not in shortage", async () => {
+		const { data } = await call(searchMedicine, { query: "paracetamol", limit: 25 });
+		const ids = resultCis(data);
+		expect(ids.indexOf("60100009")).toBeLessThan(ids.indexOf(MEDICINES.dolipraneCapsule.cis));
+		expect(data).toMatchObject({ fuzzy: false, did_you_mean: null });
+	});
+
+	it("search_medicine returns the closest names and a suggestion for a misspelled name", async () => {
+		const { data } = await call(searchMedicine, { query: "doliprame" });
+		expect(data).toMatchObject({ fuzzy: true, did_you_mean: normalize("doliprane") });
+		expect(resultCis(data)).toEqual(expect.arrayContaining([MEDICINES.dolipraneTablet.cis, MEDICINES.dolipraneCapsule.cis]));
+	});
+
+	it("search_medicine keeps the suggestion when only_in_shortage filters every fallback result", async () => {
+		const { data } = await call(searchMedicine, { query: "levotyrox", only_in_shortage: true });
+		expect(data).toMatchObject({ results: [], fuzzy: true, did_you_mean: normalize("levothyrox") });
+	});
+
+	it("get_availability aggregates when no match is in a listed shortage", async () => {
+		const { data } = await call(getAvailability, { name: "levothyrox" });
+		// The FTS prefix "LEVOTHYROX"* also matches THYROFIX through its substance LEVOTHYROXINE.
+		expect(data).toMatchObject({ kind: "aggregated", total: 4, shortage: null });
+		expect(data.medicines.map((m: { cis: string }) => m.cis).sort()).toEqual(["60100001", "60100002", "60100003", "60100004"]);
+	});
+
+	it("get_availability aggregates when every match is in the same listed entry", async () => {
+		const { data } = await call(getAvailability, { name: "testbrand" });
+		expect(data).toMatchObject({ kind: "aggregated", total: 2, shortage: { shortage_id: SHORTAGES.dolipraneRupture.id } });
+	});
+
+	it("get_availability lists candidates with details when matches are in different entries", async () => {
+		const { data } = await call(getAvailability, { name: "otherbrand" });
+		expect(data).toMatchObject({ kind: "candidates", total: 2, capped: false });
+		expect(data.candidates).toEqual([
+			{ cis: "60100007", name: "OTHERBRAND 10 mg, comprimé", holder: "LAB B", marketing_status: MEDICINE_MARKETED, shortage_status: "rupture" },
+			{ cis: "60100008", name: "OTHERBRAND 20 mg, comprimé", holder: "LAB C", marketing_status: "Non commercialisée", shortage_status: "tension" },
+		]);
+	});
+
+	it("get_availability suggests a spelling for a misspelled name", async () => {
+		expect((await call(getAvailability, { name: "doliprame" })).data).toMatchObject({ kind: "not_found", did_you_mean: normalize("doliprane") });
+	});
+
+	it("get_medicine_info and is_major_therapeutic_interest list candidates, never an aggregated answer, and suggest a spelling", async () => {
+		const candidates = { kind: "candidates", total: 2, capped: false };
+		const suggestion = { kind: "not_found", did_you_mean: normalize("doliprane") };
+		expect((await call(getMedicineInfo, { name: "testbrand" })).data).toMatchObject(candidates);
+		expect((await call(getMedicineInfo, { name: "doliprame" })).data).toMatchObject(suggestion);
+		expect((await call(isMajorTherapeuticInterest, { name: "testbrand" })).data).toMatchObject(candidates);
+		expect((await call(isMajorTherapeuticInterest, { name: "doliprame" })).data).toMatchObject(suggestion);
 	});
 });

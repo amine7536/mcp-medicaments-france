@@ -1,8 +1,8 @@
 import * as z from "zod";
-import { currentShortages, getHistory, getMedicines, getShortage, type HistoryRow, type MedicineRow } from "../../lib/db";
+import { aggregationGroup, currentShortages, getHistory, getMedicines, getShortage, type HistoryRow, type MedicineRow } from "../../lib/db";
 import { normalize } from "../../lib/normalize";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesSummary, NO_GUARANTEE, notFound, possiblyRelated, relatedList, resolveName } from "../resolve";
+import { candidatesData, candidatesSummary, NO_GUARANTEE, notFound, possiblyRelated, type Resolution, relatedList, resolveName } from "../resolve";
 import { Candidates, Cis, describeShortage, NotFound, type ShortageRow, ShortageSummary, Status, toShortageSummary } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
@@ -45,6 +45,13 @@ export const Data = z.discriminatedUnion("kind", [
 		history: z.array(HistoryItem),
 		other_shortage_ids: z.array(z.string()),
 		possibly_related_shortages: z.array(ShortageSummary),
+	}),
+	z.object({
+		kind: z.literal("aggregated"),
+		query: z.string(),
+		total: z.int().min(0),
+		shortage: ShortageSummary.nullable(),
+		medicines: z.array(z.object({ cis: Cis, name: z.string() })),
 	}),
 	Candidates,
 	NotFound,
@@ -155,7 +162,7 @@ async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ da
 	const found = await getShortage(db, id);
 	if (found === null) {
 		return {
-			data: { kind: "not_found", possibly_related_shortages: [] },
+			data: { kind: "not_found", possibly_related_shortages: [], did_you_mean: null },
 			summary: `No ANSM shortage entry with id "${id}". Use search_medicine or list_current_shortages to find an entry.`,
 			cis: null,
 		};
@@ -163,12 +170,44 @@ async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ da
 	return { ...(await availability(db, now, null, found.shortage, [])), cis: null };
 }
 
+/**
+ * Several medicines match a name: one answer when every match shares the same current listed entry (or none is
+ * listed), otherwise the ranked candidates.
+ */
+async function byCandidates(
+	db: D1Database,
+	now: Date,
+	query: string,
+	resolved: Extract<Resolution, { kind: "candidates" }>,
+): Promise<{ data: Data; summary: string }> {
+	const shortages = resolved.capped ? new Map() : await currentShortages(db, resolved.cis);
+	const group = aggregationGroup(
+		resolved.capped,
+		resolved.cis.map((c) => shortages.get(c)?.current.id ?? null),
+	);
+	if (group === undefined) {
+		return { data: await candidatesData(db, resolved), summary: candidatesSummary(query, resolved.total) };
+	}
+	const shown = resolved.cis.slice(0, LINKED_LIMIT);
+	const meds = await getMedicines(db, shown);
+	const medicines = shown.flatMap((c) => {
+		const m = meds.get(c);
+		return m ? [{ cis: m.cis, name: m.name }] : [];
+	});
+	const row = group === null ? null : (resolved.cis.map((c) => shortages.get(c)?.current).find((s) => s?.id === group) ?? null);
+	const shortage = row ? toShortageSummary(row, now) : null;
+	const summary = shortage
+		? `All ${resolved.total} medicines matching "${query}" are linked to ANSM entry ${shortage.shortage_id}: ANSM lists ${describeShortage(shortage)}`
+		: `None of the ${resolved.total} medicines matching "${query}" is linked to a listed ANSM shortage. ${NO_GUARANTEE}`;
+	return { data: { kind: "aggregated", query, total: resolved.total, shortage, medicines }, summary };
+}
+
 const result = (dates: SourceDates, now: Date, out: { data: Data; summary: string }) => toolResult(out.summary, envelope(out.data, dates, now));
 
 export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_availability",
 	title: "Get availability",
-	description: `Current ANSM shortage status of one medicine, given exactly one of: its CIS code, an ANSM shortage id or a name. Returns the status, the expected return in ANSM's wording, the change history and possibly related entries. ${INFO_ONLY}`,
+	description: `Current ANSM shortage status of one medicine, given exactly one of: its CIS code, an ANSM shortage id or a name. Returns the status, the expected return in ANSM's wording, the change history and possibly related entries. A name matching several medicines that share the same listed entry (or none) gets one answer for all of them; otherwise ranked candidates with their total, holder, marketing and shortage status; a misspelled name gets a spelling suggestion. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, shortage_id, name }): Promise<ToolOutcome> {
@@ -185,12 +224,10 @@ export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 			return { result: result(dates, now, medicine ? await byCis(db, now, medicine) : notFound(`CIS ${cis}`, [])), cis };
 		}
 		const resolved = await resolveName(db, name as string);
-		if (resolved.kind === "candidates") {
-			return { result: result(dates, now, { data: resolved, summary: candidatesSummary(name as string) }) };
-		}
+		if (resolved.kind === "candidates") return { result: result(dates, now, await byCandidates(db, now, name as string, resolved)) };
 		if (resolved.kind === "not_found") {
 			const related = (await possiblyRelated(db, normalize(name as string))).map((s) => toShortageSummary(s, now));
-			return { result: result(dates, now, notFound(`"${name}"`, related)) };
+			return { result: result(dates, now, notFound(`"${name}"`, related, resolved.did_you_mean)) };
 		}
 		return { result: result(dates, now, await byCis(db, now, resolved.medicine)), cis: resolved.medicine.cis };
 	},

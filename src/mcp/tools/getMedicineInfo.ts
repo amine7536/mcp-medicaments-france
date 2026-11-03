@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesSummary, notFound, resolveName } from "../resolve";
+import { candidatesData, candidatesSummary, notFound, resolveName } from "../resolve";
 import {
 	Candidates,
 	Cip13,
@@ -126,7 +126,7 @@ const result = (dates: SourceDates, now: Date, out: { data: Data; summary: strin
 export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_medicine_info",
 	title: "Get medicine info",
-	description: `Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions, its current ANSM safety information and its current ANSM shortage status, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
+	description: `Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions, its current ANSM safety information and its current ANSM shortage status, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. A name returns one medicine, ranked candidates with their total, holder, marketing and shortage status, or a spelling suggestion when it is misspelled. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, cip13, name }): Promise<ToolOutcome> {
@@ -145,8 +145,10 @@ export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 			return { result: result(dates, now, med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, now, med, null)), cis };
 		}
 		const resolved = await resolveName(db, name as string);
-		if (resolved.kind === "candidates") return { result: result(dates, now, { data: resolved, summary: candidatesSummary(name as string) }) };
-		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [])) };
+		if (resolved.kind === "candidates") {
+			return { result: result(dates, now, { data: await candidatesData(db, resolved), summary: candidatesSummary(name as string, resolved.total) }) };
+		}
+		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [], resolved.did_you_mean)) };
 		return { result: result(dates, now, await info(db, now, resolved.medicine, null)), cis: resolved.medicine.cis };
 	},
 };
