@@ -51,8 +51,25 @@ export const ShortageSummary = z.object({
 });
 export type ShortageSummary = z.infer<typeof ShortageSummary>;
 
-export const Candidates = z.object({ kind: z.literal("candidates"), candidates: z.array(z.object({ cis: Cis, name: z.string() })) });
-export const NotFound = z.object({ kind: z.literal("not_found"), possibly_related_shortages: z.array(ShortageSummary) });
+/** A medicine matching a name, with what tells homonyms apart. */
+export const Candidate = z.object({
+	cis: Cis,
+	name: z.string(),
+	holder: z.string().nullable(),
+	marketing_status: z.string().nullable(),
+	shortage_status: Status.nullable(),
+});
+export const Candidates = z.object({
+	kind: z.literal("candidates"),
+	total: z.int().min(0),
+	capped: z.boolean(),
+	candidates: z.array(Candidate),
+});
+export const NotFound = z.object({
+	kind: z.literal("not_found"),
+	possibly_related_shortages: z.array(ShortageSummary),
+	did_you_mean: z.string().nullable(),
+});
 
 /** A BDPM medicine's identity. */
 export const Medicine = z.object({

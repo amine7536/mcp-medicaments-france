@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { getMedicines, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesSummary, notFound, resolveName } from "../resolve";
+import { candidatesData, candidatesSummary, notFound, resolveName } from "../resolve";
 import { Candidates, Cis, NotFound } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
@@ -31,7 +31,7 @@ export const outputSchema = envelopeSchema(Data);
 export const isMajorTherapeuticInterest: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "is_major_therapeutic_interest",
 	title: "Is major therapeutic interest",
-	description: `Whether a medicine, given exactly one of its CIS code or its name, is on the BDPM list of medicines of major therapeutic interest (MITM), with its ATC code. ${INFO_ONLY}`,
+	description: `Whether a medicine, given exactly one of its CIS code or its name, is on the BDPM list of medicines of major therapeutic interest (MITM), with its ATC code. A name returns one medicine, ranked candidates with their total, holder, marketing and shortage status, or a spelling suggestion when it is misspelled. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, name }): Promise<ToolOutcome> {
@@ -46,9 +46,9 @@ export const isMajorTherapeuticInterest: Tool<typeof inputSchema, typeof outputS
 		} else {
 			const resolved = await resolveName(db, name as string);
 			if (resolved.kind === "candidates") {
-				return { result: toolResult(candidatesSummary(name as string), envelope(resolved, dates, now)) };
+				return { result: toolResult(candidatesSummary(name as string, resolved.total), envelope(await candidatesData(db, resolved), dates, now)) };
 			}
-			if (resolved.kind === "not_found") return { result: toNotFound(`"${name}"`) };
+			if (resolved.kind === "not_found") return { result: toNotFound(`"${name}"`, resolved.did_you_mean) };
 			medicine = resolved.medicine;
 		}
 		const { cis: code, name: label, is_mitm, atc_code } = medicine;
@@ -56,8 +56,8 @@ export const isMajorTherapeuticInterest: Tool<typeof inputSchema, typeof outputS
 		const source = `BDPM MITM list, release ${dates.bdpm_release ?? "unknown"}`;
 		return { result: toolResult(summary, envelope({ kind: "mitm" as const, cis: code, name: label, is_mitm, atc_code, source }, dates, now)), cis: code };
 
-		function toNotFound(what: string) {
-			const out = notFound(what, []);
+		function toNotFound(what: string, did_you_mean: string | null = null) {
+			const out = notFound(what, [], did_you_mean);
 			return toolResult(out.summary, envelope(out.data, dates, now));
 		}
 	},

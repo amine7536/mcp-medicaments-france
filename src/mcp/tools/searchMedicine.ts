@@ -1,21 +1,30 @@
 import * as z from "zod";
-import { cisByCip13, currentShortages, getMedicines, searchCis, unmatchedShortages } from "../../lib/db";
+import { cisByCip13, currentShortages, getMedicines, MATCH_CAP, searchNames, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { Cip13, Cis, describeShortage, isValidEan13, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
-export const SEARCH_LIMIT = 100;
 export const UNMATCHED_LIMIT = 10;
 
-/** A 13-digit query is a CIP13: the medicine of that presentation, else nothing. Otherwise the full-text search. */
-async function findCis(db: D1Database, query: string): Promise<string[]> {
+interface Found {
+	/** Ranked CIS. */
+	cis: string[];
+	total: number;
+	capped: boolean;
+	fuzzy: boolean;
+	did_you_mean: string | null;
+}
+
+/** A 13-digit query is a CIP13: the medicine of that presentation, else nothing. Otherwise the ranked name search. */
+async function findCis(db: D1Database, query: string): Promise<Found> {
 	const q = query.trim();
 	if (Cip13.safeParse(q).success) {
 		const cis = await cisByCip13(db, q);
-		return cis === null ? [] : [cis];
+		return { cis: cis === null ? [] : [cis], total: cis === null ? 0 : 1, capped: false, fuzzy: false, did_you_mean: null };
 	}
-	return searchCis(db, query, SEARCH_LIMIT);
+	const search = await searchNames(db, query);
+	return { cis: search.matches.map((m) => m.cis), total: search.total, capped: search.capped, fuzzy: search.fuzzy, did_you_mean: search.did_you_mean };
 }
 
 export const SHORTAGE_NOTE = "No shortage linked to this medicine. Not listed does not mean available.";
@@ -42,6 +51,12 @@ export const Data = z.discriminatedUnion("kind", [
 		),
 		unmatched_shortages: z.array(ShortageSummary),
 		invalid_cip13: z.literal(true).optional(),
+		/** Every match of the query; with `capped`, the best `MATCH_CAP` by relevance and every one in rupture or tension were ranked. */
+		total: z.int().min(0),
+		capped: z.boolean(),
+		/** The results come from the misspelling fallback. */
+		fuzzy: z.boolean(),
+		did_you_mean: z.string().nullable(),
 	}),
 ]);
 
@@ -52,28 +67,32 @@ const inShortage = (status: string | undefined): boolean => status === "rupture"
 export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "search_medicine",
 	title: "Search medicines",
-	description: `Search French medicines (BDPM) by name or active substance and show the ANSM shortage linked to each, plus listed shortages not linked to any medicine that match the query. Medicines in rupture or tension come first. ${INFO_ONLY}`,
+	description: `Search French medicines (BDPM) by name or active substance and show the ANSM shortage linked to each, plus listed shortages not linked to any medicine that match the query. Medicines in rupture or tension come first, then exact brand matches, brand prefixes and active-substance matches; a misspelled name returns the closest names and a spelling suggestion. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { query, only_in_shortage, limit }) {
 		const dates = await loadSourceDates(db);
 		const q = query.trim();
 		if (Cip13.safeParse(q).success && !isValidEan13(q)) {
-			const data = { kind: "results" as const, results: [], unmatched_shortages: [], invalid_cip13: true as const };
+			const data = { kind: "results" as const, results: [], unmatched_shortages: [], invalid_cip13: true as const, total: 0, capped: false, fuzzy: false, did_you_mean: null };
 			return { result: toolResult(`"${query}" is not a valid CIP13 barcode: its EAN-13 check digit does not match.`, envelope(data, dates, now)) };
 		}
-		const cis = await findCis(db, query);
-		const [meds, shortages, unmatched] = await Promise.all([
-			getMedicines(db, cis),
-			currentShortages(db, cis),
-			unmatchedShortages(db, tokens(normalize(query)), UNMATCHED_LIMIT),
-		]);
-		const ranked = cis
-			.flatMap((c) => meds.get(c) ?? [])
-			.map((m) => ({ m, s: shortages.get(m.cis)?.current }))
+		const { cis, total, capped, fuzzy, did_you_mean } = await findCis(db, query);
+		const [shortages, unmatched] = await Promise.all([currentShortages(db, cis), unmatchedShortages(db, tokens(normalize(query)), UNMATCHED_LIMIT)]);
+		// Over the ranked match set (every match, or the most relevant plus every one in shortage when capped): in-shortage first, stable so rank order holds within, filter, then the limit.
+		const picked = cis
+			.map((c) => ({ c, s: shortages.get(c)?.current }))
 			.filter(({ s }) => !only_in_shortage || inShortage(s?.status))
 			.sort((a, b) => Number(inShortage(b.s?.status)) - Number(inShortage(a.s?.status)))
 			.slice(0, limit);
+		const meds = await getMedicines(
+			db,
+			picked.map(({ c }) => c),
+		);
+		const ranked = picked.flatMap(({ c, s }) => {
+			const m = meds.get(c);
+			return m ? [{ m, s }] : [];
+		});
 		const results = ranked.map(({ m, s }) => ({
 			cis: m.cis,
 			name: m.name,
@@ -85,10 +104,12 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 		}));
 		const unmatched_shortages = unmatched.map((s) => toShortageSummary(s, now));
 
+		const suggestion = did_you_mean === null ? "" : ` Did you mean "${did_you_mean}"?`;
 		const lines: string[] = [];
-		if (results.length === 0) lines.push(`No medicine found for "${query}". ${NOT_FOUND_HINT}`);
+		if (results.length === 0) lines.push(`No medicine found for "${query}". ${NOT_FOUND_HINT}${suggestion}`);
 		else {
-			lines.push(`${results.length} medicine(s) found for "${query}":`);
+			const of = capped ? ` (${total} matches: ranked over the ${MATCH_CAP} most relevant and every one in rupture or tension)` : "";
+			lines.push(fuzzy ? `No exact match for "${query}".${suggestion} Closest matches:` : `${results.length} medicine(s) found for "${query}"${of}:`);
 			for (const r of results) {
 				lines.push(`- ${r.name} (CIS ${r.cis})${r.is_mitm ? ", MITM" : ""}: ${r.shortage ? describeShortage(r.shortage) : SHORTAGE_NOTE}`);
 			}
@@ -97,6 +118,6 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 			lines.push("Listed by ANSM but not linked to a medicine above:");
 			for (const s of unmatched_shortages) lines.push(`- ${describeShortage(s)}`);
 		}
-		return { result: toolResult(lines.join("\n"), envelope({ kind: "results" as const, results, unmatched_shortages }, dates, now)) };
+		return { result: toolResult(lines.join("\n"), envelope({ kind: "results" as const, results, unmatched_shortages, total, capped, fuzzy, did_you_mean }, dates, now)) };
 	},
 };

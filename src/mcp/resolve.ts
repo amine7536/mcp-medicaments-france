@@ -1,7 +1,7 @@
-import { getMedicines, type MedicineRow, relatedShortages, searchCis } from "../lib/db";
+import { currentShortages, getMedicines, MATCH_CAP, type MedicineRow, relatedShortages, searchNames } from "../lib/db";
 import { normalize, tokens } from "../lib/normalize";
 import type * as z from "zod";
-import type { NotFound, ShortageRow, ShortageSummary } from "./schemas";
+import type { Candidates, NotFound, ShortageRow, ShortageSummary } from "./schemas";
 import { NOT_FOUND_HINT } from "./tool";
 
 export const RESOLVE_LIMIT = 10;
@@ -9,20 +9,35 @@ export const RELATED_LIMIT = 5;
 
 export type Resolution =
 	| { kind: "cis"; medicine: MedicineRow }
-	| { kind: "candidates"; candidates: Array<{ cis: string; name: string }> }
-	| { kind: "not_found" };
+	/** Every ranked CIS of the exact match set (at most `MATCH_CAP`). */
+	| { kind: "candidates"; total: number; capped: boolean; cis: string[] }
+	| { kind: "not_found"; did_you_mean: string | null };
 
-/** Resolves a medicine name to one CIS, several candidates or nothing. */
-export async function resolveName(db: D1Database, name: string): Promise<Resolution> {
-	const cis = await searchCis(db, name, RESOLVE_LIMIT);
-	const meds = await getMedicines(db, cis);
-	const found = cis.flatMap((c) => meds.get(c) ?? []);
-	if (found.length === 0) return { kind: "not_found" };
+/** Resolves a medicine name to one CIS, ranked candidates, or nothing (with a spelling suggestion). Misspellings never resolve. */
+export async function resolveName(db: D1Database, name: string, cap: number = MATCH_CAP): Promise<Resolution> {
+	const search = await searchNames(db, name, cap);
+	if (search.fuzzy || search.matches.length === 0) return { kind: "not_found", did_you_mean: search.did_you_mean };
 	const norm = normalize(name);
-	const exact = found.filter((m) => m.denomination_norm === norm);
-	const single = found.length === 1 ? found[0] : exact.length === 1 ? exact[0] : undefined;
-	if (single) return { kind: "cis", medicine: single };
-	return { kind: "candidates", candidates: found.map((m) => ({ cis: m.cis, name: m.name })) };
+	const exact = search.matches.filter((m) => m.denomination_norm === norm);
+	const single = search.matches.length === 1 ? search.matches[0] : exact.length === 1 ? exact[0] : undefined;
+	if (single) {
+		const medicine = (await getMedicines(db, [single.cis])).get(single.cis);
+		if (medicine) return { kind: "cis", medicine };
+	}
+	return { kind: "candidates", total: search.total, capped: search.capped, cis: search.matches.map((m) => m.cis) };
+}
+
+/** The `candidates` data of a resolution: the first `RESOLVE_LIMIT` in rank order, with holder, marketing and shortage status. */
+export async function candidatesData(db: D1Database, resolved: Extract<Resolution, { kind: "candidates" }>): Promise<z.infer<typeof Candidates>> {
+	const shown = resolved.cis.slice(0, RESOLVE_LIMIT);
+	const [meds, shortages] = await Promise.all([getMedicines(db, shown), currentShortages(db, shown)]);
+	const candidates = shown.flatMap((c) => {
+		const m = meds.get(c);
+		return m
+			? [{ cis: m.cis, name: m.name, holder: m.holder, marketing_status: m.marketing_status, shortage_status: shortages.get(c)?.current.status ?? null }]
+			: [];
+	});
+	return { kind: "candidates", total: resolved.total, capped: resolved.capped, candidates };
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */
@@ -41,11 +56,16 @@ export const NO_GUARANTEE = "This does not guarantee availability in your pharma
 
 export const relatedList = (related: ShortageSummary[]): string => related.map((s) => `${s.name} (${s.status})`).join(", ");
 
-export const candidatesSummary = (name: string): string => `Several medicines match "${name}"; call again with one cis.`;
+export const candidatesSummary = (name: string, total: number): string =>
+	`${total} medicines match "${name}"; call again with one cis.`;
 
-/** The `not_found` variant and its summary: the spelling hint, then any possibly related entries. */
-export function notFound(what: string, related: ShortageSummary[]): { data: z.infer<typeof NotFound>; summary: string } {
-	let summary = `No medicine found for ${what}. ${NOT_FOUND_HINT}`;
+/** The `not_found` variant and its summary: the spelling suggestion or hint, then any possibly related entries. */
+export function notFound(
+	what: string,
+	related: ShortageSummary[],
+	did_you_mean: string | null = null,
+): { data: z.infer<typeof NotFound>; summary: string } {
+	let summary = `No medicine found for ${what}. ${NOT_FOUND_HINT}${did_you_mean === null ? "" : ` Did you mean "${did_you_mean}"?`}`;
 	if (related.length > 0) summary += ` ANSM lists possibly related entries: ${relatedList(related)}. ${NO_GUARANTEE}`;
-	return { data: { kind: "not_found", possibly_related_shortages: related }, summary };
+	return { data: { kind: "not_found", possibly_related_shortages: related, did_you_mean }, summary };
 }

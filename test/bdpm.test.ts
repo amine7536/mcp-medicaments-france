@@ -1,8 +1,9 @@
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { fetchBytes } from "../scripts/bdpm/download";
 import { cleanIndications, parseAnchor, parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
 import { decodeCp1252, decodeUtf8, parseBanner, parseTsv } from "../scripts/bdpm/parse";
-import { buildImportSql, insertStatements, sqlLiteral } from "../scripts/bdpm/sql";
+import { buildImportSql, insertStatements, sqlLiteral, TRGM_CREATE, TRGM_FILL } from "../scripts/bdpm/sql";
 import { USER_AGENT } from "../src/ingest/http";
 import { parseTsv as sharedParseTsv } from "../src/lib/tsv";
 
@@ -436,8 +437,10 @@ describe("sql", () => {
 		});
 		expect(sql).not.toMatch(/\b(BEGIN|COMMIT)\b/i);
 		const lines = sql.trimEnd().split("\n");
-		expect(lines.slice(0, 7)).toEqual([
+		expect(lines.slice(0, 9)).toEqual([
+			`${TRGM_CREATE};`,
 			"DELETE FROM medicines_fts;",
+			"DELETE FROM medicines_trgm;",
 			"DELETE FROM mitm;",
 			"DELETE FROM substances;",
 			"DELETE FROM medicines;",
@@ -457,5 +460,30 @@ describe("sql", () => {
 			"INSERT INTO ingest_runs (source, started_at, finished_at, status, entries_seen, bdpm_release, message) VALUES " +
 				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 mitm=6000 presentations=15000 prescription_conditions=20000 safety_information=5000 skipped=0');",
 		);
+	});
+});
+
+describe("trigram index in the import", () => {
+	it("creates the table with the migration's statement and refills it after the full-text rows", async () => {
+		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0006_medicines_trgm.sql");
+		const statements = migration?.queries.map((q) =>
+			q
+				.split("\n")
+				.filter((line) => !line.trimStart().startsWith("--"))
+				.join("\n")
+				.trim()
+				.replace(/;$/, ""),
+		);
+		expect(statements).toContain(TRGM_CREATE);
+		const sql = buildImportSql({
+			...validateAndMap(input()),
+			release: "2026-09-29",
+			startedAt: "2026-10-27T10:00:00.000Z",
+			finishedAt: "2026-10-27T10:01:00.000Z",
+		});
+		const lines = sql.trimEnd().split("\n");
+		const lastFts = lines.findLastIndex((l) => l.startsWith("INSERT INTO medicines_fts "));
+		expect(lastFts).toBeGreaterThan(0);
+		expect(lines.indexOf(`${TRGM_FILL};`)).toBeGreaterThan(lastFts);
 	});
 });
