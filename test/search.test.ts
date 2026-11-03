@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
-import { aggregationGroup, MEDICINE_MARKETED, queryTrigrams, rankMatches, searchNames } from "../src/lib/db";
+import { aggregationGroup, inShortageMatches, MEDICINE_MARKETED, queryTrigrams, rankFuzzy, rankMatches, searchNames } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { MEDICINES, seed } from "./seed";
 
@@ -51,6 +51,24 @@ describe("queryTrigrams", () => {
 	});
 });
 
+describe("rankFuzzy", () => {
+	const trigrams = queryTrigrams(normalize("doliprame"));
+	const fuzzy = (cis: string, name: string, substances: string | null = null) => ({ ...row(cis, name), substances_norm: substances && normalize(substances) });
+
+	it("orders by similarity before the bm25 order it is given, and drops rows below the threshold", () => {
+		const rows = [fuzzy("1", "DOLIPRO 10 mg"), fuzzy("2", "DOLIPRANE 1000 mg"), fuzzy("3", "AMOXICILLINE 500 mg")];
+		const { matches, did_you_mean } = rankFuzzy(trigrams, rows);
+		expect(matches.map((m) => m.cis)).toEqual(["2", "1"]);
+		expect(did_you_mean).toBe(normalize("doliprane"));
+	});
+
+	it("counts the trigrams found in the substances", () => {
+		const { matches, did_you_mean } = rankFuzzy(trigrams, [fuzzy("1", "XYZ 10 mg", "DOLIPRANE")]);
+		expect(matches.map((m) => m.cis)).toEqual(["1"]);
+		expect(did_you_mean).toBe(normalize("doliprane"));
+	});
+});
+
 describe("aggregationGroup", () => {
 	it("returns the shared entry, null when none is linked, undefined otherwise", () => {
 		expect(aggregationGroup(false, ["1001", "1001"])).toBe("1001");
@@ -76,6 +94,13 @@ describe("searchNames", () => {
 		expect(search).toMatchObject({ fuzzy: true, did_you_mean: normalize("doliprane") });
 		expect(search.matches.map((m) => m.cis)).toEqual(expect.arrayContaining([MEDICINES.dolipraneTablet.cis, MEDICINES.dolipraneCapsule.cis]));
 		expect(search.total).toBe(search.matches.length);
+	});
+
+	it("counts every match, and beyond the cap keeps every match in rupture or tension", async () => {
+		const search = await searchNames(env.DB, "doliprane", 1);
+		expect(search).toMatchObject({ total: 2, capped: true, fuzzy: false });
+		expect(search.matches.map((m) => m.cis)).toContain(MEDICINES.dolipraneTablet.cis);
+		expect((await inShortageMatches(env.DB, '"DOLIPRANE"*')).map((r) => r.cis)).toEqual([MEDICINES.dolipraneTablet.cis]);
 	});
 
 	it("finds nothing for a query far from every name", async () => {

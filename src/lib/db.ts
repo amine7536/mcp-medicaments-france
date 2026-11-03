@@ -108,37 +108,58 @@ export function queryTrigrams(norm: string): string[] {
 
 const shared = (trigrams: readonly string[], text: string): number => trigrams.filter((t) => text.includes(t)).length;
 
-/** Trigram fallback: rows sharing at least `FUZZY_MIN_SIMILARITY` of the query trigrams, closest first, and the closest token. */
+export interface FuzzyRow extends NameRow {
+	substances_norm: string | null;
+}
+
+/**
+ * Keeps the fallback rows sharing at least `FUZZY_MIN_SIMILARITY` of the query trigrams in their name and substances,
+ * closest first (then in the given bm25 order), and the token of the closest row sharing the most trigrams.
+ */
+export function rankFuzzy(trigrams: readonly string[], rows: readonly FuzzyRow[]): { matches: NameMatch[]; did_you_mean: string | null } {
+	if (trigrams.length === 0) return { matches: [], did_you_mean: null };
+	const kept = rows
+		.map((r, rank) => ({ r, rank, similarity: shared(trigrams, `${r.denomination_norm} ${r.substances_norm ?? ""}`) / trigrams.length }))
+		.filter((x) => x.similarity >= FUZZY_MIN_SIMILARITY)
+		.sort((a, b) => b.similarity - a.similarity || a.rank - b.rank);
+	const best = kept[0];
+	if (best === undefined) return { matches: [], did_you_mean: null };
+	let suggestion: string | null = null;
+	let top = 0;
+	for (const t of [...tokens(best.r.denomination_norm), ...tokens(best.r.substances_norm ?? "")]) {
+		const n = shared(trigrams, t);
+		if (n > top) [suggestion, top] = [t, n];
+	}
+	return {
+		matches: kept.map(({ r }) => ({ cis: r.cis, denomination_norm: r.denomination_norm, marketing_status: r.marketing_status, tier: 2 as const })),
+		did_you_mean: suggestion,
+	};
+}
+
+/** Trigram fallback over `medicines_trgm`, ranked by `rankFuzzy`. */
 async function fuzzySearch(db: D1Database, norm: string): Promise<NameSearch> {
 	const trigrams = queryTrigrams(norm);
 	if (trigrams.length === 0) return EMPTY_SEARCH;
-	const rows = await all<NameRow & { substances_norm: string | null }>(
+	const rows = await all<FuzzyRow>(
 		db
 			.prepare(
 				"SELECT f.cis, f.denomination_norm, f.substances_norm, m.marketing_status FROM medicines_trgm f JOIN medicines m ON m.cis = f.cis WHERE medicines_trgm MATCH ?1 ORDER BY bm25(medicines_trgm) LIMIT ?2",
 			)
 			.bind(trigrams.map((t) => `"${t}"`).join(" OR "), FUZZY_ROWS),
 	);
-	const kept = rows
-		.map((r, rank) => ({ r, rank, similarity: shared(trigrams, `${r.denomination_norm} ${r.substances_norm ?? ""}`) / trigrams.length }))
-		.filter((x) => x.similarity >= FUZZY_MIN_SIMILARITY)
-		.sort((a, b) => b.similarity - a.similarity || a.rank - b.rank);
-	const best = kept[0];
-	if (best === undefined) return EMPTY_SEARCH;
-	const candidates = [...tokens(best.r.denomination_norm), ...tokens(best.r.substances_norm ?? "")];
-	let suggestion: string | null = null;
-	let top = 0;
-	for (const t of candidates) {
-		const n = shared(trigrams, t);
-		if (n > top) [suggestion, top] = [t, n];
-	}
-	return {
-		matches: kept.map(({ r }) => ({ cis: r.cis, denomination_norm: r.denomination_norm, marketing_status: r.marketing_status, tier: 2 as const })),
-		total: kept.length,
-		capped: false,
-		fuzzy: true,
-		did_you_mean: suggestion,
-	};
+	const { matches, did_you_mean } = rankFuzzy(trigrams, rows);
+	return matches.length === 0 ? EMPTY_SEARCH : { matches, total: matches.length, capped: false, fuzzy: true, did_you_mean };
+}
+
+/** Exact name matches currently linked to a listed entry in rupture or tension, whatever their FTS rank. */
+export async function inShortageMatches(db: D1Database, ftsMatch: string): Promise<NameRow[]> {
+	return all<NameRow>(
+		db
+			.prepare(
+				"SELECT DISTINCT f.cis, f.denomination_norm, m.marketing_status FROM medicines_fts f JOIN medicines m ON m.cis = f.cis JOIN shortage_matches sm ON sm.cis = f.cis JOIN shortages s ON s.id = sm.shortage_id WHERE medicines_fts MATCH ?1 AND s.listed = 1 AND s.status IN ('rupture', 'tension')",
+			)
+			.bind(ftsMatch),
+	);
 }
 
 /**
@@ -151,22 +172,27 @@ export function aggregationGroup(capped: boolean, entryIds: ReadonlyArray<string
 	return groups.size === 1 ? (entryIds[0] as string | null) : undefined;
 }
 
-/** Name search: every exact FTS match (up to `MATCH_CAP`) ranked, or the trigram fallback when nothing matches exactly. */
-export async function searchNames(db: D1Database, text: string): Promise<NameSearch> {
+/**
+ * Name search: the exact FTS matches ranked, or the trigram fallback when nothing matches exactly. Beyond `cap`
+ * matches, the best `cap` by FTS rank are kept, plus every match in rupture or tension, so no shortage is dropped.
+ */
+export async function searchNames(db: D1Database, text: string, cap: number = MATCH_CAP): Promise<NameSearch> {
 	const query = ftsQuery(text);
 	if (query === null) return EMPTY_SEARCH;
 	const [rows, count] = await db.batch([
 		db
 			.prepare(
-				"SELECT f.cis, f.denomination_norm, m.marketing_status FROM medicines_fts f JOIN medicines m ON m.cis = f.cis WHERE medicines_fts MATCH ?1 LIMIT ?2",
+				"SELECT f.cis, f.denomination_norm, m.marketing_status FROM medicines_fts f JOIN medicines m ON m.cis = f.cis WHERE medicines_fts MATCH ?1 ORDER BY f.rank LIMIT ?2",
 			)
-			.bind(query, MATCH_CAP),
+			.bind(query, cap),
 		db.prepare("SELECT COUNT(*) AS n FROM medicines_fts WHERE medicines_fts MATCH ?1").bind(query),
 	]);
-	const found = (rows?.results ?? []) as NameRow[];
-	if (found.length === 0) return fuzzySearch(db, normalize(text));
-	const total = Number((count?.results[0] as { n: number } | undefined)?.n ?? found.length);
-	return { matches: rankMatches(text, found), total, capped: total > MATCH_CAP, fuzzy: false, did_you_mean: null };
+	const fetched = (rows?.results ?? []) as NameRow[];
+	const total = Number((count?.results[0] as { n: number } | undefined)?.n ?? 0);
+	if (total === 0) return fuzzySearch(db, normalize(text));
+	const capped = total > fetched.length;
+	const found = capped ? [...new Map([...fetched, ...(await inShortageMatches(db, query))].map((r) => [r.cis, r])).values()] : fetched;
+	return { matches: rankMatches(text, found), total, capped, fuzzy: false, did_you_mean: null };
 }
 
 export interface MedicineRow {

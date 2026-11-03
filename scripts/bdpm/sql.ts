@@ -91,7 +91,6 @@ export interface ImportSqlInput extends Mapped {
 	finishedAt: string;
 }
 
-/** Full import file: deletes, size-capped inserts, then the ingest_runs row. No BEGIN/COMMIT. */
 /** Creates the trigram index when missing (same statement as migration 0006), so the import works before or after that migration. */
 export const TRGM_CREATE =
 	"CREATE VIRTUAL TABLE IF NOT EXISTS medicines_trgm USING fts5(cis UNINDEXED, denomination_norm, substances_norm, tokenize='trigram')";
@@ -99,6 +98,7 @@ export const TRGM_CREATE =
 export const TRGM_FILL =
 	"INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) SELECT cis, denomination_norm, substances_norm FROM medicines_fts";
 
+/** Full import file: creates the trigram index if missing, deletes, size-capped inserts, refills the trigram index, then the ingest_runs row. No BEGIN/COMMIT. */
 export function buildImportSql(input: ImportSqlInput): string {
 	const { medicines, substances, mitm, fts, presentations, prescription_conditions, safety_information, skipped, release, startedAt, finishedAt } = input;
 	const skippedTotal = skipped.medicines + skipped.substances + skipped.mitm;

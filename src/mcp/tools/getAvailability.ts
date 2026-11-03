@@ -52,6 +52,8 @@ export const Data = z.discriminatedUnion("kind", [
 		total: z.int().min(0),
 		shortage: ShortageSummary.nullable(),
 		medicines: z.array(z.object({ cis: Cis, name: z.string() })),
+		/** With no shared entry: listed entries whose name contains the query's brand token, matched or not. */
+		possibly_related_shortages: z.array(ShortageSummary),
 	}),
 	Candidates,
 	NotFound,
@@ -196,10 +198,16 @@ async function byCandidates(
 	});
 	const row = group === null ? null : (resolved.cis.map((c) => shortages.get(c)?.current).find((s) => s?.id === group) ?? null);
 	const shortage = row ? toShortageSummary(row, now) : null;
-	const summary = shortage
-		? `All ${resolved.total} medicines matching "${query}" are linked to ANSM entry ${shortage.shortage_id}: ANSM lists ${describeShortage(shortage)}`
-		: `None of the ${resolved.total} medicines matching "${query}" is linked to a listed ANSM shortage. ${NO_GUARANTEE}`;
-	return { data: { kind: "aggregated", query, total: resolved.total, shortage, medicines }, summary };
+	const related = shortage ? [] : (await possiblyRelated(db, normalize(query))).map((s) => toShortageSummary(s, now));
+	let summary: string;
+	if (shortage) {
+		summary = `All ${resolved.total} medicines matching "${query}" are linked to ANSM entry ${shortage.shortage_id}: ANSM lists ${describeShortage(shortage)}`;
+	} else if (related.length > 0) {
+		summary = `None of the ${resolved.total} medicines matching "${query}" is linked to a listed ANSM shortage with certainty, but ANSM lists possibly related entries: ${relatedList(related)}. ${NO_GUARANTEE}`;
+	} else {
+		summary = `None of the ${resolved.total} medicines matching "${query}" is linked to a listed ANSM shortage. ${NO_GUARANTEE}`;
+	}
+	return { data: { kind: "aggregated", query, total: resolved.total, shortage, medicines, possibly_related_shortages: related }, summary };
 }
 
 const result = (dates: SourceDates, now: Date, out: { data: Data; summary: string }) => toolResult(out.summary, envelope(out.data, dates, now));

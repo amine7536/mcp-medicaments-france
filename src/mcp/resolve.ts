@@ -1,4 +1,4 @@
-import { currentShortages, getMedicines, type MedicineRow, relatedShortages, searchNames } from "../lib/db";
+import { currentShortages, getMedicines, MATCH_CAP, type MedicineRow, relatedShortages, searchNames } from "../lib/db";
 import { normalize, tokens } from "../lib/normalize";
 import type * as z from "zod";
 import type { Candidates, NotFound, ShortageRow, ShortageSummary } from "./schemas";
@@ -14,8 +14,8 @@ export type Resolution =
 	| { kind: "not_found"; did_you_mean: string | null };
 
 /** Resolves a medicine name to one CIS, ranked candidates, or nothing (with a spelling suggestion). Misspellings never resolve. */
-export async function resolveName(db: D1Database, name: string): Promise<Resolution> {
-	const search = await searchNames(db, name);
+export async function resolveName(db: D1Database, name: string, cap: number = MATCH_CAP): Promise<Resolution> {
+	const search = await searchNames(db, name, cap);
 	if (search.fuzzy || search.matches.length === 0) return { kind: "not_found", did_you_mean: search.did_you_mean };
 	const norm = normalize(name);
 	const exact = search.matches.filter((m) => m.denomination_norm === norm);
@@ -65,7 +65,7 @@ export function notFound(
 	related: ShortageSummary[],
 	did_you_mean: string | null = null,
 ): { data: z.infer<typeof NotFound>; summary: string } {
-	let summary = `No medicine found for ${what}. ${did_you_mean === null ? NOT_FOUND_HINT : `Did you mean "${did_you_mean}"?`}`;
+	let summary = `No medicine found for ${what}. ${NOT_FOUND_HINT}${did_you_mean === null ? "" : ` Did you mean "${did_you_mean}"?`}`;
 	if (related.length > 0) summary += ` ANSM lists possibly related entries: ${relatedList(related)}. ${NO_GUARANTEE}`;
 	return { data: { kind: "not_found", possibly_related_shortages: related, did_you_mean }, summary };
 }

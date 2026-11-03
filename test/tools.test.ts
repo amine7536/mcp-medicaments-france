@@ -7,6 +7,7 @@ import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKET
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
 import { describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { resolveName } from "../src/mcp/resolve";
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
@@ -1004,7 +1005,11 @@ describe("name search across tools", () => {
 		{ cis: "60100007", name: "OTHERBRAND 10 mg, comprimé", substance: "OTHERINE", holder: "LAB B", marketing_status: MEDICINE_MARKETED, link: SHORTAGES.dolipraneRupture.id },
 		{ cis: "60100008", name: "OTHERBRAND 20 mg, comprimé", substance: "OTHERINE", holder: "LAB C", marketing_status: "Non commercialisée", link: SHORTAGES.dolipraneTension.id },
 		{ cis: "60100009", name: "PARACETAMOL TEST 500 mg, comprimé", substance: "PARACÉTAMOL", holder: "LAB D", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100010", name: "IOMERONTEST 250 mg, solution injectable", substance: "IOMEPROL", holder: "LAB E", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100011", name: "IOMERONTEST 350 mg, solution injectable", substance: "IOMEPROL", holder: "LAB E", marketing_status: MEDICINE_MARKETED },
 	];
+	/** A listed entry matched to no medicine whose name carries the IOMERONTEST brand. */
+	const unmatchedEntry = { id: "1020", name: "Iomerontest 250 et 350 mg, solution injectable" };
 
 	beforeAll(async () => {
 		await seed();
@@ -1022,6 +1027,13 @@ describe("name search across tools", () => {
 					: []),
 			]),
 		);
+		await db
+			.prepare(
+				`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
+				VALUES (?, '/disponibilites-des-produits-de-sante/medicaments/entry-1020', ?, ?, 'tension', 'Tension d''approvisionnement', 'hopital', '2026-10-20', 'h', ?, ?, 1)`,
+			)
+			.bind(unmatchedEntry.id, unmatchedEntry.name, normalize(unmatchedEntry.name), ANSM_LAST_INGEST, ANSM_LAST_INGEST)
+			.run();
 	});
 
 	afterAll(seed);
@@ -1055,13 +1067,25 @@ describe("name search across tools", () => {
 	it("get_availability aggregates when no match is in a listed shortage", async () => {
 		const { data } = await call(getAvailability, { name: "levothyrox" });
 		// The FTS prefix "LEVOTHYROX"* also matches THYROFIX through its substance LEVOTHYROXINE.
-		expect(data).toMatchObject({ kind: "aggregated", total: 4, shortage: null });
-		expect(data.medicines.map((m: { cis: string }) => m.cis).sort()).toEqual(["60100001", "60100002", "60100003", "60100004"]);
+		expect(data).toMatchObject({ kind: "aggregated", total: 4, shortage: null, possibly_related_shortages: [] });
+		// Rank order: the exact brand first (marketed, shorter name, then CIS), the substance-only match last.
+		expect(data.medicines.map((m: { cis: string }) => m.cis)).toEqual(["60100003", "60100004", "60100001", "60100002"]);
+	});
+
+	it("get_availability keeps the possibly related entries when no match is linked to a listed entry", async () => {
+		const { data, result } = await call(getAvailability, { name: "iomerontest" });
+		expect(data).toMatchObject({ kind: "aggregated", total: 2, shortage: null });
+		expect(data.possibly_related_shortages.map((s: { shortage_id: string }) => s.shortage_id)).toEqual([unmatchedEntry.id]);
+		expect(summary(result)).toContain(unmatchedEntry.name);
+	});
+
+	it("resolveName reports a capped match set", async () => {
+		expect(await resolveName(env.DB, "testbrand", 1)).toMatchObject({ kind: "candidates", total: 2, capped: true });
 	});
 
 	it("get_availability aggregates when every match is in the same listed entry", async () => {
 		const { data } = await call(getAvailability, { name: "testbrand" });
-		expect(data).toMatchObject({ kind: "aggregated", total: 2, shortage: { shortage_id: SHORTAGES.dolipraneRupture.id } });
+		expect(data).toMatchObject({ kind: "aggregated", total: 2, shortage: { shortage_id: SHORTAGES.dolipraneRupture.id }, possibly_related_shortages: [] });
 	});
 
 	it("get_availability lists candidates with details when matches are in different entries", async () => {
