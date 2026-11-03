@@ -8,9 +8,15 @@ import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 export const NOT_LISTED = `No shortage currently listed by ANSM for this medicine. ${NO_GUARANTEE}`;
 
+/** Linked medicines returned per shortage; the full count is in `linked_medicines_total`. */
+export const LINKED_LIMIT = 20;
+
 export const inputSchema = z.object({
 	cis: Cis.optional().describe("8-digit BDPM medicine code (CIS)."),
-	shortage_id: z.string().min(1).max(20).optional().describe("ANSM shortage id: the numeric id of an ANSM shortage entry."),
+	shortage_id: z
+		.string()
+		.regex(/^\d{1,6}$/, "shortage_id must be the numeric id of an ANSM shortage entry (1 to 6 digits).")
+		.optional().describe("ANSM shortage id: the numeric id of an ANSM shortage entry."),
 	name: z.string().min(2).max(100).optional().describe("Medicine name; resolved to one CIS or a list of candidates."),
 });
 
@@ -30,6 +36,7 @@ export const Data = z.discriminatedUnion("kind", [
 		kind: z.literal("availability"),
 		medicine: z.object({ cis: Cis, name: z.string(), is_mitm: z.boolean() }).nullable(),
 		linked_medicines: z.array(z.object({ cis: Cis, name: z.string(), match_confidence: z.number() })),
+		linked_medicines_total: z.int().min(0),
 		listed: z.boolean(),
 		shortage: ShortageSummary.nullable(),
 		first_seen_at: z.iso.date().nullable(),
@@ -93,6 +100,7 @@ async function availability(
 				kind: "availability",
 				medicine: med,
 				linked_medicines: [],
+				linked_medicines_total: 0,
 				listed: false,
 				shortage: null,
 				first_seen_at: null,
@@ -114,11 +122,13 @@ async function availability(
 		`In this status since ${since.date} (${since.source === "ansm" ? "ANSM situation date" : "detected by this service"}).${listed ? "" : " This entry is no longer listed by ANSM."}`,
 	];
 	if (other_shortage_ids.length > 0) lines.push(`Other listed ANSM entries for this medicine: ${other_shortage_ids.join(", ")}.`);
+	const links = detail?.links ?? [];
 	return {
 		data: {
 			kind: "availability",
 			medicine: med,
-			linked_medicines: (detail?.links ?? []).map(({ cis, name, match_confidence }) => ({ cis, name, match_confidence })),
+			linked_medicines: links.slice(0, LINKED_LIMIT).map(({ cis, name, match_confidence }) => ({ cis, name, match_confidence })),
+			linked_medicines_total: links.length,
 			listed,
 			shortage: summary,
 			first_seen_at: shortage.first_seen_at.slice(0, 10),
@@ -139,7 +149,13 @@ async function byCis(db: D1Database, now: Date, medicine: MedicineRow) {
 
 async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ data: Data; summary: string; cis: string | null }> {
 	const found = await getShortage(db, id);
-	if (found === null) return { ...notFound(`shortage id "${id}"`, []), cis: null };
+	if (found === null) {
+		return {
+			data: { kind: "not_found", possibly_related_shortages: [] },
+			summary: `No ANSM shortage entry with id "${id}". Use search_medicine or list_current_shortages to find an entry.`,
+			cis: null,
+		};
+	}
 	const best = found.links.find((l) => l.is_best === 1) ?? null;
 	const medicine = best && ((await getMedicines(db, [best.cis])).get(best.cis) ?? null);
 	const others = medicine ? ((await currentShortages(db, [medicine.cis])).get(medicine.cis) ?? null) : null;

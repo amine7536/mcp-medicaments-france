@@ -2,7 +2,7 @@ import * as z from "zod";
 import { cisByCip13, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
-import { Candidates, Cip13, Cis, Medicine, NotFound, Presentation, SafetyInformation, utcDate } from "../schemas";
+import { Candidates, Cip13, Cis, isValidEan13, Medicine, NotFound, Presentation, SafetyInformation, utcDate } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
@@ -14,7 +14,9 @@ export const NO_SAFETY_INFORMATION = "No current ANSM safety information listed 
 
 export const inputSchema = z.object({
 	cis: Cis.optional().describe("8-digit BDPM medicine code (CIS)."),
-	cip13: Cip13.optional().describe("13-digit CIP13 code of a box (presentation), as printed on its barcode."),
+	cip13: Cip13.refine(isValidEan13, "cip13 is not a valid barcode: its EAN-13 check digit does not match.")
+		.optional()
+		.describe("13-digit CIP13 code of a box (presentation), as printed on its barcode."),
 	name: z.string().min(2).max(100).optional().describe("Medicine name; resolved to one CIS or a list of candidates."),
 });
 

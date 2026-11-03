@@ -212,6 +212,19 @@ export async function listShortages(
 	return { total: (total?.results[0] as { n: number } | undefined)?.n ?? 0, items };
 }
 
+/** Distinct therapeutic area labels of listed shortages, sorted in French order. */
+export async function listedAreas(db: D1Database): Promise<string[]> {
+	const rows = await all<{ therapeutic_areas: string | null }>(db.prepare("SELECT DISTINCT therapeutic_areas FROM shortages WHERE listed = 1"));
+	const labels = new Set(rows.flatMap((r) => (r.therapeutic_areas ?? "").split(", ").map((l) => l.trim())).filter((l) => l !== ""));
+	return [...labels].sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+/** Whether a listed shortage's normalized therapeutic areas contain `areaNorm`, the area predicate of `listShortages`. */
+export async function areaKnown(db: D1Database, areaNorm: string): Promise<boolean> {
+	const row = await db.prepare("SELECT 1 AS known FROM shortages WHERE listed = 1 AND instr(therapeutic_areas_norm, ?) > 0 LIMIT 1").bind(areaNorm).first();
+	return row !== null;
+}
+
 export interface ChangeRow extends HistoryRow {
 	id: number;
 	shortage_id: string;

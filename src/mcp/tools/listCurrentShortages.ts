@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { listShortages } from "../../lib/db";
+import { areaKnown, listedAreas, listShortages } from "../../lib/db";
 import { normalize } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { Cis, describeShortage, Scope, ShortageSummary, Status, toShortageSummary } from "../schemas";
@@ -28,6 +28,7 @@ export const Data = z.discriminatedUnion("kind", [
 		total: z.int().min(0),
 		items: z.array(ShortageSummary.extend({ cis: z.array(Cis) })),
 		next_offset: z.int().min(0).nullable(),
+		available_areas: z.array(z.string()).optional(),
 	}),
 ]);
 
@@ -54,11 +55,14 @@ export const listCurrentShortages: Tool<typeof inputSchema, typeof outputSchema>
 						limit,
 						offset,
 					});
+		// A positive total implies a known area; an area no listed entry carries gets the labels ANSM uses.
+		const available_areas = total === 0 && area !== null && !(await areaKnown(db, area)) ? await listedAreas(db) : undefined;
 		const items = rows.map((r) => ({ ...toShortageSummary(r, now), cis: r.cis }));
 		const next_offset = offset + items.length < total ? offset + items.length : null;
 		const lines = [`${total} listed ANSM entr${total === 1 ? "y" : "ies"} match; showing ${items.length} from offset ${offset}.`];
+		if (available_areas !== undefined) lines.push(`No entry for this therapeutic area. Areas used by ANSM: ${available_areas.join(", ")}.`);
 		for (const s of items) lines.push(`- ${describeShortage(s)}`);
 		if (next_offset !== null) lines.push(`More results: call again with offset ${next_offset}.`);
-		return { result: toolResult(lines.join("\n"), envelope({ kind: "list" as const, total, items, next_offset }, dates, now)) };
+		return { result: toolResult(lines.join("\n"), envelope({ kind: "list" as const, total, items, next_offset, ...(available_areas === undefined ? {} : { available_areas }) }, dates, now)) };
 	},
 };

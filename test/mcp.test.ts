@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { INSTRUCTIONS, SERVER_DESCRIPTION, SERVER_NAME, SERVER_TITLE, SERVER_VERSION, SERVER_WEBSITE_URL } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
-import { seed } from "./seed";
+import { PRESENTATIONS, seed } from "./seed";
 
 const URL = "https://medicaments-france.a3e.dev/mcp";
 const PROTOCOL_VERSION = "2025-11-25";
@@ -86,13 +86,27 @@ describe("/mcp", () => {
 		const call = await rpc(
 			4,
 			"tools/call",
-			{ name: "get_medicine_info", arguments: { cip13: "3400930000011" } },
+			{ name: "get_medicine_info", arguments: { cip13: PRESENTATIONS.dolipraneBoxOf8.cip13 } },
 			{ "MCP-Protocol-Version": PROTOCOL_VERSION },
 		);
 		expect(call.result.isError).toBeFalsy();
 		const data = (call.result.structuredContent as { data: { kind: string; medicine: { cis: string }; presentations: Array<{ cip13: string }> } }).data;
 		expect(data).toMatchObject({ kind: "info", medicine: { cis: "60000001" } });
-		expect(data.presentations[0]?.cip13).toBe("3400930000011");
+		expect(data.presentations[0]?.cip13).toBe(PRESENTATIONS.dolipraneBoxOf8.cip13);
+	});
+
+	it("rejects a non-numeric shortage_id and a CIP13 with a wrong check digit as tool errors naming the field", async () => {
+		const box = PRESENTATIONS.dolipraneBoxOf8.cip13;
+		const wrongCheckDigit = box.slice(0, 12) + String((Number(box[12]) + 1) % 10);
+		const cases = [
+			{ name: "get_availability", arguments: { shortage_id: "abc'; DROP TABLE--" }, field: "shortage_id" },
+			{ name: "get_medicine_info", arguments: { cip13: wrongCheckDigit }, field: "cip13" },
+		];
+		for (const [i, c] of cases.entries()) {
+			const call = await rpc(10 + i, "tools/call", { name: c.name, arguments: c.arguments }, { "MCP-Protocol-Version": PROTOCOL_VERSION });
+			expect(call.result.isError).toBe(true);
+			expect((call.result.content as Array<{ text: string }>)[0]?.text).toContain(c.field);
+		}
 	});
 
 	it("rate-limited: 429 JSON with Retry-After: 60, keyed on the client IP", async () => {

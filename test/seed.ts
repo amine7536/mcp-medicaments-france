@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
+import { ean13CheckDigit } from "../src/mcp/schemas";
 import { resetDb } from "./db";
 
 /** The instant the seeded data is read at. */
@@ -49,7 +50,7 @@ interface Presentation {
 export const PRESENTATIONS = {
 	/** DOLIPRANE 1000 mg: two marketed boxes and one stopped; the default order is boxOf8, boxOf100, stopped. */
 	dolipraneBoxOf8: {
-		cip13: "3400930000011",
+		cip13: "3400930000014",
 		cis: "60000001",
 		label: "plaquette(s) PVC aluminium de 8 comprimé(s)",
 		marketing_status: MARKETED,
@@ -57,7 +58,7 @@ export const PRESENTATIONS = {
 		reimbursement_rates: "[65]",
 	},
 	dolipraneBoxOf100: {
-		cip13: "3400930000028",
+		cip13: "3400930000021",
 		cis: "60000001",
 		label: "plaquette(s) PVC aluminium de 100 comprimé(s)",
 		marketing_status: MARKETED,
@@ -65,7 +66,7 @@ export const PRESENTATIONS = {
 		reimbursement_rates: null,
 	},
 	dolipraneStopped: {
-		cip13: "3400930000035",
+		cip13: "3400930000038",
 		cis: "60000001",
 		label: "flacon de 8 comprimé(s)",
 		marketing_status: "Déclaration d'arrêt de commercialisation",
@@ -76,7 +77,7 @@ export const PRESENTATIONS = {
 		Array.from({ length: 12 }, (_, i) => [
 			`kardegic${i}`,
 			{
-				cip13: String(3_400_940_000_000 + i),
+				cip13: `${340_094_000_000 + i}${ean13CheckDigit(String(340_094_000_000 + i))}`,
 				cis: "60000004",
 				label: `sachet(s) papier aluminium de ${String(i + 10)} sachet(s)`,
 				marketing_status: MARKETED,
