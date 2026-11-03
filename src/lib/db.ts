@@ -89,10 +89,12 @@ export async function getMedicines(db: D1Database, cis: readonly string[]): Prom
 
 export interface CisShortages {
 	current: ShortageRow;
+	/** The other listed shortages linked to the CIS, in the same order. */
+	others: ShortageRow[];
 	other_shortage_ids: string[];
 }
 
-/** Per CIS, the listed shortage linked to it that ranks first (status, then latest update, then id), and the other ones. */
+/** Per CIS, the listed shortage linked to it that ranks first (status, then latest update, then id), and the other ones in that order. */
 export async function currentShortages(db: D1Database, cis: readonly string[]): Promise<Map<string, CisShortages>> {
 	const out = new Map<string, CisShortages>();
 	if (cis.length === 0) return out;
@@ -105,8 +107,10 @@ export async function currentShortages(db: D1Database, cis: readonly string[]): 
 	);
 	for (const { cis: c, ...row } of rows) {
 		const entry = out.get(c);
-		if (entry) entry.other_shortage_ids.push(row.id);
-		else out.set(c, { current: row, other_shortage_ids: [] });
+		if (entry) {
+			entry.others.push(row);
+			entry.other_shortage_ids.push(row.id);
+		} else out.set(c, { current: row, others: [], other_shortage_ids: [] });
 	}
 	return out;
 }
