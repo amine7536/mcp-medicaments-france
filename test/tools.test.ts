@@ -382,6 +382,14 @@ describe("get_availability", () => {
 			expect(line).toContain(entry.name);
 			expect(line).not.toContain(MEDICINES.dolipraneTablet.cis);
 			expect(line).not.toContain(MEDICINES.dolipraneCapsule.cis);
+			// The entry label (before the shortage name, id removed) reports the link count, unlike an unmatched entry's.
+			const label = (l: string, s: { id: string; name: string }) => l.slice(0, l.indexOf(s.name)).replace(s.id, "");
+			const unmatched = SHORTAGES.dolipraneUnmatched;
+			const linkedLabel = label(line, entry);
+			const unmatchedLabel = label(firstLine((await call(getAvailability, { shortage_id: unmatched.id })).result), unmatched);
+			expect(linkedLabel).toContain(String(data.linked_medicines_total));
+			expect(unmatchedLabel).not.toContain(String(data.linked_medicines_total));
+			expect(linkedLabel).not.toBe(unmatchedLabel);
 		} finally {
 			await seed();
 		}
