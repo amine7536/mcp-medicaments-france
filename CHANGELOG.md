@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.10.3](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.2...v1.10.3) (2026-11-03)
+
+
+### Bug Fixes
+
+* **mcp:** report the ansm shortage status and marketing-stop conflict in medicine info ([#63](https://github.com/amine7536/mcp-medicaments-france/issues/63)) ([502d7a0](https://github.com/amine7536/mcp-medicaments-france/commit/502d7a05784bbc336ca35d8cd4a402ec9d5c368b))
+* **mcp:** stop picking one linked medicine for a shortage id lookup ([#64](https://github.com/amine7536/mcp-medicaments-france/issues/64)) ([47c351d](https://github.com/amine7536/mcp-medicaments-france/commit/47c351d0cc5078d7fd23bf3538a9c6a99c066b96))
+* **mcp:** validate shortage ids and barcodes, list known areas and cap linked medicines ([#61](https://github.com/amine7536/mcp-medicaments-france/issues/61)) ([a719520](https://github.com/amine7536/mcp-medicaments-france/commit/a7195202add5a487e9e7a50092962336a44646b7))
+
 ## [1.10.2](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.1...v1.10.2) (2026-11-02)
 
 
