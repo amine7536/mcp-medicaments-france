@@ -6,8 +6,8 @@ import { log } from "../src/ingest/http";
 import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
-import { NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
+import { describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
 import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
@@ -662,10 +662,7 @@ describe("get_medicine_info", () => {
 	});
 
 	it("has the description and the info-only suffix", () => {
-		expect(getMedicineInfo.description).toBe(
-			"Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions and its current ANSM safety information, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. " +
-				"Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.",
-		);
+		expect(getMedicineInfo.description.endsWith(INFO_ONLY)).toBe(true);
 	});
 
 	it("info by CIS: identity, marketed presentations first then by label", async () => {
@@ -697,11 +694,13 @@ describe("get_medicine_info", () => {
 			dispensing_fee_eur: null,
 			reimbursement_indications: null,
 		});
-		expect(summary(result).split("\n").slice(0, 3)).toEqual([
+		const lines = summary(result).split("\n");
+		expect([lines[0], lines[2], lines[3]]).toEqual([
 			`${MEDICINES.dolipraneTablet.name} (CIS ${MEDICINES.dolipraneTablet.cis}): 2 marketed box(es) out of 3.`,
 			`- ${box100.label} (CIP13 ${box100.cip13}): price not listed; not reimbursed / not listed.`,
 			`- ${box8.label} (CIP13 ${box8.cip13}): public price 2.18 EUR; reimbursed 65%.`,
 		]);
+		expect(lines[1]).toContain(describeShortage(data.ansm_shortage));
 		expect(summary(result)).not.toContain(stopped.cip13);
 	});
 
@@ -841,6 +840,46 @@ describe("get_medicine_info", () => {
 		} finally {
 			await seed();
 		}
+	});
+
+	it("reports the first-ranked linked ANSM entry, with no status conflict without a marketing stop", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+		expect(data.ansm_shortage).toMatchObject({ shortage_id: SHORTAGES.dolipraneRupture.id, status: "rupture" });
+		expect(data.status_conflict).toBeNull();
+		expect(summary(result)).toContain(describeShortage(data.ansm_shortage));
+	});
+
+	it("reports a status conflict when a non-first linked entry is a marketing stop", async () => {
+		const id = "1010";
+		const name = "PARACETAMOL TEST 1000 mg, comprimé";
+		await env.DB.batch([
+			env.DB.prepare(
+				`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, scope_raw, situation_start, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
+				VALUES (?, ?, ?, ?, 'arret_commercialisation', 'Arrêt de commercialisation', 'ville', 'Ville', '2026-09-01', '2026-10-21', 'h', ?, ?, 1)`,
+			).bind(id, `/disponibilites-des-produits-de-sante/medicaments/entry-${id}`, name, normalize(name), "2026-09-01T05:00:00.000Z", ANSM_LAST_INGEST),
+			env.DB.prepare("INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES (?, ?, 'exact', 1, 1)").bind(id, MEDICINES.dolipraneTablet.cis),
+		]);
+		try {
+			const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis });
+			expect(data.ansm_shortage).toMatchObject({ shortage_id: SHORTAGES.dolipraneRupture.id, status: "rupture" });
+			expect(typeof data.status_conflict).toBe("string");
+			expect(data.status_conflict).toContain(id);
+			expect(summary(result).split("\n")).toContain(data.status_conflict);
+		} finally {
+			await seed();
+		}
+	});
+
+	it("has no status conflict for a marketing stop without a marketed box", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.zymad.cis });
+		expect(data).toMatchObject({ presentations: [], ansm_shortage: { shortage_id: SHORTAGES.zymad.id, status: "arret_commercialisation" }, status_conflict: null });
+		expect(summary(result)).toContain(describeShortage(data.ansm_shortage));
+	});
+
+	it("has a null ANSM shortage for a medicine with no linked listed entry", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.dolipraneCapsule.cis });
+		expect(data).toMatchObject({ ansm_shortage: null, status_conflict: null });
+		expect(summary(result)).not.toContain(SHORTAGES.dolipraneUnmatched.name);
 	});
 
 	it("candidates and not_found variants", async () => {

@@ -1,8 +1,22 @@
 import * as z from "zod";
-import { cisByCip13, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
+import { cisByCip13, currentShortages, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesSummary, notFound, resolveName } from "../resolve";
-import { Candidates, Cip13, Cis, isValidEan13, Medicine, NotFound, Presentation, SafetyInformation, utcDate } from "../schemas";
+import {
+	Candidates,
+	Cip13,
+	Cis,
+	describeShortage,
+	isValidEan13,
+	Medicine,
+	NotFound,
+	Presentation,
+	SafetyInformation,
+	type ShortageRow,
+	ShortageSummary,
+	toShortageSummary,
+	utcDate,
+} from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
@@ -27,6 +41,8 @@ export const Data = z.discriminatedUnion("kind", [
 		presentations: z.array(Presentation),
 		prescription_conditions: z.array(z.string()),
 		safety_information: z.array(SafetyInformation),
+		ansm_shortage: ShortageSummary.nullable(),
+		status_conflict: z.string().nullable(),
 	}),
 	Candidates,
 	NotFound,
@@ -39,10 +55,31 @@ const price = (p: Presentation): string => (p.public_price_eur === null ? "price
 const rates = (p: Presentation): string =>
 	p.reimbursement_rates.length === 0 ? "not reimbursed / not listed" : `reimbursed ${p.reimbursement_rates.map((r) => `${r}%`).join(", ")}`;
 
-/** The medicine line, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`). */
-export function infoSummary(medicine: Medicine, presentations: Presentation[], conditions: string[], safety: SafetyInformation[]): string {
+/**
+ * The conflict between an ANSM marketing stop and the BDPM, null when no linked listed entry is a marketing stop or no box is marketed.
+ * `entries` are the listed entries linked to the medicine, in shortage order; the first marketing stop is reported.
+ */
+export function statusConflict(entries: readonly ShortageRow[], presentations: readonly Presentation[]): string | null {
+	const stop = entries.find((e) => e.status === "arret_commercialisation");
+	const marketed = presentations.filter((p) => p.marketing_status === MARKETED).length;
+	if (stop === undefined || marketed === 0) return null;
+	const since = stop.situation_start === null ? "" : ` since ${stop.situation_start}`;
+	return `Status conflict: the BDPM lists ${marketed} marketed box(es), but ANSM lists "${stop.status_raw}" (entry ${stop.id})${since}. The BDPM may not reflect the marketing stop.`;
+}
+
+/** The medicine line, the ANSM shortage status and status conflict when any, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`). */
+export function infoSummary(
+	medicine: Medicine,
+	presentations: Presentation[],
+	conditions: string[],
+	safety: SafetyInformation[],
+	shortage: ShortageSummary | null,
+	conflict: string | null,
+): string {
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED);
 	const lines = [`${medicine.name} (CIS ${medicine.cis}): ${marketed.length} marketed box(es) out of ${presentations.length}.`];
+	if (shortage !== null) lines.push(`ANSM shortage status: ${describeShortage(shortage)}`);
+	if (conflict !== null) lines.push(conflict);
 	for (const p of marketed.slice(0, SUMMARY_LIMIT)) lines.push(`- ${p.label} (CIP13 ${p.cip13}): ${price(p)}; ${rates(p)}.`);
 	if (marketed.length > SUMMARY_LIMIT) lines.push(`${marketed.length - SUMMARY_LIMIT} more marketed box(es) in the structured content.`);
 	lines.push(
@@ -71,10 +108,16 @@ async function info(db: D1Database, now: Date, m: MedicineRow, cip13: string | n
 		marketing_status: m.marketing_status,
 		is_mitm: m.is_mitm,
 	};
-	const { presentations, prescription_conditions, safety_information } = await loadInfo(db, m.cis, cip13, utcDate(now));
+	const [{ presentations, prescription_conditions, safety_information }, shortages] = await Promise.all([
+		loadInfo(db, m.cis, cip13, utcDate(now)),
+		currentShortages(db, [m.cis]),
+	]);
+	const linked = shortages.get(m.cis);
+	const ansm_shortage = linked === undefined ? null : toShortageSummary(linked.current, now);
+	const status_conflict = linked === undefined ? null : statusConflict([linked.current, ...linked.others], presentations);
 	return {
-		data: { kind: "info", medicine, presentations, prescription_conditions, safety_information },
-		summary: infoSummary(medicine, presentations, prescription_conditions, safety_information),
+		data: { kind: "info", medicine, presentations, prescription_conditions, safety_information, ansm_shortage, status_conflict },
+		summary: infoSummary(medicine, presentations, prescription_conditions, safety_information, ansm_shortage, status_conflict),
 	};
 }
 
@@ -83,7 +126,7 @@ const result = (dates: SourceDates, now: Date, out: { data: Data; summary: strin
 export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_medicine_info",
 	title: "Get medicine info",
-	description: `Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions and its current ANSM safety information, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
+	description: `Boxes of a medicine in the French public medicines database (BDPM), its prescription and dispensing conditions, its current ANSM safety information and its current ANSM shortage status, given exactly one of its CIS code, a CIP13 barcode or its name. Each box has its CIP13, marketing status, price and reimbursement rate. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, cip13, name }): Promise<ToolOutcome> {
