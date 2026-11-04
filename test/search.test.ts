@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
-import { aggregationGroup, inShortageMatches, MEDICINE_MARKETED, queryTrigrams, rankFuzzy, rankMatches, searchNames } from "../src/lib/db";
+import { aggregationGroup, inShortageMatches, MEDICINE_MARKETED, mitmCodes, queryTrigrams, rankFuzzy, rankMatches, searchNames } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { MEDICINES, seed } from "./seed";
 
@@ -101,6 +101,12 @@ describe("searchNames", () => {
 		expect(search).toMatchObject({ total: 2, capped: true, fuzzy: false });
 		expect(search.matches.map((m) => m.cis)).toContain(MEDICINES.dolipraneTablet.cis);
 		expect((await inShortageMatches(env.DB, '"DOLIPRANE"*')).map((r) => r.cis)).toEqual([MEDICINES.dolipraneTablet.cis]);
+	});
+
+	it("mitmCodes gives the ATC code of a MITM medicine, null for another, and omits an unknown CIS", async () => {
+		const codes = await mitmCodes(env.DB, [MEDICINES.dolipraneTablet.cis, MEDICINES.dolipraneCapsule.cis, "69999999"]);
+		expect(codes).toEqual(new Map([[MEDICINES.dolipraneTablet.cis, MEDICINES.dolipraneTablet.atc], [MEDICINES.dolipraneCapsule.cis, null]]));
+		expect(await mitmCodes(env.DB, [])).toEqual(new Map());
 	});
 
 	it("finds nothing for a query far from every name", async () => {

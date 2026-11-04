@@ -215,7 +215,7 @@ const result = (dates: SourceDates, now: Date, out: { data: Data; summary: strin
 export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_availability",
 	title: "Get availability",
-	description: `Current ANSM shortage status of one medicine, given exactly one of: its CIS code, an ANSM shortage id or a name. Returns the status, the expected return in ANSM's wording, the change history and possibly related entries. A name matching several medicines that share the same listed entry (or none) gets one answer for all of them; otherwise ranked candidates with their total, holder, marketing and shortage status; a misspelled name gets a spelling suggestion. ${INFO_ONLY}`,
+	description: `Current ANSM shortage status of one medicine, given exactly one of: its CIS code, an ANSM shortage id or a name. Returns the status, the expected return in ANSM's wording, the change history and possibly related entries. A name matching several medicines that share the same listed entry (or none) gets one answer for all of them; otherwise ranked candidates with their total, holder, marketing, shortage and MITM status and ATC code; a misspelled name gets a spelling suggestion. ${INFO_ONLY}`,
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, shortage_id, name }): Promise<ToolOutcome> {

@@ -39,7 +39,7 @@ Streamable HTTP, read-only, no authentication. Status and data dates: <https://m
 | `get_availability` | Shortage status, expected return and history of one medicine; by name, one answer when every match shares the same entry, otherwise ranked candidates, and a spelling suggestion for a misspelled name. | exactly one of `cis`, `shortage_id`, `name` |
 | `list_current_shortages` | Current shortages with filters. | `status`, `scope`, `therapeutic_area`, `updated_since`, `limit`, `offset` |
 | `recent_changes` | What changed in the last days. | `days`, `change_types`, `limit` |
-| `is_major_therapeutic_interest` | MITM status of a medicine, with its ATC code; by name, ranked candidates or a spelling suggestion. | exactly one of `cis`, `name` |
+| `is_major_therapeutic_interest` | MITM status of a medicine, with its ATC code; by name, one answer when every match has the same MITM status and ATC code, otherwise ranked candidates, and a spelling suggestion for a misspelled name. | exactly one of `cis`, `name` |
 | `get_medicine_info` | Boxes of a medicine (CIP13 code, marketing status, price, reimbursement rate), its prescription and dispensing conditions, current ANSM safety information, and its current ANSM shortage status; by name, ranked candidates or a spelling suggestion. | exactly one of `cis`, `cip13`, `name` |
 
 Every result carries the sources, their update dates, the coverage note, the disclaimer and a safety notice.
