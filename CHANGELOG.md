@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.11.0...v1.12.0) (2026-11-04)
+
+
+### Features
+
+* **mcp:** answer once for mitm lookups by name and add mitm status to candidates ([#68](https://github.com/amine7536/mcp-medicaments-france/issues/68)) ([d016b6c](https://github.com/amine7536/mcp-medicaments-france/commit/d016b6c72ffca89f574fd22825b2a545871976e5))
+
 ## [1.11.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.10.3...v1.11.0) (2026-11-03)
 
 
