@@ -11,7 +11,7 @@ import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from ".
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
-import { isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
+import { byCandidates, isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
@@ -1257,7 +1257,67 @@ describe("name search across tools", () => {
 		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(isMajorTherapeuticInterest, { name: "doliprane" })]) {
 			expect(data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
 			expect(data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
-			expect(firstLine(result)).toBe(candidatesSummary("doliprane", data));
+			expect(firstLine(result).startsWith(candidatesSummary("doliprane", data))).toBe(true);
+		}
+	});
+
+	/** Adds each CIS with a code to the MITM list. */
+	async function seedMitm(cis: readonly string[], codes: ReadonlyArray<string | null>): Promise<void> {
+		await env.DB.batch(cis.flatMap((c, i) => (codes[i] ? [env.DB.prepare("INSERT INTO mitm (cis, atc_code) VALUES (?, ?)").bind(c, codes[i])] : [])));
+	}
+	const ATC_CODE = /\b[A-Z]\d{2}[A-Z]{2}\d{2}\b/g;
+
+	it("is_major_therapeutic_interest reports the MITM mix of all matches, not of the 10 shown", async () => {
+		const codes = [...Array.from({ length: RESOLVE_LIMIT }, () => "A10BA02"), "A10BD02", null];
+		const cis = await seedSubstanceMatches(60200400, "UNIFORMINE", codes.map(() => null));
+		await seedMitm(cis, codes);
+		const { data, result } = await call(isMajorTherapeuticInterest, { name: "uniformine" });
+		expect(data).toMatchObject({ kind: "candidates", total: codes.length, capped: false, mitm_total: codes.length - 1, atc_codes: ["A10BA02", "A10BD02"] });
+		expect(new Set(data.candidates.map((c: { atc_code: string | null }) => c.atc_code))).toEqual(new Set(["A10BA02"]));
+		const line = firstLine(result);
+		expect(line.startsWith(candidatesSummary("uniformine", data))).toBe(true);
+		expect(line.match(ATC_CODE)).toEqual(["A10BA02", "A10BD02"]);
+		expect(line).toContain(`${codes.length - 1} on the BDPM MITM list`);
+		expect(line).toContain("1 not");
+	});
+
+	it("byCandidates reports no MITM mix for a capped match set", async () => {
+		const cis = await seedSubstanceMatches(60200500, "OVERFLOWINE", [null, null, null]);
+		await seedMitm(cis, ["A10BA02", "A10BD02", null]);
+		const resolved = await resolveName(env.DB, "overflowine", 2);
+		if (resolved.kind !== "candidates") throw new Error(`expected candidates, got ${resolved.kind}`);
+		expect(resolved.capped).toBe(true);
+		const { data, summary: text } = await byCandidates(env.DB, "overflowine", resolved, "source");
+		expect(data).toMatchObject({ kind: "candidates", capped: true, mitm_total: null, atc_codes: null });
+		expect(text).not.toContain("Across all");
+	});
+
+	it("is_major_therapeutic_interest keeps every ATC code in the data and at most 5 in the summary", async () => {
+		const codes = ["A10BD20", "A10BD15", "A10BD08", "A10BD07", "A10BD02", "A10BA02", "A10BB01"];
+		const cis = await seedSubstanceMatches(60200600, "MANYCODINE", codes.map(() => null));
+		await seedMitm(cis, codes);
+		const { data, result } = await call(isMajorTherapeuticInterest, { name: "manycodine" });
+		const sorted = codes.toSorted();
+		expect(data).toMatchObject({ kind: "candidates", mitm_total: codes.length, atc_codes: sorted });
+		const line = firstLine(result);
+		expect(line.match(ATC_CODE)).toEqual(sorted.slice(0, 5));
+		expect(line).toContain(`and ${codes.length - 5} more`);
+		// Every match is on the list: nothing to report as not on it.
+		expect(line).not.toContain(" not.");
+	});
+
+	it("the MITM mix is only on the candidates of is_major_therapeutic_interest", async () => {
+		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(getMedicineInfo, { name: "doliprane" })]) {
+			expect(data.kind).toBe("candidates");
+			expect(data).not.toHaveProperty("mitm_total");
+			expect(data).not.toHaveProperty("atc_codes");
+			expect(summary(result)).not.toContain("Across all");
+		}
+		for (const args of [{ name: "otherbrand" }, { cis: MEDICINES.kardegic.cis }]) {
+			const { data, result } = await call(isMajorTherapeuticInterest, args);
+			expect(data).not.toHaveProperty("mitm_total");
+			expect(data).not.toHaveProperty("atc_codes");
+			expect(summary(result)).not.toContain("Across all");
 		}
 	});
 });
