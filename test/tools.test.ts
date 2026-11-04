@@ -7,7 +7,7 @@ import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKET
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
 import { describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
-import { resolveName } from "../src/mcp/resolve";
+import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from "../src/mcp/resolve";
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
@@ -1175,5 +1175,89 @@ describe("name search across tools", () => {
 		expect(data).toMatchObject({ kind: "candidates", total: 2 });
 		const byCis = Object.fromEntries(data.candidates.map((c: { cis: string; is_mitm: boolean; atc_code: string | null }) => [c.cis, [c.is_mitm, c.atc_code]]));
 		expect(byCis).toEqual({ [MEDICINES.dolipraneTablet.cis]: [true, MEDICINES.dolipraneTablet.atc], [MEDICINES.dolipraneCapsule.cis]: [false, null] });
+	});
+
+	/**
+	 * Seeds one medicine per entry of `links` (the shortage it is linked to, or null), all sharing `substance` and none
+	 * carrying it in their name. Same tier, marketing status and name length, so rank order is CIS order: the order of `links`.
+	 * Returns their CIS in rank order.
+	 */
+	async function seedSubstanceMatches(firstCis: number, substance: string, links: ReadonlyArray<string | null>): Promise<string[]> {
+		const db = env.DB;
+		const rows = links.map((link, i) => ({ cis: String(firstCis + i), name: `SORTBRAND ${100 + i} mg, comprimé`, link }));
+		await db.batch(
+			rows.flatMap((m) => [
+				db
+					.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, form, holder, marketing_status, bdpm_updated_at) VALUES (?, ?, ?, 'comprimé', 'LAB S', ?, ?)")
+					.bind(m.cis, m.name, normalize(m.name), MEDICINE_MARKETED, BDPM_RELEASE),
+				db.prepare("INSERT INTO substances (cis, substance_name, substance_norm, nature) VALUES (?, ?, ?, 'SA')").bind(m.cis, substance, normalize(substance)),
+				db.prepare("INSERT INTO medicines_fts (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)").bind(m.cis, normalize(m.name), normalize(substance)),
+				...(m.link === null
+					? []
+					: [db.prepare("INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES (?, ?, 'exact', 1, 1)").bind(m.link, m.cis)]),
+			]),
+		);
+		return rows.map((m) => m.cis);
+	}
+
+	const statuses = (data: { candidates: Array<{ shortage_status: string | null }> }) => data.candidates.map((c) => c.shortage_status);
+	const candidateCis = (data: { candidates: Array<{ cis: string }> }) => data.candidates.map((c) => c.cis);
+
+	it("candidates put medicines in rupture or tension first", async () => {
+		const matches = RESOLVE_LIMIT + 2;
+		const cis = await seedSubstanceMatches(60200000, "HIDDENINE", [...Array.from({ length: matches - 1 }, () => null), SHORTAGES.dolipraneRupture.id]);
+		const { data, result } = await call(getMedicineInfo, { name: "hiddenine" });
+		expect({ kind: data.kind, total: data.total, in_shortage_total: data.in_shortage_total, statuses: statuses(data) }).toEqual({
+			kind: "candidates",
+			total: matches,
+			in_shortage_total: 1,
+			statuses: ["rupture", ...Array.from({ length: RESOLVE_LIMIT - 1 }, () => null)],
+		});
+		// The one in shortage first, the rest in rank order.
+		expect(candidateCis(data)).toEqual([cis[matches - 1], ...cis.slice(0, RESOLVE_LIMIT - 1)]);
+		expect(firstLine(result)).toBe(candidatesSummary("hiddenine", data));
+	});
+
+	it("get_medicine_info shows 10 in shortage and counts them all when more are", async () => {
+		const inShortage = RESOLVE_LIMIT + 2;
+		const links = Array.from({ length: inShortage }, (_, i) => (i % 2 === 0 ? SHORTAGES.dolipraneRupture.id : SHORTAGES.dolipraneTension.id));
+		const cis = await seedSubstanceMatches(60200100, "CROWDINE", [null, null, ...links]);
+		const { data, result } = await call(getMedicineInfo, { name: "crowdine" });
+		expect(data).toMatchObject({ kind: "candidates", total: inShortage + 2, in_shortage_total: inShortage });
+		// Rupture and tension are not ordered against each other: rank order holds within the medicines in shortage.
+		expect(candidateCis(data)).toEqual(cis.slice(2, 2 + RESOLVE_LIMIT));
+		// The count across all matches reaches the summary, not the number shown.
+		expect(firstLine(result)).toBe(candidatesSummary("crowdine", data));
+		expect(firstLine(result)).toContain(String(inShortage));
+	});
+
+	it("candidatesData counts every medicine in rupture or tension of a capped match set", async () => {
+		const links = [null, null, SHORTAGES.dolipraneRupture.id, SHORTAGES.dolipraneTension.id, SHORTAGES.dolipraneRupture.id];
+		await seedSubstanceMatches(60200200, "CAPPEDINE", links);
+		const resolved = await resolveName(env.DB, "cappedine", 1);
+		if (resolved.kind !== "candidates") throw new Error(`expected candidates, got ${resolved.kind}`);
+		const data = await candidatesData(env.DB, resolved);
+		expect(data).toMatchObject({ total: links.length, capped: true, in_shortage_total: 3 });
+		expect(statuses(data).slice(0, 3)).toEqual(["rupture", "tension", "rupture"]);
+	});
+
+	it("get_medicine_info keeps rank order and the plain summary when no medicine is in rupture or tension", async () => {
+		// The last one is listed, but not in rupture or tension.
+		const cis = await seedSubstanceMatches(60200300, "CALMINE", [null, null, SHORTAGES.remise.id]);
+		const { data, result } = await call(getMedicineInfo, { name: "calmine" });
+		expect(data).toMatchObject({ kind: "candidates", total: 3, in_shortage_total: 0 });
+		expect(candidateCis(data)).toEqual(cis);
+		expect(statuses(data)).toEqual([null, null, SHORTAGES.remise.status]);
+		expect(firstLine(result)).toBe(candidatesSummary("calmine", data));
+		// With nothing in shortage, the summary is not the sentence that announces medicines in shortage.
+		expect(firstLine(result)).not.toBe(candidatesSummary("calmine", { ...data, in_shortage_total: 1 }));
+	});
+
+	it("get_availability and is_major_therapeutic_interest report the medicines in rupture or tension of their candidates", async () => {
+		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(isMajorTherapeuticInterest, { name: "doliprane" })]) {
+			expect(data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
+			expect(data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
+			expect(firstLine(result)).toBe(candidatesSummary("doliprane", data));
+		}
 	});
 });

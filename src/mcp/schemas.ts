@@ -65,6 +65,8 @@ export const Candidates = z.object({
 	kind: z.literal("candidates"),
 	total: z.int().min(0),
 	capped: z.boolean(),
+	/** How many of the matches are in rupture or tension; they come first in `candidates`. */
+	in_shortage_total: z.int().min(0),
 	candidates: z.array(Candidate),
 });
 export const NotFound = z.object({
