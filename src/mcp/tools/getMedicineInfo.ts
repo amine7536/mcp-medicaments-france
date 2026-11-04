@@ -146,7 +146,8 @@ export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 		}
 		const resolved = await resolveName(db, name as string);
 		if (resolved.kind === "candidates") {
-			return { result: result(dates, now, { data: await candidatesData(db, resolved), summary: candidatesSummary(name as string, resolved.total) }) };
+			const data = await candidatesData(db, resolved);
+			return { result: result(dates, now, { data, summary: candidatesSummary(name as string, data) }) };
 		}
 		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [], resolved.did_you_mean)) };
 		return { result: result(dates, now, await info(db, now, resolved.medicine, null)), cis: resolved.medicine.cis };

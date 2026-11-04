@@ -2,6 +2,7 @@ import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicines, MATCH_CAP, searchNames, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { inShortage } from "../resolve";
 import { Cip13, Cis, describeShortage, isValidEan13, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
@@ -61,8 +62,6 @@ export const Data = z.discriminatedUnion("kind", [
 ]);
 
 export const outputSchema = envelopeSchema(Data);
-
-const inShortage = (status: string | undefined): boolean => status === "rupture" || status === "tension";
 
 export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "search_medicine",

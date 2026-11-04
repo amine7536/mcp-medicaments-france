@@ -52,7 +52,10 @@ async function byCandidates(
 		resolved.capped,
 		resolved.cis.map((c) => codes.get(c) ?? null),
 	);
-	if (group === undefined) return { data: await candidatesData(db, resolved), summary: candidatesSummary(query, resolved.total) };
+	if (group === undefined) {
+		const data = await candidatesData(db, resolved);
+		return { data, summary: candidatesSummary(query, data) };
+	}
 	const shown = resolved.cis.slice(0, LINKED_LIMIT);
 	const meds = await getMedicines(db, shown);
 	const medicines = shown.flatMap((c) => {
