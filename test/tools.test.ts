@@ -7,7 +7,7 @@ import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKET
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
 import { describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
-import { candidatesData, RESOLVE_LIMIT, resolveName } from "../src/mcp/resolve";
+import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from "../src/mcp/resolve";
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
@@ -1215,7 +1215,7 @@ describe("name search across tools", () => {
 		});
 		// The one in shortage first, the rest in rank order.
 		expect(candidateCis(data)).toEqual([cis[matches - 1], ...cis.slice(0, RESOLVE_LIMIT - 1)]);
-		expect(firstLine(result)).toContain("1 of them in rupture or tension");
+		expect(firstLine(result)).toBe(candidatesSummary("hiddenine", data));
 	});
 
 	it("get_medicine_info shows 10 in shortage and counts them all when more are", async () => {
@@ -1226,7 +1226,9 @@ describe("name search across tools", () => {
 		expect(data).toMatchObject({ kind: "candidates", total: inShortage + 2, in_shortage_total: inShortage });
 		// Rupture and tension are not ordered against each other: rank order holds within the medicines in shortage.
 		expect(candidateCis(data)).toEqual(cis.slice(2, 2 + RESOLVE_LIMIT));
-		expect(firstLine(result)).toContain(`${inShortage} of them in rupture or tension`);
+		// The count across all matches reaches the summary, not the number shown.
+		expect(firstLine(result)).toBe(candidatesSummary("crowdine", data));
+		expect(firstLine(result)).toContain(String(inShortage));
 	});
 
 	it("candidatesData counts every medicine in rupture or tension of a capped match set", async () => {
@@ -1246,15 +1248,16 @@ describe("name search across tools", () => {
 		expect(data).toMatchObject({ kind: "candidates", total: 3, in_shortage_total: 0 });
 		expect(candidateCis(data)).toEqual(cis);
 		expect(statuses(data)).toEqual([null, null, SHORTAGES.remise.status]);
-		expect(firstLine(result)).toContain(`3 medicines match "calmine"`);
-		expect(firstLine(result)).not.toContain("rupture or tension");
+		expect(firstLine(result)).toBe(candidatesSummary("calmine", data));
+		// With nothing in shortage, the summary is not the sentence that announces medicines in shortage.
+		expect(firstLine(result)).not.toBe(candidatesSummary("calmine", { ...data, in_shortage_total: 1 }));
 	});
 
 	it("get_availability and is_major_therapeutic_interest report the medicines in rupture or tension of their candidates", async () => {
 		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(isMajorTherapeuticInterest, { name: "doliprane" })]) {
 			expect(data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
 			expect(data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
-			expect(firstLine(result)).toContain("1 of them in rupture or tension");
+			expect(firstLine(result)).toBe(candidatesSummary("doliprane", data));
 		}
 	});
 });
