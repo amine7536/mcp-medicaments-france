@@ -1257,7 +1257,10 @@ describe("name search across tools", () => {
 		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(isMajorTherapeuticInterest, { name: "doliprane" })]) {
 			expect(data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
 			expect(data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
-			expect(firstLine(result).startsWith(candidatesSummary("doliprane", data))).toBe(true);
+			const expected = candidatesSummary("doliprane", data);
+			// is_major_therapeutic_interest appends the MITM mix; get_availability's summary is exactly the candidates sentence.
+			if (data.mitm_total === undefined) expect(firstLine(result)).toBe(expected);
+			else expect(firstLine(result).startsWith(expected)).toBe(true);
 		}
 	});
 
