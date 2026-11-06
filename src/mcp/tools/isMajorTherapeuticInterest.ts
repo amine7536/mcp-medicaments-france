@@ -14,12 +14,6 @@ export const inputSchema = z.object({
 	name: z.string().min(2).max(100).optional().describe("Medicine name; resolved to one CIS or a list of candidates."),
 });
 
-/** Candidates with the MITM mix across all matches; both fields are null when the match set is capped, so incomplete. */
-const MitmCandidates = Candidates.extend({
-	mitm_total: z.int().min(0).nullable(),
-	atc_codes: z.array(z.string()).nullable(),
-});
-
 export const Data = z.discriminatedUnion("kind", [
 	z.object({
 		kind: z.literal("mitm"),
@@ -38,14 +32,15 @@ export const Data = z.discriminatedUnion("kind", [
 		medicines: z.array(z.object({ cis: Cis, name: z.string() })),
 		source: z.string(),
 	}),
-	MitmCandidates,
+	Candidates,
 	NotFound,
 ]);
 type Data = z.infer<typeof Data>;
 
 const MIX_CODES_LIMIT = 5;
 
-function mixSentence(total: number, mitmTotal: number, atcCodes: string[]): string {
+/** The MITM mix across all matches, as text: a new field in the data would fail the output schema clients have cached. */
+export function mixSentence(total: number, mitmTotal: number, atcCodes: string[]): string {
 	const more = atcCodes.length - MIX_CODES_LIMIT;
 	const codes = atcCodes.slice(0, MIX_CODES_LIMIT).join(", ") + (more > 0 ? ` and ${more} more` : "");
 	const rest = total - mitmTotal;
@@ -68,12 +63,12 @@ export async function byCandidates(
 		resolved.cis.map((c) => codes.get(c) ?? null),
 	);
 	if (group === undefined) {
-		const data = await candidatesData(db, resolved);
-		const summary = candidatesSummary(query, data);
-		if (resolved.capped) return { data: { ...data, mitm_total: null, atc_codes: null }, summary };
+		const { data, inShortageTotal } = await candidatesData(db, resolved);
+		const summary = candidatesSummary(query, data.total, inShortageTotal);
+		// A capped match set is incomplete, so its mix would be wrong.
+		if (resolved.capped) return { data, summary };
 		const listed = resolved.cis.flatMap((c) => codes.get(c) ?? []);
-		const atc_codes = [...new Set(listed)].sort();
-		return { data: { ...data, mitm_total: listed.length, atc_codes }, summary: `${summary} ${mixSentence(data.total, listed.length, atc_codes)}` };
+		return { data, summary: `${summary} ${mixSentence(data.total, listed.length, [...new Set(listed)].sort())}` };
 	}
 	const shown = resolved.cis.slice(0, LINKED_LIMIT);
 	const meds = await getMedicines(db, shown);

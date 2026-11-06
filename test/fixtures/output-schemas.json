@@ -1,0 +1,3795 @@
+{
+  "search_medicine": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "data": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "results"
+              },
+              "results": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "form": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "substances": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "dosage": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "dosage"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "is_mitm": {
+                      "type": "boolean"
+                    },
+                    "shortage": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "shortage_id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "dci": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "rupture",
+                                "tension",
+                                "arret_commercialisation",
+                                "remise_a_disposition",
+                                "autre"
+                              ]
+                            },
+                            "status_label_fr": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": [
+                                "ville",
+                                "hopital",
+                                "ville_hopital",
+                                "inconnu"
+                              ]
+                            },
+                            "scope_raw": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "expected_return": {
+                              "type": "object",
+                              "properties": {
+                                "earliest": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "latest": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "precision": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "day",
+                                        "month",
+                                        "quarter",
+                                        "year"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "part": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "debut",
+                                        "mi",
+                                        "fin"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "raw": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "passed": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "earliest",
+                                "latest",
+                                "precision",
+                                "part",
+                                "raw",
+                                "passed"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "returned_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "ansm_updated_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "ansm_url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "match_confidence": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "match_note": {
+                              "type": "string",
+                              "const": "probable match"
+                            }
+                          },
+                          "required": [
+                            "shortage_id",
+                            "name",
+                            "dci",
+                            "status",
+                            "status_label_fr",
+                            "scope",
+                            "scope_raw",
+                            "expected_return",
+                            "returned_at",
+                            "ansm_updated_at",
+                            "ansm_url",
+                            "match_confidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shortage_note": {
+                      "type": "string",
+                      "const": "No shortage linked to this medicine. Not listed does not mean available."
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name",
+                    "form",
+                    "substances",
+                    "is_mitm",
+                    "shortage"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "unmatched_shortages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "invalid_cip13": {
+                "type": "boolean",
+                "const": true
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "capped": {
+                "type": "boolean"
+              },
+              "fuzzy": {
+                "type": "boolean"
+              },
+              "did_you_mean": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "results",
+              "unmatched_shortages",
+              "total",
+              "capped",
+              "fuzzy",
+              "did_you_mean"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "ansm": {
+            "type": "string",
+            "const": "https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments"
+          },
+          "bdpm": {
+            "type": "string",
+            "const": "https://base-donnees-publique.medicaments.gouv.fr"
+          },
+          "ansm_last_ingest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_release": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ansm",
+          "bdpm",
+          "ansm_last_ingest",
+          "bdpm_release",
+          "bdpm_imported_at"
+        ],
+        "additionalProperties": false
+      },
+      "coverage_note": {
+        "type": "string",
+        "const": "ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available."
+      },
+      "disclaimer": {
+        "type": "string",
+        "const": "Information only. Ask your pharmacist or doctor. No substitution or dosage advice."
+      },
+      "safety": {
+        "type": "string",
+        "const": "Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor."
+      },
+      "warning": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "data",
+      "source",
+      "coverage_note",
+      "disclaimer",
+      "safety"
+    ],
+    "additionalProperties": false
+  },
+  "get_availability": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "data": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "availability"
+              },
+              "medicine": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "cis": {
+                        "type": "string",
+                        "pattern": "^\\d{8}$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "is_mitm": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "cis",
+                      "name",
+                      "is_mitm"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "linked_medicines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "match_confidence": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "linked_medicines_total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "listed": {
+                "type": "boolean"
+              },
+              "shortage": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "shortage_id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "dci": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "rupture",
+                          "tension",
+                          "arret_commercialisation",
+                          "remise_a_disposition",
+                          "autre"
+                        ]
+                      },
+                      "status_label_fr": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string",
+                        "enum": [
+                          "ville",
+                          "hopital",
+                          "ville_hopital",
+                          "inconnu"
+                        ]
+                      },
+                      "scope_raw": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expected_return": {
+                        "type": "object",
+                        "properties": {
+                          "earliest": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "latest": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "precision": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "day",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "part": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "debut",
+                                  "mi",
+                                  "fin"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "raw": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "passed": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "earliest",
+                          "latest",
+                          "precision",
+                          "part",
+                          "raw",
+                          "passed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "returned_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ansm_updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ansm_url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "match_confidence": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "match_note": {
+                        "type": "string",
+                        "const": "probable match"
+                      }
+                    },
+                    "required": [
+                      "shortage_id",
+                      "name",
+                      "dci",
+                      "status",
+                      "status_label_fr",
+                      "scope",
+                      "scope_raw",
+                      "expected_return",
+                      "returned_at",
+                      "ansm_updated_at",
+                      "ansm_url",
+                      "match_confidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "first_seen_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status_since": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status_since_source": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "ansm",
+                      "service"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "history": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        "change": {
+                          "type": "string",
+                          "const": "new"
+                        },
+                        "status": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "rupture",
+                                "tension",
+                                "arret_commercialisation",
+                                "remise_a_disposition",
+                                "autre"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "change",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        "change": {
+                          "type": "string",
+                          "const": "status_change"
+                        },
+                        "from": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "rupture",
+                                "tension",
+                                "arret_commercialisation",
+                                "remise_a_disposition",
+                                "autre"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "to": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "rupture",
+                                "tension",
+                                "arret_commercialisation",
+                                "remise_a_disposition",
+                                "autre"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "change",
+                        "from",
+                        "to"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        "change": {
+                          "type": "string",
+                          "const": "return_date_change"
+                        },
+                        "from_raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "to_raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "change",
+                        "from_raw",
+                        "to_raw"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        "change": {
+                          "type": "string",
+                          "const": "delisted"
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "change"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        "change": {
+                          "type": "string",
+                          "const": "relisted"
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "change"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "other_shortage_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "possibly_related_shortages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "medicine",
+              "linked_medicines",
+              "linked_medicines_total",
+              "listed",
+              "shortage",
+              "first_seen_at",
+              "status_since",
+              "status_since_source",
+              "history",
+              "other_shortage_ids",
+              "possibly_related_shortages"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "aggregated"
+              },
+              "query": {
+                "type": "string"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "shortage": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "shortage_id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "dci": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "rupture",
+                          "tension",
+                          "arret_commercialisation",
+                          "remise_a_disposition",
+                          "autre"
+                        ]
+                      },
+                      "status_label_fr": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string",
+                        "enum": [
+                          "ville",
+                          "hopital",
+                          "ville_hopital",
+                          "inconnu"
+                        ]
+                      },
+                      "scope_raw": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expected_return": {
+                        "type": "object",
+                        "properties": {
+                          "earliest": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "latest": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "precision": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "day",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "part": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "debut",
+                                  "mi",
+                                  "fin"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "raw": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "passed": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "earliest",
+                          "latest",
+                          "precision",
+                          "part",
+                          "raw",
+                          "passed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "returned_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ansm_updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ansm_url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "match_confidence": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "match_note": {
+                        "type": "string",
+                        "const": "probable match"
+                      }
+                    },
+                    "required": [
+                      "shortage_id",
+                      "name",
+                      "dci",
+                      "status",
+                      "status_label_fr",
+                      "scope",
+                      "scope_raw",
+                      "expected_return",
+                      "returned_at",
+                      "ansm_updated_at",
+                      "ansm_url",
+                      "match_confidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "medicines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "possibly_related_shortages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "query",
+              "total",
+              "shortage",
+              "medicines",
+              "possibly_related_shortages"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "candidates"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "capped": {
+                "type": "boolean"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "holder": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "marketing_status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shortage_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "rupture",
+                            "tension",
+                            "arret_commercialisation",
+                            "remise_a_disposition",
+                            "autre"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "is_mitm": {
+                      "type": "boolean"
+                    },
+                    "atc_code": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name",
+                    "holder",
+                    "marketing_status",
+                    "shortage_status",
+                    "is_mitm",
+                    "atc_code"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "total",
+              "capped",
+              "candidates"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "not_found"
+              },
+              "possibly_related_shortages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "did_you_mean": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "possibly_related_shortages",
+              "did_you_mean"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "ansm": {
+            "type": "string",
+            "const": "https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments"
+          },
+          "bdpm": {
+            "type": "string",
+            "const": "https://base-donnees-publique.medicaments.gouv.fr"
+          },
+          "ansm_last_ingest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_release": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ansm",
+          "bdpm",
+          "ansm_last_ingest",
+          "bdpm_release",
+          "bdpm_imported_at"
+        ],
+        "additionalProperties": false
+      },
+      "coverage_note": {
+        "type": "string",
+        "const": "ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available."
+      },
+      "disclaimer": {
+        "type": "string",
+        "const": "Information only. Ask your pharmacist or doctor. No substitution or dosage advice."
+      },
+      "safety": {
+        "type": "string",
+        "const": "Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor."
+      },
+      "warning": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "data",
+      "source",
+      "coverage_note",
+      "disclaimer",
+      "safety"
+    ],
+    "additionalProperties": false
+  },
+  "list_current_shortages": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "data": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "list"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    },
+                    "cis": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^\\d{8}$"
+                      }
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence",
+                    "cis"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "next_offset": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "available_areas": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "total",
+              "items",
+              "next_offset"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "ansm": {
+            "type": "string",
+            "const": "https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments"
+          },
+          "bdpm": {
+            "type": "string",
+            "const": "https://base-donnees-publique.medicaments.gouv.fr"
+          },
+          "ansm_last_ingest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_release": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ansm",
+          "bdpm",
+          "ansm_last_ingest",
+          "bdpm_release",
+          "bdpm_imported_at"
+        ],
+        "additionalProperties": false
+      },
+      "coverage_note": {
+        "type": "string",
+        "const": "ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available."
+      },
+      "disclaimer": {
+        "type": "string",
+        "const": "Information only. Ask your pharmacist or doctor. No substitution or dosage advice."
+      },
+      "safety": {
+        "type": "string",
+        "const": "Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor."
+      },
+      "warning": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "data",
+      "source",
+      "coverage_note",
+      "disclaimer",
+      "safety"
+    ],
+    "additionalProperties": false
+  },
+  "recent_changes": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "data": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "changes"
+              },
+              "since": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "counts": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "status_change",
+                    "return_date_change",
+                    "delisted",
+                    "relisted"
+                  ]
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "tracking_since": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "change": {
+                      "type": "string",
+                      "enum": [
+                        "new",
+                        "status_change",
+                        "return_date_change",
+                        "delisted",
+                        "relisted"
+                      ]
+                    },
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "old_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "rupture",
+                            "tension",
+                            "arret_commercialisation",
+                            "remise_a_disposition",
+                            "autre"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "new_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "rupture",
+                            "tension",
+                            "arret_commercialisation",
+                            "remise_a_disposition",
+                            "autre"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "old_expected_return": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "new_expected_return": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "change",
+                    "shortage_id",
+                    "name",
+                    "ansm_url",
+                    "old_status",
+                    "new_status",
+                    "old_expected_return",
+                    "new_expected_return"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "type": "string",
+                "const": "Dates are detection dates by this service (daily cadence), not official ANSM decision dates."
+              }
+            },
+            "required": [
+              "kind",
+              "since",
+              "counts",
+              "tracking_since",
+              "items",
+              "note"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "ansm": {
+            "type": "string",
+            "const": "https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments"
+          },
+          "bdpm": {
+            "type": "string",
+            "const": "https://base-donnees-publique.medicaments.gouv.fr"
+          },
+          "ansm_last_ingest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_release": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ansm",
+          "bdpm",
+          "ansm_last_ingest",
+          "bdpm_release",
+          "bdpm_imported_at"
+        ],
+        "additionalProperties": false
+      },
+      "coverage_note": {
+        "type": "string",
+        "const": "ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available."
+      },
+      "disclaimer": {
+        "type": "string",
+        "const": "Information only. Ask your pharmacist or doctor. No substitution or dosage advice."
+      },
+      "safety": {
+        "type": "string",
+        "const": "Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor."
+      },
+      "warning": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "data",
+      "source",
+      "coverage_note",
+      "disclaimer",
+      "safety"
+    ],
+    "additionalProperties": false
+  },
+  "is_major_therapeutic_interest": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "data": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "mitm"
+              },
+              "cis": {
+                "type": "string",
+                "pattern": "^\\d{8}$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "is_mitm": {
+                "type": "boolean"
+              },
+              "atc_code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "cis",
+              "name",
+              "is_mitm",
+              "atc_code",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "aggregated"
+              },
+              "query": {
+                "type": "string"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "is_mitm": {
+                "type": "boolean"
+              },
+              "atc_code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "medicines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "query",
+              "total",
+              "is_mitm",
+              "atc_code",
+              "medicines",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "candidates"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "capped": {
+                "type": "boolean"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "holder": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "marketing_status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shortage_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "rupture",
+                            "tension",
+                            "arret_commercialisation",
+                            "remise_a_disposition",
+                            "autre"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "is_mitm": {
+                      "type": "boolean"
+                    },
+                    "atc_code": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name",
+                    "holder",
+                    "marketing_status",
+                    "shortage_status",
+                    "is_mitm",
+                    "atc_code"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "total",
+              "capped",
+              "candidates"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "not_found"
+              },
+              "possibly_related_shortages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "did_you_mean": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "possibly_related_shortages",
+              "did_you_mean"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "ansm": {
+            "type": "string",
+            "const": "https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments"
+          },
+          "bdpm": {
+            "type": "string",
+            "const": "https://base-donnees-publique.medicaments.gouv.fr"
+          },
+          "ansm_last_ingest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_release": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ansm",
+          "bdpm",
+          "ansm_last_ingest",
+          "bdpm_release",
+          "bdpm_imported_at"
+        ],
+        "additionalProperties": false
+      },
+      "coverage_note": {
+        "type": "string",
+        "const": "ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available."
+      },
+      "disclaimer": {
+        "type": "string",
+        "const": "Information only. Ask your pharmacist or doctor. No substitution or dosage advice."
+      },
+      "safety": {
+        "type": "string",
+        "const": "Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor."
+      },
+      "warning": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "data",
+      "source",
+      "coverage_note",
+      "disclaimer",
+      "safety"
+    ],
+    "additionalProperties": false
+  },
+  "get_medicine_info": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "data": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "info"
+              },
+              "medicine": {
+                "type": "object",
+                "properties": {
+                  "cis": {
+                    "type": "string",
+                    "pattern": "^\\d{8}$"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "form": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "routes": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "holder": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "marketing_status": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "is_mitm": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "cis",
+                  "name",
+                  "form",
+                  "routes",
+                  "holder",
+                  "marketing_status",
+                  "is_mitm"
+                ],
+                "additionalProperties": false
+              },
+              "presentations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cip13": {
+                      "type": "string",
+                      "pattern": "^\\d{13}$"
+                    },
+                    "cip7": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "admin_status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "marketing_status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "declared_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hospital_approval": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "reimbursement_rates": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "price_eur": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "public_price_eur": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "dispensing_fee_eur": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "reimbursement_indications": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "cip13",
+                    "cip7",
+                    "label",
+                    "admin_status",
+                    "marketing_status",
+                    "declared_at",
+                    "hospital_approval",
+                    "reimbursement_rates",
+                    "price_eur",
+                    "public_price_eur",
+                    "dispensing_fee_eur",
+                    "reimbursement_indications"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "prescription_conditions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "safety_information": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "starts_on": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "ends_on": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "url",
+                    "starts_on",
+                    "ends_on"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "ansm_shortage": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "shortage_id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "dci": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "rupture",
+                          "tension",
+                          "arret_commercialisation",
+                          "remise_a_disposition",
+                          "autre"
+                        ]
+                      },
+                      "status_label_fr": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string",
+                        "enum": [
+                          "ville",
+                          "hopital",
+                          "ville_hopital",
+                          "inconnu"
+                        ]
+                      },
+                      "scope_raw": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expected_return": {
+                        "type": "object",
+                        "properties": {
+                          "earliest": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "latest": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "precision": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "day",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "part": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "debut",
+                                  "mi",
+                                  "fin"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "raw": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "passed": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "earliest",
+                          "latest",
+                          "precision",
+                          "part",
+                          "raw",
+                          "passed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "returned_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ansm_updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "ansm_url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "match_confidence": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "match_note": {
+                        "type": "string",
+                        "const": "probable match"
+                      }
+                    },
+                    "required": [
+                      "shortage_id",
+                      "name",
+                      "dci",
+                      "status",
+                      "status_label_fr",
+                      "scope",
+                      "scope_raw",
+                      "expected_return",
+                      "returned_at",
+                      "ansm_updated_at",
+                      "ansm_url",
+                      "match_confidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status_conflict": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "medicine",
+              "presentations",
+              "prescription_conditions",
+              "safety_information",
+              "ansm_shortage",
+              "status_conflict"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "candidates"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "capped": {
+                "type": "boolean"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cis": {
+                      "type": "string",
+                      "pattern": "^\\d{8}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "holder": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "marketing_status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shortage_status": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "rupture",
+                            "tension",
+                            "arret_commercialisation",
+                            "remise_a_disposition",
+                            "autre"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "is_mitm": {
+                      "type": "boolean"
+                    },
+                    "atc_code": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "cis",
+                    "name",
+                    "holder",
+                    "marketing_status",
+                    "shortage_status",
+                    "is_mitm",
+                    "atc_code"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "total",
+              "capped",
+              "candidates"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "not_found"
+              },
+              "possibly_related_shortages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shortage_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "dci": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "rupture",
+                        "tension",
+                        "arret_commercialisation",
+                        "remise_a_disposition",
+                        "autre"
+                      ]
+                    },
+                    "status_label_fr": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "ville",
+                        "hopital",
+                        "ville_hopital",
+                        "inconnu"
+                      ]
+                    },
+                    "scope_raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expected_return": {
+                      "type": "object",
+                      "properties": {
+                        "earliest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "latest": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "precision": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "day",
+                                "month",
+                                "quarter",
+                                "year"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "part": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "debut",
+                                "mi",
+                                "fin"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "raw": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "passed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "earliest",
+                        "latest",
+                        "precision",
+                        "part",
+                        "raw",
+                        "passed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "returned_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "ansm_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "match_confidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "match_note": {
+                      "type": "string",
+                      "const": "probable match"
+                    }
+                  },
+                  "required": [
+                    "shortage_id",
+                    "name",
+                    "dci",
+                    "status",
+                    "status_label_fr",
+                    "scope",
+                    "scope_raw",
+                    "expected_return",
+                    "returned_at",
+                    "ansm_updated_at",
+                    "ansm_url",
+                    "match_confidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "did_you_mean": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "possibly_related_shortages",
+              "did_you_mean"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "ansm": {
+            "type": "string",
+            "const": "https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments"
+          },
+          "bdpm": {
+            "type": "string",
+            "const": "https://base-donnees-publique.medicaments.gouv.fr"
+          },
+          "ansm_last_ingest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_release": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bdpm_imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ansm",
+          "bdpm",
+          "ansm_last_ingest",
+          "bdpm_release",
+          "bdpm_imported_at"
+        ],
+        "additionalProperties": false
+      },
+      "coverage_note": {
+        "type": "string",
+        "const": "ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available."
+      },
+      "disclaimer": {
+        "type": "string",
+        "const": "Information only. Ask your pharmacist or doctor. No substitution or dosage advice."
+      },
+      "safety": {
+        "type": "string",
+        "const": "Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor."
+      },
+      "warning": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "data",
+      "source",
+      "coverage_note",
+      "disclaimer",
+      "safety"
+    ],
+    "additionalProperties": false
+  }
+}

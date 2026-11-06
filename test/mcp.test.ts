@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { INSTRUCTIONS, SERVER_DESCRIPTION, SERVER_NAME, SERVER_TITLE, SERVER_VERSION, SERVER_WEBSITE_URL } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
+import publishedOutputSchemas from "./fixtures/output-schemas.json";
 import { PRESENTATIONS, seed } from "./seed";
 
 const URL = "https://medicaments-france.a3e.dev/mcp";
@@ -69,6 +70,14 @@ describe("/mcp", () => {
 			expect(t.outputSchema).toMatchObject({ type: "object" });
 			expect(t.description.endsWith(NEW_INFO_ONLY)).toBe(true);
 		}
+	});
+
+	// Clients validate results against the output schema they cached, and every object sets `additionalProperties: false`,
+	// so any change here, even a new optional field, fails on clients connected before the release.
+	it("keeps the output schemas clients have cached", async () => {
+		const list = await rpc(2, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
+		const tools = list.result.tools as Array<{ name: string; outputSchema: object }>;
+		expect(Object.fromEntries(tools.map((t) => [t.name, t.outputSchema]))).toEqual(publishedOutputSchemas);
 	});
 
 	it("returns a tool result through the SDK output validation", async () => {
