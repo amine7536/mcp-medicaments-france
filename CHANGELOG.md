@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.12.0...v1.13.0) (2026-11-05)
+
+
+### Features
+
+* **mcp:** report the mitm mix of all matches in is_major_therapeutic_interest candidates ([#76](https://github.com/amine7536/mcp-medicaments-france/issues/76)) ([8e25221](https://github.com/amine7536/mcp-medicaments-france/commit/8e25221c71f1fe7808e7c9e0b04d61142adeb333))
+
+
+### Bug Fixes
+
+* **mcp:** list medicines in rupture or tension first in candidates ([#74](https://github.com/amine7536/mcp-medicaments-france/issues/74)) ([0123d60](https://github.com/amine7536/mcp-medicaments-france/commit/0123d6041d9834f84a78ea58f49cb660c1e59b04))
+
 ## [1.12.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.11.0...v1.12.0) (2026-11-04)
 
 
