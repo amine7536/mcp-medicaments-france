@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.0...v1.13.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **mcp:** restore the published output schema for candidates ([#78](https://github.com/amine7536/mcp-medicaments-france/issues/78)) ([dc42f20](https://github.com/amine7536/mcp-medicaments-france/commit/dc42f2079846cf88033fca0e924232c04c1e65f0))
+
 ## [1.13.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.12.0...v1.13.0) (2026-11-05)
 
 
