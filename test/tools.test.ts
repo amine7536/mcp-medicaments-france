@@ -11,7 +11,7 @@ import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from ".
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
 import { Data, getMedicineInfo, NO_SAFETY_INFORMATION, SAFETY_ADVICE, SUMMARY_LIMIT } from "../src/mcp/tools/getMedicineInfo";
-import { byCandidates, isMajorTherapeuticInterest, MITM_DEFINITION } from "../src/mcp/tools/isMajorTherapeuticInterest";
+import { byCandidates, isMajorTherapeuticInterest, MITM_DEFINITION, mixSentence } from "../src/mcp/tools/isMajorTherapeuticInterest";
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
@@ -1207,15 +1207,14 @@ describe("name search across tools", () => {
 		const matches = RESOLVE_LIMIT + 2;
 		const cis = await seedSubstanceMatches(60200000, "HIDDENINE", [...Array.from({ length: matches - 1 }, () => null), SHORTAGES.dolipraneRupture.id]);
 		const { data, result } = await call(getMedicineInfo, { name: "hiddenine" });
-		expect({ kind: data.kind, total: data.total, in_shortage_total: data.in_shortage_total, statuses: statuses(data) }).toEqual({
+		expect({ kind: data.kind, total: data.total, statuses: statuses(data) }).toEqual({
 			kind: "candidates",
 			total: matches,
-			in_shortage_total: 1,
 			statuses: ["rupture", ...Array.from({ length: RESOLVE_LIMIT - 1 }, () => null)],
 		});
 		// The one in shortage first, the rest in rank order.
 		expect(candidateCis(data)).toEqual([cis[matches - 1], ...cis.slice(0, RESOLVE_LIMIT - 1)]);
-		expect(firstLine(result)).toBe(candidatesSummary("hiddenine", data));
+		expect(firstLine(result)).toBe(candidatesSummary("hiddenine", matches, 1));
 	});
 
 	it("get_medicine_info shows 10 in shortage and counts them all when more are", async () => {
@@ -1223,11 +1222,11 @@ describe("name search across tools", () => {
 		const links = Array.from({ length: inShortage }, (_, i) => (i % 2 === 0 ? SHORTAGES.dolipraneRupture.id : SHORTAGES.dolipraneTension.id));
 		const cis = await seedSubstanceMatches(60200100, "CROWDINE", [null, null, ...links]);
 		const { data, result } = await call(getMedicineInfo, { name: "crowdine" });
-		expect(data).toMatchObject({ kind: "candidates", total: inShortage + 2, in_shortage_total: inShortage });
+		expect(data).toMatchObject({ kind: "candidates", total: inShortage + 2 });
 		// Rupture and tension are not ordered against each other: rank order holds within the medicines in shortage.
 		expect(candidateCis(data)).toEqual(cis.slice(2, 2 + RESOLVE_LIMIT));
 		// The count across all matches reaches the summary, not the number shown.
-		expect(firstLine(result)).toBe(candidatesSummary("crowdine", data));
+		expect(firstLine(result)).toBe(candidatesSummary("crowdine", inShortage + 2, inShortage));
 		expect(firstLine(result)).toContain(String(inShortage));
 	});
 
@@ -1236,8 +1235,9 @@ describe("name search across tools", () => {
 		await seedSubstanceMatches(60200200, "CAPPEDINE", links);
 		const resolved = await resolveName(env.DB, "cappedine", 1);
 		if (resolved.kind !== "candidates") throw new Error(`expected candidates, got ${resolved.kind}`);
-		const data = await candidatesData(env.DB, resolved);
-		expect(data).toMatchObject({ total: links.length, capped: true, in_shortage_total: 3 });
+		const { data, inShortageTotal } = await candidatesData(env.DB, resolved);
+		expect(data).toMatchObject({ total: links.length, capped: true });
+		expect(inShortageTotal).toBe(3);
 		expect(statuses(data).slice(0, 3)).toEqual(["rupture", "tension", "rupture"]);
 	});
 
@@ -1245,23 +1245,25 @@ describe("name search across tools", () => {
 		// The last one is listed, but not in rupture or tension.
 		const cis = await seedSubstanceMatches(60200300, "CALMINE", [null, null, SHORTAGES.remise.id]);
 		const { data, result } = await call(getMedicineInfo, { name: "calmine" });
-		expect(data).toMatchObject({ kind: "candidates", total: 3, in_shortage_total: 0 });
+		expect(data).toMatchObject({ kind: "candidates", total: 3 });
 		expect(candidateCis(data)).toEqual(cis);
 		expect(statuses(data)).toEqual([null, null, SHORTAGES.remise.status]);
-		expect(firstLine(result)).toBe(candidatesSummary("calmine", data));
+		expect(firstLine(result)).toBe(candidatesSummary("calmine", 3, 0));
 		// With nothing in shortage, the summary is not the sentence that announces medicines in shortage.
-		expect(firstLine(result)).not.toBe(candidatesSummary("calmine", { ...data, in_shortage_total: 1 }));
+		expect(firstLine(result)).not.toBe(candidatesSummary("calmine", 3, 1));
 	});
 
 	it("get_availability and is_major_therapeutic_interest report the medicines in rupture or tension of their candidates", async () => {
-		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(isMajorTherapeuticInterest, { name: "doliprane" })]) {
-			expect(data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
-			expect(data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
-			const expected = candidatesSummary("doliprane", data);
-			// is_major_therapeutic_interest appends the MITM mix; get_availability's summary is exactly the candidates sentence.
-			if (data.mitm_total === undefined) expect(firstLine(result)).toBe(expected);
-			else expect(firstLine(result).startsWith(expected)).toBe(true);
-		}
+		const expected = candidatesSummary("doliprane", 2, 1);
+		const availability = await call(getAvailability, { name: "doliprane" });
+		expect(availability.data).toMatchObject({ kind: "candidates", total: 2 });
+		expect(availability.data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
+		expect(firstLine(availability.result)).toBe(expected);
+		const mitm = await call(isMajorTherapeuticInterest, { name: "doliprane" });
+		expect(mitm.data).toMatchObject({ kind: "candidates", total: 2 });
+		expect(mitm.data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
+		// is_major_therapeutic_interest appends the MITM mix to the same sentence.
+		expect(firstLine(mitm.result).startsWith(expected)).toBe(true);
 	});
 
 	/** Adds each CIS with a code to the MITM list. */
@@ -1275,10 +1277,10 @@ describe("name search across tools", () => {
 		const cis = await seedSubstanceMatches(60200400, "UNIFORMINE", codes.map(() => null));
 		await seedMitm(cis, codes);
 		const { data, result } = await call(isMajorTherapeuticInterest, { name: "uniformine" });
-		expect(data).toMatchObject({ kind: "candidates", total: codes.length, capped: false, mitm_total: codes.length - 1, atc_codes: ["A10BA02", "A10BD02"] });
+		expect(data).toMatchObject({ kind: "candidates", total: codes.length, capped: false });
 		expect(new Set(data.candidates.map((c: { atc_code: string | null }) => c.atc_code))).toEqual(new Set(["A10BA02"]));
 		const line = firstLine(result);
-		expect(line.startsWith(candidatesSummary("uniformine", data))).toBe(true);
+		expect(line).toBe(`${candidatesSummary("uniformine", codes.length, 0)} ${mixSentence(codes.length, codes.length - 1, ["A10BA02", "A10BD02"])}`);
 		expect(line.match(ATC_CODE)).toEqual(["A10BA02", "A10BD02"]);
 		expect(line).toContain(`${codes.length - 1} on the BDPM MITM list`);
 		expect(line).toContain("1 not");
@@ -1291,17 +1293,17 @@ describe("name search across tools", () => {
 		if (resolved.kind !== "candidates") throw new Error(`expected candidates, got ${resolved.kind}`);
 		expect(resolved.capped).toBe(true);
 		const { data, summary: text } = await byCandidates(env.DB, "overflowine", resolved, "source");
-		expect(data).toMatchObject({ kind: "candidates", capped: true, mitm_total: null, atc_codes: null });
-		expect(text).not.toContain("Across all");
+		expect(data).toMatchObject({ kind: "candidates", capped: true });
+		expect(text).toBe(candidatesSummary("overflowine", 3, 0));
 	});
 
-	it("is_major_therapeutic_interest keeps every ATC code in the data and at most 5 in the summary", async () => {
+	it("is_major_therapeutic_interest names at most 5 ATC codes in the summary", async () => {
 		const codes = ["A10BD20", "A10BD15", "A10BD08", "A10BD07", "A10BD02", "A10BA02", "A10BB01"];
 		const cis = await seedSubstanceMatches(60200600, "MANYCODINE", codes.map(() => null));
 		await seedMitm(cis, codes);
 		const { data, result } = await call(isMajorTherapeuticInterest, { name: "manycodine" });
 		const sorted = codes.toSorted();
-		expect(data).toMatchObject({ kind: "candidates", mitm_total: codes.length, atc_codes: sorted });
+		expect(data).toMatchObject({ kind: "candidates", total: codes.length });
 		const line = firstLine(result);
 		expect(line.match(ATC_CODE)).toEqual(sorted.slice(0, 5));
 		expect(line).toContain(`and ${codes.length - 5} more`);
@@ -1312,14 +1314,10 @@ describe("name search across tools", () => {
 	it("the MITM mix is only on the candidates of is_major_therapeutic_interest", async () => {
 		for (const { data, result } of [await call(getAvailability, { name: "doliprane" }), await call(getMedicineInfo, { name: "doliprane" })]) {
 			expect(data.kind).toBe("candidates");
-			expect(data).not.toHaveProperty("mitm_total");
-			expect(data).not.toHaveProperty("atc_codes");
 			expect(summary(result)).not.toContain("Across all");
 		}
 		for (const args of [{ name: "otherbrand" }, { cis: MEDICINES.kardegic.cis }]) {
-			const { data, result } = await call(isMajorTherapeuticInterest, args);
-			expect(data).not.toHaveProperty("mitm_total");
-			expect(data).not.toHaveProperty("atc_codes");
+			const { result } = await call(isMajorTherapeuticInterest, args);
 			expect(summary(result)).not.toContain("Across all");
 		}
 	});

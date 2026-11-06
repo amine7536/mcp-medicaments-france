@@ -188,8 +188,8 @@ async function byCandidates(
 		resolved.cis.map((c) => shortages.get(c)?.current.id ?? null),
 	);
 	if (group === undefined) {
-		const data = await candidatesData(db, resolved);
-		return { data, summary: candidatesSummary(query, data) };
+		const { data, inShortageTotal } = await candidatesData(db, resolved);
+		return { data, summary: candidatesSummary(query, data.total, inShortageTotal) };
 	}
 	const shown = resolved.cis.slice(0, LINKED_LIMIT);
 	const meds = await getMedicines(db, shown);

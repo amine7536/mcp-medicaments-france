@@ -29,8 +29,15 @@ export async function resolveName(db: D1Database, name: string, cap: number = MA
 
 export const inShortage = (status: string | undefined): boolean => status === "rupture" || status === "tension";
 
-/** The `candidates` data of a resolution: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise in rank order, with holder, marketing and shortage status, MITM status and ATC code. */
-export async function candidatesData(db: D1Database, resolved: Extract<Resolution, { kind: "candidates" }>): Promise<z.infer<typeof Candidates>> {
+/**
+ * The `candidates` data of a resolution: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise in rank order,
+ * with holder, marketing and shortage status, MITM status and ATC code. `inShortageTotal` counts them across all matches; it
+ * stays out of the data because a new field fails the output schema clients have cached.
+ */
+export async function candidatesData(
+	db: D1Database,
+	resolved: Extract<Resolution, { kind: "candidates" }>,
+): Promise<{ data: z.infer<typeof Candidates>; inShortageTotal: number }> {
 	const shortages = await currentShortages(db, resolved.cis);
 	const isInShortage = (c: string): boolean => inShortage(shortages.get(c)?.current.status);
 	const shown = resolved.cis.toSorted((a, b) => Number(isInShortage(b)) - Number(isInShortage(a))).slice(0, RESOLVE_LIMIT);
@@ -51,7 +58,7 @@ export async function candidatesData(db: D1Database, resolved: Extract<Resolutio
 				]
 			: [];
 	});
-	return { kind: "candidates", total: resolved.total, capped: resolved.capped, in_shortage_total: resolved.cis.filter(isInShortage).length, candidates };
+	return { data: { kind: "candidates", total: resolved.total, capped: resolved.capped, candidates }, inShortageTotal: resolved.cis.filter(isInShortage).length };
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */
@@ -70,9 +77,9 @@ export const NO_GUARANTEE = "This does not guarantee availability in your pharma
 
 export const relatedList = (related: ShortageSummary[]): string => related.map((s) => `${s.name} (${s.status})`).join(", ");
 
-export const candidatesSummary = (name: string, { total, in_shortage_total }: z.infer<typeof Candidates>): string =>
-	in_shortage_total > 0
-		? `${total} medicines match "${name}", ${in_shortage_total} of them in rupture or tension and listed first; call again with one cis.`
+export const candidatesSummary = (name: string, total: number, inShortageTotal: number): string =>
+	inShortageTotal > 0
+		? `${total} medicines match "${name}", ${inShortageTotal} of them in rupture or tension and listed first; call again with one cis.`
 		: `${total} medicines match "${name}"; call again with one cis.`;
 
 /** The `not_found` variant and its summary: the spelling suggestion or hint, then any possibly related entries. */
