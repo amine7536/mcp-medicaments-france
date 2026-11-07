@@ -11,6 +11,11 @@ export const ChangeType = z.enum(CHANGE_TYPES);
 export const Cis = z.string().regex(/^\d{8}$/);
 export const Cip13 = z.string().regex(/^\d{13}$/);
 
+/** An output object: served without forbidding extra properties, because clients validate results against the schema they cached. */
+export function outputObject<T extends z.core.$ZodLooseShape>(shape: T) {
+	return z.object(shape).meta({ additionalProperties: {} });
+}
+
 /** EAN-13 check digit of the first 12 digits of a code: weights 1 and 3 alternating from the left. */
 export function ean13CheckDigit(first12: string): number {
 	let sum = 0;
@@ -24,7 +29,7 @@ export const isValidEan13 = (code: string): boolean => /^\d{13}$/.test(code) && 
 /** Below this match confidence a shortage is reported as a probable match. */
 export const PROBABLE_MATCH_BELOW = 0.8;
 
-export const ExpectedReturn = z.object({
+export const ExpectedReturn = outputObject({
 	earliest: z.iso.date().nullable(),
 	latest: z.iso.date().nullable(),
 	precision: z.enum(RETURN_PRECISIONS).nullable(),
@@ -34,7 +39,7 @@ export const ExpectedReturn = z.object({
 });
 export type ExpectedReturn = z.infer<typeof ExpectedReturn>;
 
-export const ShortageSummary = z.object({
+export const ShortageSummary = outputObject({
 	shortage_id: z.string(),
 	name: z.string(),
 	dci: z.string().nullable(),
@@ -52,7 +57,7 @@ export const ShortageSummary = z.object({
 export type ShortageSummary = z.infer<typeof ShortageSummary>;
 
 /** A medicine matching a name, with what tells homonyms apart. */
-export const Candidate = z.object({
+export const Candidate = outputObject({
 	cis: Cis,
 	name: z.string(),
 	holder: z.string().nullable(),
@@ -61,20 +66,20 @@ export const Candidate = z.object({
 	is_mitm: z.boolean(),
 	atc_code: z.string().nullable(),
 });
-export const Candidates = z.object({
+export const Candidates = outputObject({
 	kind: z.literal("candidates"),
 	total: z.int().min(0),
 	capped: z.boolean(),
 	candidates: z.array(Candidate),
 });
-export const NotFound = z.object({
+export const NotFound = outputObject({
 	kind: z.literal("not_found"),
 	possibly_related_shortages: z.array(ShortageSummary),
 	did_you_mean: z.string().nullable(),
 });
 
 /** A BDPM medicine's identity. */
-export const Medicine = z.object({
+export const Medicine = outputObject({
 	cis: Cis,
 	name: z.string(),
 	form: z.string().nullable(),
@@ -86,7 +91,7 @@ export const Medicine = z.object({
 export type Medicine = z.infer<typeof Medicine>;
 
 /** A BDPM presentation (box) of a medicine. */
-export const Presentation = z.object({
+export const Presentation = outputObject({
 	cip13: Cip13,
 	cip7: z.string().nullable(),
 	label: z.string(),
@@ -103,7 +108,7 @@ export const Presentation = z.object({
 export type Presentation = z.infer<typeof Presentation>;
 
 /** An ANSM safety information item of a medicine, as listed in the BDPM: the ANSM page title and link, and its validity window. */
-export const SafetyInformation = z.object({
+export const SafetyInformation = outputObject({
 	title: z.string(),
 	url: z.url(),
 	starts_on: z.iso.date(),

@@ -3,7 +3,7 @@ import { aggregationGroup, getMedicines, type MedicineRow, mitmCodes } from "../
 import { envelope, envelopeSchema, errorResult, loadSourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesData, candidatesSummary, notFound, type Resolution, resolveName } from "../resolve";
 import { LINKED_LIMIT } from "./getAvailability";
-import { Candidates, Cis, NotFound } from "../schemas";
+import { Candidates, Cis, NotFound, outputObject } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 export const MITM_DEFINITION =
@@ -15,7 +15,7 @@ export const inputSchema = z.object({
 });
 
 export const Data = z.discriminatedUnion("kind", [
-	z.object({
+	outputObject({
 		kind: z.literal("mitm"),
 		cis: Cis,
 		name: z.string(),
@@ -23,13 +23,13 @@ export const Data = z.discriminatedUnion("kind", [
 		atc_code: z.string().nullable(),
 		source: z.string(),
 	}),
-	z.object({
+	outputObject({
 		kind: z.literal("aggregated"),
 		query: z.string(),
 		total: z.int().min(0),
 		is_mitm: z.boolean(),
 		atc_code: z.string().nullable(),
-		medicines: z.array(z.object({ cis: Cis, name: z.string() })),
+		medicines: z.array(outputObject({ cis: Cis, name: z.string() })),
 		source: z.string(),
 	}),
 	Candidates,

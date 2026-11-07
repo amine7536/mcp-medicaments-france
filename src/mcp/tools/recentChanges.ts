@@ -2,7 +2,7 @@ import * as z from "zod";
 import { ANSM_ORIGIN } from "../../ingest/http";
 import { recentChanges as loadChanges } from "../../lib/db";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
-import { CHANGE_TYPES, ChangeType, Status } from "../schemas";
+import { CHANGE_TYPES, ChangeType, outputObject, Status } from "../schemas";
 import { INFO_ONLY, type Tool } from "../tool";
 
 export const CHANGES_NOTE = "Dates are detection dates by this service (daily cadence), not official ANSM decision dates.";
@@ -16,13 +16,13 @@ export const inputSchema = z.object({
 });
 
 export const Data = z.discriminatedUnion("kind", [
-	z.object({
+	outputObject({
 		kind: z.literal("changes"),
 		since: z.iso.datetime(),
 		counts: z.partialRecord(ChangeType, z.int().min(0)),
 		tracking_since: z.iso.datetime().nullable(),
 		items: z.array(
-			z.object({
+			outputObject({
 				date: z.iso.datetime(),
 				change: ChangeType,
 				shortage_id: z.string(),

@@ -1,12 +1,13 @@
 import { env } from "cloudflare:workers";
-import type { CallToolResult } from "@modelcontextprotocol/server";
+import type { CallToolResult, JsonSchemaType } from "@modelcontextprotocol/server";
+import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
 import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { CHANGE_TYPES, describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
 import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from "../src/mcp/resolve";
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
@@ -16,6 +17,7 @@ import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
 import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
+import publishedOutputSchemas from "./fixtures/output-schemas.json";
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}, imported 2026-10-05).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown, imported unknown).";
@@ -41,15 +43,23 @@ const brokenDb = (): D1Database =>
 		},
 	});
 
+/** Clients validate results against the output schema they cached: the strict one published by 1.12.0 and 1.13.1. */
+const jsonSchemaValidator = new CfWorkerJsonSchemaValidator();
+const publishedValidators = new Map(Object.entries(publishedOutputSchemas).map(([name, schema]) => [name, jsonSchemaValidator.getValidator(schema as JsonSchemaType)]));
+
 /**
  * Calls a handler with arguments parsed by its input schema; every non-error result is checked against
- * the tool's output schema and the envelope fields, and its data returned.
+ * the tool's output schema, the published output schema and the envelope fields, and its data returned.
  */
 async function call<I extends z.ZodObject, O extends z.ZodType>(tool: Tool<I, O>, args: z.input<I>, at: Date = NOW) {
 	const { result } = await tool.handler({ ...ctx, now: at }, tool.inputSchema.parse(args));
 	if (result.isError) return { result, data: undefined as never, sc: undefined as never };
 	const parsed = tool.outputSchema.safeParse(result.structuredContent);
 	expect(parsed.error).toBeUndefined();
+	// Parsing strips unknown keys, but the SDK sends the handler's structuredContent: validate what is sent.
+	const validate = publishedValidators.get(tool.name);
+	expect(validate).toBeDefined();
+	expect(validate?.(result.structuredContent)).toMatchObject({ valid: true });
 	const sc = result.structuredContent as {
 		data: Record<string, unknown> & { kind: string };
 		source: Record<string, unknown>;
@@ -1061,6 +1071,127 @@ describe("name search across tools", () => {
 	afterAll(seed);
 
 	const resultCis = (data: { results: Array<{ cis: string }> }) => data.results.map((r) => r.cis);
+
+	// `call()` validates each response against the published schema; this test makes sure every kind and every
+	// nested shape is reached with content, since an empty or null value validates nothing.
+	it("every response kind validates against the published output schema", async () => {
+		const filled = (value: unknown) => {
+			expect(value).toBeDefined();
+			expect(value).not.toBeNull();
+			if (Array.isArray(value)) expect(value.length).toBeGreaterThan(0);
+		};
+		const some = <T>(items: T[], pick: (item: T) => unknown) => filled(items.map(pick).find((v) => v !== null && (!Array.isArray(v) || v.length > 0)));
+		const changes = (items: Array<{ change: string }>) => expect(new Set(items.map((i) => i.change))).toEqual(new Set(CHANGE_TYPES));
+
+		const search = (await call(searchMedicine, { query: "doliprane" })).data;
+		expect(search.kind).toBe("results");
+		filled(search.results);
+		some(search.results, (r: { shortage: unknown }) => r.shortage);
+		some(search.results, (r: { substances: unknown[] }) => r.substances);
+		filled(search.unmatched_shortages);
+
+		const byCip13 = (await call(searchMedicine, { query: INVALID_CIP13 })).data;
+		expect(byCip13.kind).toBe("results");
+		filled(byCip13.invalid_cip13);
+
+		const stale = await call(searchMedicine, { query: "kardegic" }, new Date("2026-10-30T06:00:00.000Z"));
+		expect(stale.data.kind).toBe("results");
+		filled(stale.sc.warning);
+
+		const tablet = SHORTAGES.dolipraneRupture.id;
+		await env.DB.batch(
+			[
+				["delisted", "2026-10-26T06:00:00.000Z"],
+				["relisted", "2026-10-26T07:00:00.000Z"],
+			].map(([type, at]) =>
+				env.DB.prepare("INSERT INTO status_history (shortage_id, change_type, detected_at) VALUES (?, ?, ?)").bind(tablet, type, at),
+			),
+		);
+		try {
+			const availability = (await call(getAvailability, { cis: MEDICINES.dolipraneTablet.cis })).data;
+			expect(availability.kind).toBe("availability");
+			for (const v of [availability.medicine, availability.linked_medicines, availability.shortage, availability.other_shortage_ids, availability.history]) filled(v);
+			changes(availability.history);
+
+			const recent = (await call(recentChanges, { days: 90 })).data;
+			expect(recent.kind).toBe("changes");
+			filled(recent.items);
+			changes(recent.items);
+			filled(Object.keys(recent.counts));
+		} finally {
+			await env.DB.prepare("DELETE FROM status_history WHERE shortage_id = ? AND change_type IN ('delisted', 'relisted')").bind(tablet).run();
+		}
+
+		const capsule = (await call(getAvailability, { cis: MEDICINES.dolipraneCapsule.cis })).data;
+		expect(capsule.kind).toBe("availability");
+		filled(capsule.possibly_related_shortages);
+
+		const probable = (await call(getAvailability, { cis: MEDICINES.amoxicilline.cis })).data;
+		expect(probable.kind).toBe("availability");
+		filled(probable.shortage?.match_note);
+
+		const shared = (await call(getAvailability, { name: "testbrand" })).data;
+		expect(shared.kind).toBe("aggregated");
+		filled(shared.shortage);
+		filled(shared.medicines);
+
+		const related = (await call(getAvailability, { name: "iomerontest" })).data;
+		expect(related.kind).toBe("aggregated");
+		filled(related.medicines);
+		filled(related.possibly_related_shortages);
+
+		const availabilityCandidates = (await call(getAvailability, { name: "otherbrand" })).data;
+		expect(availabilityCandidates.kind).toBe("candidates");
+		filled(availabilityCandidates.candidates);
+
+		const availabilityNotFound = (await call(getAvailability, { name: "spasfon" })).data;
+		expect(availabilityNotFound.kind).toBe("not_found");
+		filled(availabilityNotFound.possibly_related_shortages);
+
+		const list = (await call(listCurrentShortages, {})).data;
+		expect(list.kind).toBe("list");
+		filled(list.items);
+		some(list.items, (i: { cis: string[] }) => i.cis);
+
+		const unknownArea = (await call(listCurrentShortages, { therapeutic_area: "zzzunknown" })).data;
+		expect(unknownArea.kind).toBe("list");
+		filled(unknownArea.available_areas);
+
+		const mitm = (await call(isMajorTherapeuticInterest, { cis: MEDICINES.dolipraneTablet.cis })).data;
+		expect(mitm.kind).toBe("mitm");
+		filled(mitm.atc_code);
+
+		const mitmAggregated = (await call(isMajorTherapeuticInterest, { name: "otherbrand" })).data;
+		expect(mitmAggregated.kind).toBe("aggregated");
+		filled(mitmAggregated.medicines);
+
+		const mitmCandidates = (await call(isMajorTherapeuticInterest, { name: "splitbrand" })).data;
+		expect(mitmCandidates.kind).toBe("candidates");
+		filled(mitmCandidates.candidates);
+
+		const mitmNotFound = (await call(isMajorTherapeuticInterest, { name: "doliprame" })).data;
+		expect(mitmNotFound.kind).toBe("not_found");
+		filled(mitmNotFound.did_you_mean);
+
+		const info = (await call(getMedicineInfo, { cis: MEDICINES.dolipraneTablet.cis })).data;
+		expect(info.kind).toBe("info");
+		filled(info.medicine);
+		filled(info.presentations);
+		filled(info.ansm_shortage);
+
+		const infoConditions = (await call(getMedicineInfo, { cis: MEDICINES.amoxicilline.cis })).data;
+		expect(infoConditions.kind).toBe("info");
+		filled(infoConditions.prescription_conditions);
+		filled(infoConditions.safety_information);
+
+		const infoCandidates = (await call(getMedicineInfo, { name: "otherbrand" })).data;
+		expect(infoCandidates.kind).toBe("candidates");
+		filled(infoCandidates.candidates);
+
+		const infoNotFound = (await call(getMedicineInfo, { name: "doliprame" })).data;
+		expect(infoNotFound.kind).toBe("not_found");
+		filled(infoNotFound.did_you_mean);
+	});
 
 	it("search_medicine ranks a brand prefix of the query before a substance-only match", async () => {
 		const ids = resultCis((await call(searchMedicine, { query: "lévothyroxine", limit: 25 })).data);

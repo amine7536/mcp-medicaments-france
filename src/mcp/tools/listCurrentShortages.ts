@@ -2,7 +2,7 @@ import * as z from "zod";
 import { areaKnown, listedAreas, listShortages } from "../../lib/db";
 import { normalize } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
-import { Cis, describeShortage, Scope, ShortageSummary, Status, toShortageSummary } from "../schemas";
+import { Cis, describeShortage, outputObject, Scope, ShortageSummary, Status, toShortageSummary } from "../schemas";
 import { INFO_ONLY, type Tool } from "../tool";
 
 /** `scope` filter value → accepted `shortages.scope` values: a city or hospital filter includes city-and-hospital entries. */
@@ -23,10 +23,10 @@ export const inputSchema = z.object({
 });
 
 export const Data = z.discriminatedUnion("kind", [
-	z.object({
+	outputObject({
 		kind: z.literal("list"),
 		total: z.int().min(0),
-		items: z.array(ShortageSummary.extend({ cis: z.array(Cis) })),
+		items: z.array(ShortageSummary.extend({ cis: z.array(Cis) }).meta({ additionalProperties: {} })),
 		next_offset: z.int().min(0).nullable(),
 		available_areas: z.array(z.string()).optional(),
 	}),

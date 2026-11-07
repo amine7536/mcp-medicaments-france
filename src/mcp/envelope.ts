@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import * as z from "zod";
 import { ANSM_LIST_URL } from "../ingest/http";
+import { outputObject } from "./schemas";
 
 export const ANSM_SOURCE_URL = ANSM_LIST_URL;
 export const BDPM_SOURCE_URL = "https://base-donnees-publique.medicaments.gouv.fr";
@@ -45,9 +46,9 @@ export async function loadSourceDates(db: D1Database): Promise<SourceDates> {
 }
 
 export function envelopeSchema<D extends z.ZodType>(data: D) {
-	return z.object({
+	return outputObject({
 		data,
-		source: z.object({
+		source: outputObject({
 			ansm: z.literal(ANSM_SOURCE_URL),
 			bdpm: z.literal(BDPM_SOURCE_URL),
 			ansm_last_ingest: z.iso.datetime().nullable(),

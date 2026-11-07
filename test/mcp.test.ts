@@ -37,6 +37,33 @@ async function rpc(id: number, method: string, params: Record<string, unknown>, 
 	return response as { result: Record<string, unknown> };
 }
 
+async function servedOutputSchemas(): Promise<Record<string, unknown>> {
+	const list = await rpc(2, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
+	const tools = list.result.tools as Array<{ name: string; outputSchema: object }>;
+	return Object.fromEntries(tools.map((t) => [t.name, t.outputSchema]));
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const isEmptyObject = (v: unknown): boolean => isObject(v) && Object.keys(v).length === 0;
+
+/** Every object node of a JSON value, the root included. */
+function schemaNodes(value: unknown): Array<Record<string, unknown>> {
+	if (Array.isArray(value)) return value.flatMap(schemaNodes);
+	if (!isObject(value)) return [];
+	return [value, ...Object.values(value).flatMap(schemaNodes)];
+}
+
+/** The value with every `additionalProperties` of `false` or `{}` removed; any other value is kept and compared. */
+function withoutLooseness(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(withoutLooseness);
+	if (!isObject(value)) return value;
+	return Object.fromEntries(
+		Object.entries(value)
+			.filter(([k, v]) => !(k === "additionalProperties" && (v === false || isEmptyObject(v))))
+			.map(([k, v]) => [k, withoutLooseness(v)]),
+	);
+}
+
 // Seeding and many D1 round-trips run slower on CI runners.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -72,12 +99,24 @@ describe("/mcp", () => {
 		}
 	});
 
-	// Clients validate results against the output schema they cached, and every object sets `additionalProperties: false`,
-	// so any change here, even a new optional field, fails on clients connected before the release.
-	it("keeps the output schemas clients have cached", async () => {
-		const list = await rpc(2, "tools/list", {}, { "MCP-Protocol-Version": PROTOCOL_VERSION });
-		const tools = list.result.tools as Array<{ name: string; outputSchema: object }>;
-		expect(Object.fromEntries(tools.map((t) => [t.name, t.outputSchema]))).toEqual(publishedOutputSchemas);
+	// Clients validate results against the output schema they cached. The fixture is the strict schema published by 1.12.0 and 1.13.1:
+	// the served schema keeps its fields and only stops forbidding extra properties.
+	it("serves the published output fields", async () => {
+		const served = await servedOutputSchemas();
+		expect(withoutLooseness(served)).toEqual(withoutLooseness(publishedOutputSchemas));
+	});
+
+	it("serves no output object that forbids extra properties", async () => {
+		const served = await servedOutputSchemas();
+		expect(schemaNodes(served).filter((n) => n.additionalProperties === false)).toEqual([]);
+	});
+
+	it("the published output schema fixture stays strict", () => {
+		const nodes = schemaNodes(publishedOutputSchemas);
+		const withProperties = nodes.filter((n) => "properties" in n);
+		expect(withProperties.length).toBeGreaterThan(0);
+		for (const n of withProperties) expect(n.additionalProperties).toBe(false);
+		expect(nodes.filter((n) => isEmptyObject(n.additionalProperties))).toEqual([]);
 	});
 
 	it("returns a tool result through the SDK output validation", async () => {
