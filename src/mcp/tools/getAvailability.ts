@@ -3,7 +3,7 @@ import { aggregationGroup, currentShortages, getHistory, getMedicines, getShorta
 import { normalize } from "../../lib/normalize";
 import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
 import { candidatesData, candidatesSummary, NO_GUARANTEE, notFound, possiblyRelated, type Resolution, relatedList, resolveName } from "../resolve";
-import { Candidates, Cis, describeShortage, NotFound, type ShortageRow, ShortageSummary, Status, toShortageSummary } from "../schemas";
+import { Candidates, Cis, describeShortage, NotFound, outputObject, type ShortageRow, ShortageSummary, Status, toShortageSummary } from "../schemas";
 import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 export const NOT_LISTED = `No shortage currently listed by ANSM for this medicine. ${NO_GUARANTEE}`;
@@ -21,21 +21,21 @@ export const inputSchema = z.object({
 });
 
 const HistoryItem = z.discriminatedUnion("change", [
-	z.object({ date: z.iso.date(), change: z.literal("new"), status: Status.nullable() }),
-	z.object({ date: z.iso.date(), change: z.literal("status_change"), from: Status.nullable(), to: Status.nullable() }),
-	z.object({ date: z.iso.date(), change: z.literal("return_date_change"), from_raw: z.string().nullable(), to_raw: z.string().nullable() }),
-	z.object({ date: z.iso.date(), change: z.literal("delisted") }),
-	z.object({ date: z.iso.date(), change: z.literal("relisted") }),
+	outputObject({ date: z.iso.date(), change: z.literal("new"), status: Status.nullable() }),
+	outputObject({ date: z.iso.date(), change: z.literal("status_change"), from: Status.nullable(), to: Status.nullable() }),
+	outputObject({ date: z.iso.date(), change: z.literal("return_date_change"), from_raw: z.string().nullable(), to_raw: z.string().nullable() }),
+	outputObject({ date: z.iso.date(), change: z.literal("delisted") }),
+	outputObject({ date: z.iso.date(), change: z.literal("relisted") }),
 ]);
 type HistoryItem = z.infer<typeof HistoryItem>;
 
 const StatusSinceSource = z.enum(["ansm", "service"]);
 
 export const Data = z.discriminatedUnion("kind", [
-	z.object({
+	outputObject({
 		kind: z.literal("availability"),
-		medicine: z.object({ cis: Cis, name: z.string(), is_mitm: z.boolean() }).nullable(),
-		linked_medicines: z.array(z.object({ cis: Cis, name: z.string(), match_confidence: z.number() })),
+		medicine: outputObject({ cis: Cis, name: z.string(), is_mitm: z.boolean() }).nullable(),
+		linked_medicines: z.array(outputObject({ cis: Cis, name: z.string(), match_confidence: z.number() })),
 		linked_medicines_total: z.int().min(0),
 		listed: z.boolean(),
 		shortage: ShortageSummary.nullable(),
@@ -46,12 +46,12 @@ export const Data = z.discriminatedUnion("kind", [
 		other_shortage_ids: z.array(z.string()),
 		possibly_related_shortages: z.array(ShortageSummary),
 	}),
-	z.object({
+	outputObject({
 		kind: z.literal("aggregated"),
 		query: z.string(),
 		total: z.int().min(0),
 		shortage: ShortageSummary.nullable(),
-		medicines: z.array(z.object({ cis: Cis, name: z.string() })),
+		medicines: z.array(outputObject({ cis: Cis, name: z.string() })),
 		/** With no shared entry: listed entries whose name contains the query's brand token, matched or not. */
 		possibly_related_shortages: z.array(ShortageSummary),
 	}),

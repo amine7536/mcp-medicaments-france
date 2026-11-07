@@ -10,6 +10,7 @@ import {
 	isValidEan13,
 	Medicine,
 	NotFound,
+	outputObject,
 	Presentation,
 	SafetyInformation,
 	type ShortageRow,
@@ -35,7 +36,7 @@ export const inputSchema = z.object({
 });
 
 export const Data = z.discriminatedUnion("kind", [
-	z.object({
+	outputObject({
 		kind: z.literal("info"),
 		medicine: Medicine,
 		presentations: z.array(Presentation),
