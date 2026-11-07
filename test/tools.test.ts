@@ -1035,6 +1035,9 @@ describe("name search across tools", () => {
 			holder: "LAB H",
 			marketing_status: MEDICINE_MARKETED,
 		})),
+		// "5"* also matches the 5 of 2,5.
+		{ cis: "60100016", name: "DOSEBRAND 5 mg, gélule", substance: "DOSINE", holder: "LAB I", marketing_status: MEDICINE_MARKETED },
+		{ cis: "60100017", name: "DOSEBRAND 2,5 mg, comprimé sécable", substance: "DOSINE", holder: "LAB I", marketing_status: MEDICINE_MARKETED },
 	];
 	/** ATC code shared by the two OTHERBRAND medicines, both on the MITM list. */
 	const otherbrandAtc = "C09AA05";
@@ -1172,6 +1175,18 @@ describe("name search across tools", () => {
 		const mitmCandidates = (await call(isMajorTherapeuticInterest, { name: "splitbrand" })).data;
 		expect(mitmCandidates.kind).toBe("candidates");
 		filled(mitmCandidates.candidates);
+
+		// A best match: both added fields are filled.
+		const bests = [
+			(await call(getAvailability, { name: "limitbrand 1 mg" })).data,
+			(await call(isMajorTherapeuticInterest, { name: "limitbrand 1 mg" })).data,
+			(await call(getMedicineInfo, { name: "levothyrox 100" })).data,
+		];
+		for (const best of bests) {
+			expect(best.kind).toBe("candidates");
+			filled(best.best_match_total);
+			some(best.candidates, (c: { best_match?: true }) => c.best_match);
+		}
 
 		// More matches than shown, with a complete set: the MITM mix is in the data.
 		const mixCodes = [...Array.from({ length: RESOLVE_LIMIT }, () => "A10BA02"), "A10BD02", null];
@@ -1322,6 +1337,61 @@ describe("name search across tools", () => {
 		expect(data).not.toHaveProperty("atc_codes");
 	});
 
+	it("a name lookup flags the asked brand and dose first and drops nothing", async () => {
+		const { data } = await call(getMedicineInfo, { name: "levothyrox 100" });
+		// THYROFIX 100 matches through its substance LEVOTHYROXINE: it stays, unflagged.
+		expect(data).toMatchObject({ kind: "candidates", total: 2, best_match_total: 1 });
+		expect(data.candidates[0]).toMatchObject({ cis: "60100001", best_match: true });
+		const thyrofix = data.candidates.find((c: { cis: string }) => c.cis === "60100002");
+		expect(thyrofix).toBeDefined();
+		expect(thyrofix).not.toHaveProperty("best_match");
+	});
+
+	it("a query with a number does not aggregate different doses", async () => {
+		// The prefix "1" matches LIMITBRAND 1 mg and 10 to 19 mg.
+		const matches = 11;
+		const availability = await call(getAvailability, { name: "limitbrand 1 mg" });
+		const mitm = await call(isMajorTherapeuticInterest, { name: "limitbrand 1 mg" });
+		for (const { data } of [availability, mitm]) {
+			expect(data).toMatchObject({ kind: "candidates", total: matches, best_match_total: 1 });
+			expect(data.candidates[0]).toMatchObject({ cis: "60100100", best_match: true });
+		}
+		expect(mitm.data).toMatchObject({ mitm_total: 0, atc_codes: [] });
+		const line = firstLine(mitm.result);
+		expect(line).toBe(`${candidatesSummary("limitbrand 1 mg", matches, 0, 1)} ${mixSentence(matches, 0, [])}`);
+		expect(line).not.toContain("ATC");
+	});
+
+	it("a name lookup with a number matching no dose flags nothing", async () => {
+		// The prefix "1" matches LEVOTHYROX 100 and THYROFIX 100, neither of dose 1.
+		const { data } = await call(getMedicineInfo, { name: "levothyrox 1" });
+		expect(data).toMatchObject({ kind: "candidates", total: 2 });
+		expect(data).not.toHaveProperty("best_match_total");
+		for (const c of data.candidates) expect(c).not.toHaveProperty("best_match");
+	});
+
+	it("a medicine in rupture or tension stays ahead of the best match", async () => {
+		await env.DB.prepare("INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES (?, '60100017', 'exact', 1, 1)")
+			.bind(SHORTAGES.dolipraneRupture.id)
+			.run();
+		try {
+			const { data, result } = await call(getMedicineInfo, { name: "dosebrand 5 mg" });
+			expect(data).toMatchObject({ kind: "candidates", total: 2, best_match_total: 1 });
+			expect(data.candidates[0]).toMatchObject({ cis: "60100017", shortage_status: "rupture" });
+			expect(data.candidates[0]).not.toHaveProperty("best_match");
+			expect(data.candidates[1]).toMatchObject({ cis: "60100016", best_match: true });
+			expect(firstLine(result)).toBe(candidatesSummary("dosebrand 5 mg", 2, 1, 1));
+		} finally {
+			await env.DB.prepare("DELETE FROM shortage_matches WHERE cis = '60100017'").run();
+		}
+	});
+
+	it("get_availability still aggregates a query with a number when every match has the same dose", async () => {
+		const { data } = await call(getAvailability, { name: "levothyrox 100" });
+		expect(data).toMatchObject({ kind: "aggregated", total: 2, shortage: null });
+		expect(data.medicines[0].cis).toBe("60100001");
+	});
+
 	/**
 	 * Seeds one medicine per entry of `links` (the shortage it is linked to, or null), all sharing `substance` and none
 	 * carrying it in their name. Same tier, marketing status and name length, so rank order is CIS order: the order of `links`.
@@ -1359,7 +1429,7 @@ describe("name search across tools", () => {
 		});
 		// The one in shortage first, the rest in rank order.
 		expect(candidateCis(data)).toEqual([cis[matches - 1], ...cis.slice(0, RESOLVE_LIMIT - 1)]);
-		expect(firstLine(result)).toBe(candidatesSummary("hiddenine", matches, 1));
+		expect(firstLine(result)).toBe(candidatesSummary("hiddenine", matches, 1, 0));
 	});
 
 	it("get_medicine_info shows 10 in shortage and counts them all when more are", async () => {
@@ -1371,7 +1441,7 @@ describe("name search across tools", () => {
 		// Rupture and tension are not ordered against each other: rank order holds within the medicines in shortage.
 		expect(candidateCis(data)).toEqual(cis.slice(2, 2 + RESOLVE_LIMIT));
 		// The count across all matches reaches the summary, not the number shown.
-		expect(firstLine(result)).toBe(candidatesSummary("crowdine", inShortage + 2, inShortage));
+		expect(firstLine(result)).toBe(candidatesSummary("crowdine", inShortage + 2, inShortage, 0));
 		expect(firstLine(result)).toContain(String(inShortage));
 	});
 
@@ -1393,13 +1463,13 @@ describe("name search across tools", () => {
 		expect(data).toMatchObject({ kind: "candidates", total: 3 });
 		expect(candidateCis(data)).toEqual(cis);
 		expect(statuses(data)).toEqual([null, null, SHORTAGES.remise.status]);
-		expect(firstLine(result)).toBe(candidatesSummary("calmine", 3, 0));
+		expect(firstLine(result)).toBe(candidatesSummary("calmine", 3, 0, 0));
 		// With nothing in shortage, the summary is not the sentence that announces medicines in shortage.
-		expect(firstLine(result)).not.toBe(candidatesSummary("calmine", 3, 1));
+		expect(firstLine(result)).not.toBe(candidatesSummary("calmine", 3, 1, 0));
 	});
 
 	it("get_availability and is_major_therapeutic_interest report the medicines in rupture or tension of their candidates", async () => {
-		const expected = candidatesSummary("doliprane", 2, 1);
+		const expected = candidatesSummary("doliprane", 2, 1, 0);
 		const availability = await call(getAvailability, { name: "doliprane" });
 		expect(availability.data).toMatchObject({ kind: "candidates", total: 2 });
 		expect(availability.data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
@@ -1427,7 +1497,7 @@ describe("name search across tools", () => {
 		// The data shows the mix the rows hide.
 		expect(data).toMatchObject({ mitm_total: codes.length - 1, atc_codes: ["A10BA02", "A10BD02"] });
 		const line = firstLine(result);
-		expect(line).toBe(`${candidatesSummary("uniformine", codes.length, 0)} ${mixSentence(codes.length, codes.length - 1, ["A10BA02", "A10BD02"])}`);
+		expect(line).toBe(`${candidatesSummary("uniformine", codes.length, 0, 0)} ${mixSentence(codes.length, codes.length - 1, ["A10BA02", "A10BD02"])}`);
 		expect(line.match(ATC_CODE)).toEqual(["A10BA02", "A10BD02"]);
 		expect(line).toContain(`${codes.length - 1} on the BDPM MITM list`);
 		expect(line).toContain("1 not");
@@ -1443,7 +1513,7 @@ describe("name search across tools", () => {
 		expect(data).toMatchObject({ kind: "candidates", capped: true });
 		expect(data).not.toHaveProperty("mitm_total");
 		expect(data).not.toHaveProperty("atc_codes");
-		expect(text).toBe(candidatesSummary("overflowine", 3, 0));
+		expect(text).toBe(candidatesSummary("overflowine", 3, 0, 0));
 	});
 
 	it("is_major_therapeutic_interest names at most 5 ATC codes in the summary", async () => {

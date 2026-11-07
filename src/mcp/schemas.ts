@@ -65,12 +65,16 @@ export const Candidate = outputObject({
 	shortage_status: Status.nullable(),
 	is_mitm: z.boolean(),
 	atc_code: z.string().nullable(),
+	/** Its name matches the brand and dose of the query; absent otherwise. */
+	best_match: z.literal(true).optional(),
 });
 export const Candidates = outputObject({
 	kind: z.literal("candidates"),
 	total: z.int().min(0),
 	capped: z.boolean(),
 	candidates: z.array(Candidate),
+	/** How many matches carry `best_match`, shown or not; absent when none does. */
+	best_match_total: z.int().min(1).optional(),
 });
 export const NotFound = outputObject({
 	kind: z.literal("not_found"),

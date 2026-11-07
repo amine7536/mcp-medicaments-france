@@ -1,5 +1,5 @@
 import manualMatches from "../data/manual_matches.json";
-import { tokens } from "../lib/normalize";
+import { NUMERIC, tokens } from "../lib/normalize";
 import { log } from "./http";
 
 export type MatchMethod = "manual" | "dispo" | "exact" | "fuzzy" | "sibling";
@@ -54,7 +54,6 @@ interface Candidate {
 }
 
 const ROWS_PER_INSERT = 20; // 5 columns x 20 rows = 100 bound parameters (limit 100)
-const NUMERIC = /^\d+(\.\d+)?$/;
 const FUZZY_MIN_SCORE = 0.8;
 const DOSE = String.raw`\d+(?:\.\d+)? (?:MG|G|MCG|UI)`;
 /** The first dose list: two or more doses separated by single spaces, `ET` before the last, each delimited by a space or the string ends. */

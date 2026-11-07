@@ -1,5 +1,5 @@
-import { currentShortages, getMedicines, MATCH_CAP, type MedicineRow, relatedShortages, searchNames } from "../lib/db";
-import { normalize, tokens } from "../lib/normalize";
+import { currentShortages, getMedicines, MATCH_CAP, type MedicineRow, type NameMatch, relatedShortages, searchNames } from "../lib/db";
+import { normalize, NUMERIC, tokens } from "../lib/normalize";
 import type * as z from "zod";
 import type { Candidates, NotFound, ShortageRow, ShortageSummary } from "./schemas";
 import { NOT_FOUND_HINT } from "./tool";
@@ -9,9 +9,51 @@ export const RELATED_LIMIT = 5;
 
 export type Resolution =
 	| { kind: "cis"; medicine: MedicineRow }
-	/** Every ranked CIS of the exact match set (at most `MATCH_CAP`). */
-	| { kind: "candidates"; total: number; capped: boolean; cis: string[] }
+	/**
+	 * Every ranked CIS of the exact match set (at most `MATCH_CAP`), best matches first; `best` the best matches and
+	 * `splitsDose` whether the query's number splits the matches across doses, both over the fetched matches.
+	 */
+	| { kind: "candidates"; total: number; capped: boolean; cis: string[]; best: string[]; splitsDose: boolean }
 	| { kind: "not_found"; did_you_mean: string | null };
+
+/** The query's tokens from its first number after its first token to its end; null when it has no such number. */
+function doseTail(query: string): string[] | null {
+	const toks = tokens(normalize(query));
+	const at = toks.findIndex((t, i) => i > 0 && NUMERIC.test(t));
+	return at < 0 ? null : toks.slice(at);
+}
+
+/** A name's tokens from its first number; empty when it has none. */
+function fromFirstNumber(norm: string): string[] {
+	const toks = tokens(norm);
+	const at = toks.findIndex((t) => NUMERIC.test(t));
+	return at < 0 ? [] : toks.slice(at);
+}
+
+/**
+ * The CIS of the matches naming the query's brand and dose, in the given order: same first token as the query (tier 0),
+ * and tokens from the first number starting with the query's, a trailing number not continued by a 3-digit group
+ * (`10` is not `10 000 UI`).
+ */
+export function bestMatches(query: string, matches: readonly NameMatch[]): string[] {
+	const tail = doseTail(query);
+	if (tail === null) return [];
+	const endsWithNumber = NUMERIC.test(tail[tail.length - 1] as string);
+	return matches
+		.filter((m) => {
+			if (m.tier !== 0) return false;
+			const dose = fromFirstNumber(m.denomination_norm);
+			if (!tail.every((t, i) => dose[i] === t)) return false;
+			return !(endsWithNumber && /^\d{3}$/.test(dose[tail.length] ?? ""));
+		})
+		.map((m) => m.cis);
+}
+
+/** Whether the query has a number and the matches do not all have the same first dose (first number and the token after it). */
+export function splitsDose(query: string, matches: readonly NameMatch[]): boolean {
+	if (doseTail(query) === null) return false;
+	return new Set(matches.map((m) => fromFirstNumber(m.denomination_norm).slice(0, 2).join(" "))).size > 1;
+}
 
 /** Resolves a medicine name to one CIS, ranked candidates, or nothing (with a spelling suggestion). Misspellings never resolve. */
 export async function resolveName(db: D1Database, name: string, cap: number = MATCH_CAP): Promise<Resolution> {
@@ -24,15 +66,19 @@ export async function resolveName(db: D1Database, name: string, cap: number = MA
 		const medicine = (await getMedicines(db, [single.cis])).get(single.cis);
 		if (medicine) return { kind: "cis", medicine };
 	}
-	return { kind: "candidates", total: search.total, capped: search.capped, cis: search.matches.map((m) => m.cis) };
+	const best = bestMatches(name, search.matches);
+	const isBest = new Set(best);
+	const rest = search.matches.flatMap((m) => (isBest.has(m.cis) ? [] : [m.cis]));
+	return { kind: "candidates", total: search.total, capped: search.capped, cis: [...best, ...rest], best, splitsDose: splitsDose(name, search.matches) };
 }
 
 export const inShortage = (status: string | undefined): boolean => status === "rupture" || status === "tension";
 
 /**
- * The `candidates` data of a resolution: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise in rank order,
- * with holder, marketing and shortage status, MITM status and ATC code. `inShortageTotal` counts them across all matches; it
- * stays out of the data because a new field fails the output schema clients have cached.
+ * The `candidates` data of a resolution: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise in resolution
+ * order, with holder, marketing and shortage status, MITM status and ATC code, `best_match` on the best matches shown and
+ * `best_match_total` when there is one. `inShortageTotal` counts them across all matches; it stays out of the data because
+ * #71 is closed.
  */
 export async function candidatesData(
 	db: D1Database,
@@ -42,6 +88,7 @@ export async function candidatesData(
 	const isInShortage = (c: string): boolean => inShortage(shortages.get(c)?.current.status);
 	const shown = resolved.cis.toSorted((a, b) => Number(isInShortage(b)) - Number(isInShortage(a))).slice(0, RESOLVE_LIMIT);
 	const meds = await getMedicines(db, shown);
+	const best = new Set(resolved.best);
 	const candidates = shown.flatMap((c) => {
 		const m = meds.get(c);
 		return m
@@ -54,11 +101,21 @@ export async function candidatesData(
 						shortage_status: shortages.get(c)?.current.status ?? null,
 						is_mitm: m.is_mitm,
 						atc_code: m.atc_code,
+						...(best.has(c) ? { best_match: true as const } : {}),
 					},
 				]
 			: [];
 	});
-	return { data: { kind: "candidates", total: resolved.total, capped: resolved.capped, candidates }, inShortageTotal: resolved.cis.filter(isInShortage).length };
+	return {
+		data: {
+			kind: "candidates",
+			total: resolved.total,
+			capped: resolved.capped,
+			candidates,
+			...(resolved.best.length > 0 ? { best_match_total: resolved.best.length } : {}),
+		},
+		inShortageTotal: resolved.cis.filter(isInShortage).length,
+	};
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */
@@ -77,10 +134,11 @@ export const NO_GUARANTEE = "This does not guarantee availability in your pharma
 
 export const relatedList = (related: ShortageSummary[]): string => related.map((s) => `${s.name} (${s.status})`).join(", ");
 
-export const candidatesSummary = (name: string, total: number, inShortageTotal: number): string =>
-	inShortageTotal > 0
+export const candidatesSummary = (name: string, total: number, inShortageTotal: number, bestMatchTotal: number): string =>
+	(inShortageTotal > 0
 		? `${total} medicines match "${name}", ${inShortageTotal} of them in rupture or tension and listed first; call again with one cis.`
-		: `${total} medicines match "${name}"; call again with one cis.`;
+		: `${total} medicines match "${name}"; call again with one cis.`) +
+	(bestMatchTotal > 0 ? ` \`best_match\` flags ${bestMatchTotal} of them as matching the name and dose.` : "");
 
 /** The `not_found` variant and its summary: the spelling suggestion or hint, then any possibly related entries. */
 export function notFound(
