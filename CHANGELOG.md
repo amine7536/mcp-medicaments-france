@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.2](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.1...v1.13.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **mcp:** allow extra properties in the served output schemas ([#80](https://github.com/amine7536/mcp-medicaments-france/issues/80)) ([eee07f7](https://github.com/amine7536/mcp-medicaments-france/commit/eee07f73dfb78d27128d5f6c735dd004c40bb377))
+
 ## [1.13.1](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.0...v1.13.1) (2026-11-06)
 
 
