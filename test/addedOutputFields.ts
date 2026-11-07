@@ -21,6 +21,42 @@ export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 		property: "atc_codes",
 		schema: { type: "array", items: { type: "string" } },
 	},
+	{
+		tool: "get_availability",
+		path: "/properties/data/oneOf/2",
+		property: "best_match_total",
+		schema: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+	},
+	{
+		tool: "get_availability",
+		path: "/properties/data/oneOf/2/properties/candidates/items",
+		property: "best_match",
+		schema: { type: "boolean", const: true },
+	},
+	{
+		tool: "is_major_therapeutic_interest",
+		path: "/properties/data/oneOf/2",
+		property: "best_match_total",
+		schema: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+	},
+	{
+		tool: "is_major_therapeutic_interest",
+		path: "/properties/data/oneOf/2/properties/candidates/items",
+		property: "best_match",
+		schema: { type: "boolean", const: true },
+	},
+	{
+		tool: "get_medicine_info",
+		path: "/properties/data/oneOf/1",
+		property: "best_match_total",
+		schema: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+	},
+	{
+		tool: "get_medicine_info",
+		path: "/properties/data/oneOf/1/properties/candidates/items",
+		property: "best_match",
+		schema: { type: "boolean", const: true },
+	},
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);

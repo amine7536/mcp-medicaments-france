@@ -174,7 +174,7 @@ async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ da
 
 /**
  * Several medicines match a name: one answer when every match shares the same current listed entry (or none is
- * listed), otherwise the ranked candidates.
+ * listed) and the query's number does not split them across doses, otherwise the ranked candidates.
  */
 async function byCandidates(
 	db: D1Database,
@@ -182,14 +182,16 @@ async function byCandidates(
 	query: string,
 	resolved: Extract<Resolution, { kind: "candidates" }>,
 ): Promise<{ data: Data; summary: string }> {
-	const shortages = resolved.capped ? new Map() : await currentShortages(db, resolved.cis);
-	const group = aggregationGroup(
-		resolved.capped,
-		resolved.cis.map((c) => shortages.get(c)?.current.id ?? null),
-	);
+	const shortages = resolved.capped || resolved.splitsDose ? new Map() : await currentShortages(db, resolved.cis);
+	const group = resolved.splitsDose
+		? undefined
+		: aggregationGroup(
+				resolved.capped,
+				resolved.cis.map((c) => shortages.get(c)?.current.id ?? null),
+			);
 	if (group === undefined) {
 		const { data, inShortageTotal } = await candidatesData(db, resolved);
-		return { data, summary: candidatesSummary(query, data.total, inShortageTotal) };
+		return { data, summary: candidatesSummary(query, data.total, inShortageTotal, data.best_match_total ?? 0) };
 	}
 	const shown = resolved.cis.slice(0, LINKED_LIMIT);
 	const meds = await getMedicines(db, shown);

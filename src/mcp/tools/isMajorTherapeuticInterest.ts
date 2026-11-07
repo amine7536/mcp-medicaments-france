@@ -50,12 +50,13 @@ export function mixSentence(total: number, mitmTotal: number, atcCodes: string[]
 	const more = atcCodes.length - MIX_CODES_LIMIT;
 	const codes = atcCodes.slice(0, MIX_CODES_LIMIT).join(", ") + (more > 0 ? ` and ${more} more` : "");
 	const rest = total - mitmTotal;
-	return `Across all ${total}: ${mitmTotal} on the BDPM MITM list (ATC ${codes})${rest > 0 ? `, ${rest} not.` : "."}`;
+	return `Across all ${total}: ${mitmTotal} on the BDPM MITM list${atcCodes.length > 0 ? ` (ATC ${codes})` : ""}${rest > 0 ? `, ${rest} not.` : "."}`;
 }
 
 /**
- * Several medicines match a name: one answer when the match set is complete and every match has the same ATC code
- * (or none is on the MITM list), otherwise the ranked candidates with their MITM status.
+ * Several medicines match a name: one answer when the match set is complete, every match has the same ATC code (or none
+ * is on the MITM list) and the query's number does not split the matches across doses, otherwise the ranked candidates
+ * with their MITM status.
  */
 export async function byCandidates(
 	db: D1Database,
@@ -64,13 +65,15 @@ export async function byCandidates(
 	source: string,
 ): Promise<{ data: Data; summary: string }> {
 	const codes = resolved.capped ? new Map<string, string | null>() : await mitmCodes(db, resolved.cis);
-	const group = aggregationGroup(
-		resolved.capped,
-		resolved.cis.map((c) => codes.get(c) ?? null),
-	);
+	const group = resolved.splitsDose
+		? undefined
+		: aggregationGroup(
+				resolved.capped,
+				resolved.cis.map((c) => codes.get(c) ?? null),
+			);
 	if (group === undefined) {
 		const { data, inShortageTotal } = await candidatesData(db, resolved);
-		const summary = candidatesSummary(query, data.total, inShortageTotal);
+		const summary = candidatesSummary(query, data.total, inShortageTotal, data.best_match_total ?? 0);
 		// A capped match set is incomplete, so its mix would be wrong.
 		if (resolved.capped) return { data, summary };
 		const listed = resolved.cis.flatMap((c) => codes.get(c) ?? []);

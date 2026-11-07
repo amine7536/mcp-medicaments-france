@@ -37,6 +37,9 @@ export function tokens(norm: string): string[] {
 	return norm.split(/[ /]+/).filter((tok) => tok !== "" && !STOP_WORDS.has(tok));
 }
 
+/** A number token of a normalized name (decimal comma already turned into a dot). */
+export const NUMERIC = /^\d+(\.\d+)?$/;
+
 /** Tokens as indexed by the FTS5 `unicode61` tokenizer (dots are separators). */
 export function ftsTokens(norm: string): string[] {
 	return tokens(norm).flatMap((tok) => tok.split(".").filter((part) => part !== ""));

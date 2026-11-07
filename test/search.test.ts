@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import { aggregationGroup, inShortageMatches, MEDICINE_MARKETED, mitmCodes, queryTrigrams, rankFuzzy, rankMatches, searchNames } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
+import { bestMatches, splitsDose } from "../src/mcp/resolve";
 import { MEDICINES, seed } from "./seed";
 
 const row = (cis: string, name: string, marketing_status: string | null = MEDICINE_MARKETED) => ({
@@ -66,6 +67,51 @@ describe("rankFuzzy", () => {
 		const { matches, did_you_mean } = rankFuzzy(trigrams, [fuzzy("1", "XYZ 10 mg", "DOLIPRANE")]);
 		expect(matches.map((m) => m.cis)).toEqual(["1"]);
 		expect(did_you_mean).toBe(normalize("doliprane"));
+	});
+});
+
+/** The CIS flagged by `bestMatches` for `query` among one row per name, ranked as `searchNames` ranks them. */
+const flagged = (query: string, ...names: string[]) => bestMatches(query, rankMatches(query, names.map((name, i) => row(String(i + 1), name))));
+const split = (query: string, ...names: string[]) => splitsDose(query, rankMatches(query, names.map((name, i) => row(String(i + 1), name))));
+
+describe("bestMatches", () => {
+	it("flags no row whose dose differs from the query's", () => {
+		expect(flagged("x 1 mg", "X 4 mg/1 ml, solution")).toEqual([]);
+		expect(flagged("x 5 g", "X 5 mg, comprimé")).toEqual([]);
+		expect(flagged("x 10", "X 10 000 UI, solution")).toEqual([]);
+		expect(flagged("x 125", "X 125 100 mg, comprimé")).toEqual([]);
+		expect(flagged("x 5", "X 50 mg, comprimé")).toEqual([]);
+	});
+
+	it("flags no row of another brand with the same dose", () => {
+		expect(flagged("x 5 mg", "Y 5 mg, comprimé")).toEqual([]);
+	});
+
+	it("flags no row for a query without a number, or whose only number is its first token", () => {
+		expect(flagged("x", "X 5 mg, comprimé")).toEqual([]);
+		expect(flagged("x mg", "X 5 mg, comprimé")).toEqual([]);
+		expect(flagged("5 mg", "5 mg, comprimé")).toEqual([]);
+	});
+
+	it("flags the rows naming the query's brand and dose, in rank order, and only them", () => {
+		expect(flagged("x 10 000", "X 10 000 UI, solution")).toEqual(["1"]);
+		expect(flagged("x 2,5 mg", "X 2,5 mg, comprimé")).toEqual(["1"]);
+		expect(flagged("x 100", "X 100 microgrammes, comprimé")).toEqual(["1"]);
+		expect(flagged("x 5 mg", "X 5 mg, gélule", "X 2,5 mg, comprimé", "Y 5 mg, comprimé", "X 5 mg, comprimé sécable")).toEqual(["1", "4"]);
+	});
+});
+
+describe("splitsDose", () => {
+	it("is true when a query with a number matches different first doses", () => {
+		expect(split("x 5 mg", "X 5 mg, gélule", "X 2,5 mg, comprimé")).toBe(true);
+	});
+
+	it("is false when every match has the same first dose", () => {
+		expect(split("x 100", "X 100 microgrammes, comprimé", "Y 100 microgrammes, comprimé")).toBe(false);
+	});
+
+	it("is false for a query without a number, whatever the matches", () => {
+		expect(split("x", "X 5 mg, gélule", "X 2,5 mg, comprimé")).toBe(false);
 	});
 });
 
