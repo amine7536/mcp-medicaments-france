@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { INSTRUCTIONS, SERVER_DESCRIPTION, SERVER_NAME, SERVER_TITLE, SERVER_VERSION, SERVER_WEBSITE_URL } from "../src/mcp/server";
 import { INFO_ONLY } from "../src/mcp/tool";
+import { withAddedFields } from "./addedOutputFields";
 import publishedOutputSchemas from "./fixtures/output-schemas.json";
 import { PRESENTATIONS, seed } from "./seed";
 
@@ -100,10 +101,21 @@ describe("/mcp", () => {
 	});
 
 	// Clients validate results against the output schema they cached. The fixture is the strict schema published by 1.12.0 and 1.13.1:
-	// the served schema keeps its fields and only stops forbidding extra properties.
+	// the served schema keeps its fields, stops forbidding extra properties, and adds only the optional fields of ADDED_OUTPUT_FIELDS.
 	it("serves the published output fields", async () => {
 		const served = await servedOutputSchemas();
-		expect(withoutLooseness(served)).toEqual(withoutLooseness(publishedOutputSchemas));
+		expect(withoutLooseness(served)).toEqual(withoutLooseness(withAddedFields(publishedOutputSchemas)));
+	});
+
+	it("withAddedFields adds listed fields and rejects bad entries", () => {
+		const fixtures = { tool: { type: "object", properties: { a: { type: "string" } }, required: ["a"], additionalProperties: false } };
+		const before = structuredClone(fixtures);
+		const added = withAddedFields(fixtures, [{ tool: "tool", path: "", property: "b", schema: { type: "integer" } }]);
+		expect(added.tool.properties).toEqual({ a: { type: "string" }, b: { type: "integer" } });
+		expect(added.tool.required).toEqual(["a"]);
+		expect(fixtures).toEqual(before);
+		expect(() => withAddedFields(fixtures, [{ tool: "tool", path: "/properties/a", property: "b", schema: {} }])).toThrow();
+		expect(() => withAddedFields(fixtures, [{ tool: "tool", path: "", property: "a", schema: {} }])).toThrow();
 	});
 
 	it("serves no output object that forbids extra properties", async () => {

@@ -32,14 +32,20 @@ export const Data = z.discriminatedUnion("kind", [
 		medicines: z.array(outputObject({ cis: Cis, name: z.string() })),
 		source: z.string(),
 	}),
-	Candidates,
+	outputObject({
+		...Candidates.shape,
+		/** How many of all `total` matches are on the BDPM MITM list; only on a complete match set with more matches than shown. */
+		mitm_total: z.int().min(0).optional(),
+		/** The distinct ATC codes of those matches, sorted; present with `mitm_total`. */
+		atc_codes: z.array(z.string()).optional(),
+	}),
 	NotFound,
 ]);
 type Data = z.infer<typeof Data>;
 
 const MIX_CODES_LIMIT = 5;
 
-/** The MITM mix across all matches, as text: a new field in the data would fail the output schema clients have cached. */
+/** The MITM mix across all matches, as text: the text form of the mix also carried in `mitm_total` and `atc_codes`. */
 export function mixSentence(total: number, mitmTotal: number, atcCodes: string[]): string {
 	const more = atcCodes.length - MIX_CODES_LIMIT;
 	const codes = atcCodes.slice(0, MIX_CODES_LIMIT).join(", ") + (more > 0 ? ` and ${more} more` : "");
@@ -68,7 +74,11 @@ export async function byCandidates(
 		// A capped match set is incomplete, so its mix would be wrong.
 		if (resolved.capped) return { data, summary };
 		const listed = resolved.cis.flatMap((c) => codes.get(c) ?? []);
-		return { data, summary: `${summary} ${mixSentence(data.total, listed.length, [...new Set(listed)].sort())}` };
+		const atcCodes = [...new Set(listed)].sort();
+		const text = `${summary} ${mixSentence(data.total, listed.length, atcCodes)}`;
+		// With every match shown, the rows already carry the mix.
+		if (data.total <= data.candidates.length) return { data, summary: text };
+		return { data: { ...data, mitm_total: listed.length, atc_codes: atcCodes }, summary: text };
 	}
 	const shown = resolved.cis.slice(0, LINKED_LIMIT);
 	const meds = await getMedicines(db, shown);

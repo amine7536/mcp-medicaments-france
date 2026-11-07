@@ -17,6 +17,7 @@ import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
 import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
+import { withAddedFields } from "./addedOutputFields";
 import publishedOutputSchemas from "./fixtures/output-schemas.json";
 
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}, imported 2026-10-05).`;
@@ -43,9 +44,12 @@ const brokenDb = (): D1Database =>
 		},
 	});
 
-/** Clients validate results against the output schema they cached: the strict one published by 1.12.0 and 1.13.1. */
+/**
+ * Clients validate results against the output schema they cached: the strict one published by 1.12.0 and 1.13.1, plus the
+ * optional fields of ADDED_OUTPUT_FIELDS. Any other field still fails, since the published nodes forbid extra properties.
+ */
 const jsonSchemaValidator = new CfWorkerJsonSchemaValidator();
-const publishedValidators = new Map(Object.entries(publishedOutputSchemas).map(([name, schema]) => [name, jsonSchemaValidator.getValidator(schema as JsonSchemaType)]));
+const publishedValidators = new Map(Object.entries(withAddedFields(publishedOutputSchemas)).map(([name, schema]) => [name, jsonSchemaValidator.getValidator(schema as JsonSchemaType)]));
 
 /**
  * Calls a handler with arguments parsed by its input schema; every non-error result is checked against
@@ -1169,6 +1173,14 @@ describe("name search across tools", () => {
 		expect(mitmCandidates.kind).toBe("candidates");
 		filled(mitmCandidates.candidates);
 
+		// More matches than shown, with a complete set: the MITM mix is in the data.
+		const mixCodes = [...Array.from({ length: RESOLVE_LIMIT }, () => "A10BA02"), "A10BD02", null];
+		await seedMitm(await seedSubstanceMatches(60200800, "KINDINE", mixCodes.map(() => null)), mixCodes);
+		const mitmMix = (await call(isMajorTherapeuticInterest, { name: "kindine" })).data;
+		expect(mitmMix.kind).toBe("candidates");
+		filled(mitmMix.mitm_total);
+		filled(mitmMix.atc_codes);
+
 		const mitmNotFound = (await call(isMajorTherapeuticInterest, { name: "doliprame" })).data;
 		expect(mitmNotFound.kind).toBe("not_found");
 		filled(mitmNotFound.did_you_mean);
@@ -1306,6 +1318,8 @@ describe("name search across tools", () => {
 		expect(data).toMatchObject({ kind: "candidates", total: 2 });
 		const byCis = Object.fromEntries(data.candidates.map((c: { cis: string; is_mitm: boolean; atc_code: string | null }) => [c.cis, [c.is_mitm, c.atc_code]]));
 		expect(byCis).toEqual({ [MEDICINES.dolipraneTablet.cis]: [true, MEDICINES.dolipraneTablet.atc], [MEDICINES.dolipraneCapsule.cis]: [false, null] });
+		expect(data).not.toHaveProperty("mitm_total");
+		expect(data).not.toHaveProperty("atc_codes");
 	});
 
 	/**
@@ -1410,6 +1424,8 @@ describe("name search across tools", () => {
 		const { data, result } = await call(isMajorTherapeuticInterest, { name: "uniformine" });
 		expect(data).toMatchObject({ kind: "candidates", total: codes.length, capped: false });
 		expect(new Set(data.candidates.map((c: { atc_code: string | null }) => c.atc_code))).toEqual(new Set(["A10BA02"]));
+		// The data shows the mix the rows hide.
+		expect(data).toMatchObject({ mitm_total: codes.length - 1, atc_codes: ["A10BA02", "A10BD02"] });
 		const line = firstLine(result);
 		expect(line).toBe(`${candidatesSummary("uniformine", codes.length, 0)} ${mixSentence(codes.length, codes.length - 1, ["A10BA02", "A10BD02"])}`);
 		expect(line.match(ATC_CODE)).toEqual(["A10BA02", "A10BD02"]);
@@ -1425,6 +1441,8 @@ describe("name search across tools", () => {
 		expect(resolved.capped).toBe(true);
 		const { data, summary: text } = await byCandidates(env.DB, "overflowine", resolved, "source");
 		expect(data).toMatchObject({ kind: "candidates", capped: true });
+		expect(data).not.toHaveProperty("mitm_total");
+		expect(data).not.toHaveProperty("atc_codes");
 		expect(text).toBe(candidatesSummary("overflowine", 3, 0));
 	});
 
@@ -1435,6 +1453,9 @@ describe("name search across tools", () => {
 		const { data, result } = await call(isMajorTherapeuticInterest, { name: "manycodine" });
 		const sorted = codes.toSorted();
 		expect(data).toMatchObject({ kind: "candidates", total: codes.length });
+		// Every match is shown: the rows carry the mix, the data adds nothing.
+		expect(data).not.toHaveProperty("mitm_total");
+		expect(data).not.toHaveProperty("atc_codes");
 		const line = firstLine(result);
 		expect(line.match(ATC_CODE)).toEqual(sorted.slice(0, 5));
 		expect(line).toContain(`and ${codes.length - 5} more`);
