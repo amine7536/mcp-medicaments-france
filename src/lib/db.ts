@@ -230,6 +230,12 @@ export async function getMedicines(db: D1Database, cis: readonly string[]): Prom
 	return out;
 }
 
+/** The medicines of a CIS list, in that order; unknown CIS are skipped. */
+export async function orderedMedicines(db: D1Database, cis: readonly string[]): Promise<MedicineRow[]> {
+	const meds = await getMedicines(db, cis);
+	return cis.flatMap((c) => meds.get(c) ?? []);
+}
+
 /** ATC code per CIS (null when the CIS is not on the MITM list); unknown CIS are absent. */
 export async function mitmCodes(db: D1Database, cis: readonly string[]): Promise<Map<string, string | null>> {
 	if (cis.length === 0) return new Map();

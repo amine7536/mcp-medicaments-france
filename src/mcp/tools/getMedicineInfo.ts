@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
-import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesData, candidatesSummary, notFound, resolveName } from "../resolve";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { candidatesData, notFound, resolveName } from "../resolve";
 import {
 	Candidates,
 	Cip13,
@@ -18,7 +18,7 @@ import {
 	toShortageSummary,
 	utcDate,
 } from "../schemas";
-import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
+import { exactlyOne, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
 export const SUMMARY_LIMIT = 10;
@@ -122,8 +122,6 @@ async function info(db: D1Database, now: Date, m: MedicineRow, cip13: string | n
 	};
 }
 
-const result = (dates: SourceDates, now: Date, out: { data: Data; summary: string }) => toolResult(out.summary, envelope(out.data, dates, now));
-
 export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_medicine_info",
 	title: "Get medicine info",
@@ -131,26 +129,22 @@ export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, cip13, name }): Promise<ToolOutcome> {
-		if ([cis, cip13, name].filter((a) => a !== undefined).length !== 1) {
-			return { result: errorResult(EXACTLY_ONE("cis, cip13 or name"), await loadSourceDates(db).catch(() => UNKNOWN_DATES)) };
-		}
+		const invalid = await exactlyOne(db, { cis, cip13, name });
+		if (invalid !== null) return invalid;
 		const dates = await loadSourceDates(db);
 		if (cip13 !== undefined) {
 			const code = await cisByCip13(db, cip13);
 			const med = code === null ? undefined : (await getMedicines(db, [code])).get(code);
 			const out = med === undefined ? notFound(`CIP13 ${cip13}`, []) : await info(db, now, med, cip13);
-			return { result: result(dates, now, out), cis: med ? med.cis : null };
+			return { result: toolResult(out, dates, now), cis: med ? med.cis : null };
 		}
 		if (cis !== undefined) {
 			const med = (await getMedicines(db, [cis])).get(cis);
-			return { result: result(dates, now, med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, now, med, null)), cis };
+			return { result: toolResult(med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, now, med, null), dates, now), cis };
 		}
 		const resolved = await resolveName(db, name as string);
-		if (resolved.kind === "candidates") {
-			const { data, inShortageTotal } = await candidatesData(db, resolved);
-			return { result: result(dates, now, { data, summary: candidatesSummary(name as string, data.total, inShortageTotal, data.best_match_total ?? 0) }) };
-		}
-		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [], resolved.did_you_mean)) };
-		return { result: result(dates, now, await info(db, now, resolved.medicine, null)), cis: resolved.medicine.cis };
+		if (resolved.kind === "candidates") return { result: toolResult(await candidatesData(db, name as string, resolved), dates, now) };
+		if (resolved.kind === "not_found") return { result: toolResult(notFound(`"${name}"`, [], resolved.did_you_mean), dates, now) };
+		return { result: toolResult(await info(db, now, resolved.medicine, null), dates, now), cis: resolved.medicine.cis };
 	},
 };

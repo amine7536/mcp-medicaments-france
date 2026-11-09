@@ -1587,9 +1587,9 @@ describe("name search across tools", () => {
 		await seedSubstanceMatches(60200200, "CAPPEDINE", links);
 		const resolved = await resolveName(env.DB, "cappedine", 1);
 		if (resolved.kind !== "candidates") throw new Error(`expected candidates, got ${resolved.kind}`);
-		const { data, inShortageTotal } = await candidatesData(env.DB, resolved);
+		const { data, summary } = await candidatesData(env.DB, "cappedine", resolved);
 		expect(data).toMatchObject({ total: links.length, capped: true });
-		expect(inShortageTotal).toBe(3);
+		expect(summary).toBe(candidatesSummary("cappedine", links.length, 3, 0));
 		expect(statuses(data).slice(0, 3)).toEqual(["rupture", "tension", "rupture"]);
 	});
 
