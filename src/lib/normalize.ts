@@ -1,10 +1,5 @@
 import { decodeHTML } from "entities/decode";
 
-/** Decodes HTML entities (all HTML5 named references, decimal and hex numeric). */
-export function decodeEntities(s: string): string {
-	return decodeHTML(s);
-}
-
 const UNIT_RULES: Array<[RegExp, string]> = [
 	[/M\.U\.I\./g, "MUI"],
 	[/U\.I\./g, "UI"],
@@ -18,7 +13,7 @@ const UNIT_RULES: Array<[RegExp, string]> = [
 
 /** Normalizes a medicine name or free text for matching and full-text search. */
 export function normalize(s: string): string {
-	let t = decodeEntities(s.replace(/<[^>]*>/g, ""));
+	let t = decodeHTML(s.replace(/<[^>]*>/g, ""));
 	t = t.replace(/[’‘]/g, "'").replace(/[–—]/g, "-");
 	t = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 	t = t.replace(/Œ/g, "OE").replace(/Æ/g, "AE");

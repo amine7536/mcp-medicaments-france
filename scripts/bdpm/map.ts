@@ -1,6 +1,7 @@
+import { decodeHTML } from "entities/decode";
 import * as z from "zod";
 import { parseFrDate } from "../../src/lib/dates";
-import { decodeEntities, normalize } from "../../src/lib/normalize";
+import { normalize } from "../../src/lib/normalize";
 
 export const FILES = {
 	cisBdpm: { name: "CIS_bdpm.txt", cols: 12, floor: 12_000 },
@@ -205,7 +206,7 @@ export function parseAnchor(cell: string): { title: string; url: string } | null
 	const href = HREF_RE.exec(cell);
 	const inner = INNER_RE.exec(cell);
 	if (!href || !inner) return null;
-	return { url: href[2] as string, title: decodeEntities((inner[1] as string).replace(/<[^>]*>/g, "")).trim() };
+	return { url: href[2] as string, title: decodeHTML((inner[1] as string).replace(/<[^>]*>/g, "")).trim() };
 }
 
 /** Columns: CIS, start date, end date (ISO), HTML anchor to the ANSM page. Throws on any invalid row. */

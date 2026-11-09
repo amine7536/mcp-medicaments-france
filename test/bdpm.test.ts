@@ -2,10 +2,11 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { fetchBytes } from "../scripts/bdpm/download";
 import { cleanIndications, parseAnchor, parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
-import { decodeCp1252, decodeUtf8, parseBanner, parseTsv } from "../scripts/bdpm/parse";
+import { decodeUtf8, parseBanner } from "../scripts/bdpm/parse";
 import { buildImportSql, insertStatements, sqlLiteral, TRGM_CREATE, TRGM_FILL } from "../scripts/bdpm/sql";
 import { USER_AGENT } from "../src/ingest/http";
-import { parseTsv as sharedParseTsv } from "../src/lib/tsv";
+import { decodeCp1252 } from "../src/lib/cp1252";
+import { parseTsv } from "../src/lib/tsv";
 
 const cis = (i: number): string => String(60_000_000 + i);
 
@@ -86,10 +87,6 @@ describe("fetchBytes", () => {
 });
 
 describe("parseTsv", () => {
-	it("re-exports the shared parser", () => {
-		expect(parseTsv).toBe(sharedParseTsv);
-	});
-
 	it("splits CRLF lines, trims fields and drops the final empty line", () => {
 		expect(parseTsv("a \tb\r\nc\t d \r\n", 2, "F.txt")).toEqual([
 			["a", "b"],

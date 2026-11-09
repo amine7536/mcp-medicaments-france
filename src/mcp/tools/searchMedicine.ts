@@ -1,7 +1,7 @@
 import * as z from "zod";
-import { cisByCip13, currentShortages, getMedicines, MATCH_CAP, searchNames, unmatchedShortages } from "../../lib/db";
+import { cisByCip13, currentShortages, MATCH_CAP, orderedMedicines, searchNames, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
-import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { inShortage, matchCount } from "../resolve";
 import { Cip13, Cis, describeShortage, isValidEan13, outputObject, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
@@ -78,7 +78,7 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 		const q = query.trim();
 		if (Cip13.safeParse(q).success && !isValidEan13(q)) {
 			const data = { kind: "results" as const, results: [], unmatched_shortages: [], invalid_cip13: true as const, total: 0, capped: false, fuzzy: false, did_you_mean: null };
-			return { result: toolResult(`"${query}" is not a valid CIP13 barcode: its EAN-13 check digit does not match.`, envelope(data, dates, now)) };
+			return { result: toolResult({ data, summary: `"${query}" is not a valid CIP13 barcode: its EAN-13 check digit does not match.` }, dates, now) };
 		}
 		const { cis, total, capped, fuzzy, did_you_mean } = await findCis(db, query);
 		const [shortages, unmatched] = await Promise.all([currentShortages(db, cis), unmatchedShortages(db, tokens(normalize(query)), UNMATCHED_LIMIT)]);
@@ -88,17 +88,14 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 			.filter(({ s }) => !only_in_shortage || inShortage(s?.status))
 			.sort((a, b) => Number(inShortage(b.s?.status)) - Number(inShortage(a.s?.status)))
 			.slice(0, limit);
-		const meds = await getMedicines(
+		const ranked = await orderedMedicines(
 			db,
 			picked.map(({ c }) => c),
 		);
-		const ranked = picked.flatMap(({ c, s }) => {
-			const m = meds.get(c);
-			return m ? [{ m, s }] : [];
-		});
 		const nameCount = new Map<string, number>();
-		for (const { m } of ranked) nameCount.set(m.name, (nameCount.get(m.name) ?? 0) + 1);
-		const results = ranked.map(({ m, s }) => {
+		for (const m of ranked) nameCount.set(m.name, (nameCount.get(m.name) ?? 0) + 1);
+		const results = ranked.map((m) => {
+			const s = shortages.get(m.cis)?.current;
 			const shared = (nameCount.get(m.name) ?? 0) > 1;
 			return {
 				cis: m.cis,
@@ -120,8 +117,8 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 		else if (results.length === 0) lines.push(`No medicine found for "${query}". ${NOT_FOUND_HINT}${suggestion}`);
 		else {
 			const shown = results.length < total ? `; showing ${results.length}${only_in_shortage ? " in rupture or tension" : ""}` : "";
-			const ranked = capped ? ` (ranked over the ${MATCH_CAP} most relevant and every one in rupture or tension)` : "";
-			lines.push(fuzzy ? `No exact match for "${query}".${suggestion} Closest matches:` : `${matchCount(query, total)}${shown}${ranked}:`);
+			const cappedNote = capped ? ` (ranked over the ${MATCH_CAP} most relevant and every one in rupture or tension)` : "";
+			lines.push(fuzzy ? `No exact match for "${query}".${suggestion} Closest matches:` : `${matchCount(query, total)}${shown}${cappedNote}:`);
 			for (const r of results) {
 				// A same-name row also names its holder and marketing status, so text-only readers can tell the rows apart.
 				const tell = [`CIS ${r.cis}`, r.holder, r.marketing_status].filter((v) => v !== undefined).join(", ");
@@ -132,6 +129,6 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 			lines.push("Listed by ANSM but not linked to a medicine above:");
 			for (const s of unmatched_shortages) lines.push(`- ${describeShortage(s)}`);
 		}
-		return { result: toolResult(lines.join("\n"), envelope({ kind: "results" as const, results, unmatched_shortages, total, capped, fuzzy, did_you_mean }, dates, now)) };
+		return { result: toolResult({ data: { kind: "results" as const, results, unmatched_shortages, total, capped, fuzzy, did_you_mean }, summary: lines.join("\n") }, dates, now) };
 	},
 };

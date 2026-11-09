@@ -24,6 +24,18 @@ const SHORTAGE_COLUMNS = [
 	.map((c) => `s.${c}`)
 	.join(", ");
 
+/** INSERT statements of `rows` (values in `columns` order), `floor(100 / columns)` rows each: D1 binds at most 100 parameters per query. */
+export function insertChunks(db: D1Database, table: string, columns: readonly string[], rows: readonly (readonly unknown[])[]): D1PreparedStatement[] {
+	const perInsert = Math.floor(100 / columns.length);
+	const tuple = `(${columns.map(() => "?").join(", ")})`;
+	const stmts: D1PreparedStatement[] = [];
+	for (let i = 0; i < rows.length; i += perInsert) {
+		const chunk = rows.slice(i, i + perInsert);
+		stmts.push(db.prepare(`INSERT INTO ${table} (${columns.join(", ")}) VALUES ${chunk.map(() => tuple).join(", ")}`).bind(...chunk.flat()));
+	}
+	return stmts;
+}
+
 /** Best confidence among a shortage's matches, null when unmatched. */
 const BEST_CONFIDENCE = "(SELECT MAX(m.confidence) FROM shortage_matches m WHERE m.shortage_id = s.id) AS match_confidence";
 
@@ -228,6 +240,12 @@ export async function getMedicines(db: D1Database, cis: readonly string[]): Prom
 		out.get(s.cis)?.substances.push({ name: s.name, dosage: s.dosage });
 	}
 	return out;
+}
+
+/** The medicines of a CIS list, in that order; unknown CIS are skipped. */
+export async function orderedMedicines(db: D1Database, cis: readonly string[]): Promise<MedicineRow[]> {
+	const meds = await getMedicines(db, cis);
+	return cis.flatMap((c) => meds.get(c) ?? []);
 }
 
 /** ATC code per CIS (null when the CIS is not on the MITM list); unknown CIS are absent. */

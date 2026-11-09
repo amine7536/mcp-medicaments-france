@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { ANSM_ORIGIN } from "../../ingest/http";
 import { recentChanges as loadChanges } from "../../lib/db";
-import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { CHANGE_TYPES, ChangeType, outputObject, Status } from "../schemas";
 import { INFO_ONLY, type Tool } from "../tool";
 
@@ -82,6 +82,6 @@ export const recentChanges: Tool<typeof inputSchema, typeof outputSchema> = {
 				return `- ${i.date.slice(0, 10)} ${i.change}: ${i.name}${detail}`;
 			}),
 		];
-		return { result: toolResult(lines.join("\n"), envelope({ kind: "changes" as const, since, counts, tracking_since, items, note: CHANGES_NOTE }, dates, now)) };
+		return { result: toolResult({ data: { kind: "changes" as const, since, counts, tracking_since, items, note: CHANGES_NOTE }, summary: lines.join("\n") }, dates, now) };
 	},
 };

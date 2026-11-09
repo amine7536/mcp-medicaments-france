@@ -14,6 +14,9 @@ export function get(fetcher: Fetcher, url: string): Promise<Response> {
 	return fetcher(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 }
 
+/** The message of an error, or the thrown value as a string. */
+export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
 /** One JSON log line; `error` lines go to stderr. */
 export function log(event: string, fields: Record<string, unknown> = {}, level: "info" | "error" = "info"): void {
 	const line = JSON.stringify({ event, ...fields });

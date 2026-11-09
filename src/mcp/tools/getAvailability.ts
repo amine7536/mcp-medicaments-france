@@ -1,10 +1,10 @@
 import * as z from "zod";
-import { aggregationGroup, currentShortages, getHistory, getMedicines, getShortage, type HistoryRow, type MedicineRow } from "../../lib/db";
+import { aggregationGroup, currentShortages, getHistory, getMedicines, getShortage, type HistoryRow, type MedicineRow, orderedMedicines } from "../../lib/db";
 import { normalize } from "../../lib/normalize";
-import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesData, candidatesSummary, NO_GUARANTEE, notFound, possiblyRelated, type Resolution, relatedList, resolveName } from "../resolve";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { candidatesData, NO_GUARANTEE, notFound, possiblyRelated, type Resolution, relatedList, resolveName } from "../resolve";
 import { Candidates, Cis, describeShortage, NotFound, outputObject, type ShortageRow, ShortageSummary, Status, toShortageSummary } from "../schemas";
-import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
+import { exactlyOne, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 export const NOT_LISTED = `No shortage currently listed by ANSM for this medicine. ${NO_GUARANTEE}`;
 
@@ -160,16 +160,15 @@ async function byCis(db: D1Database, now: Date, medicine: MedicineRow) {
 	return availability(db, now, medicine, current?.current ?? null, current?.other_shortage_ids ?? []);
 }
 
-async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ data: Data; summary: string; cis: string | null }> {
+async function byShortageId(db: D1Database, now: Date, id: string): Promise<{ data: Data; summary: string }> {
 	const found = await getShortage(db, id);
 	if (found === null) {
 		return {
 			data: { kind: "not_found", possibly_related_shortages: [], did_you_mean: null },
 			summary: `No ANSM shortage entry with id "${id}". Use search_medicine or list_current_shortages to find an entry.`,
-			cis: null,
 		};
 	}
-	return { ...(await availability(db, now, null, found.shortage, [])), cis: null };
+	return availability(db, now, null, found.shortage, []);
 }
 
 /**
@@ -189,16 +188,8 @@ async function byCandidates(
 				resolved.capped,
 				resolved.cis.map((c) => shortages.get(c)?.current.id ?? null),
 			);
-	if (group === undefined) {
-		const { data, inShortageTotal } = await candidatesData(db, resolved);
-		return { data, summary: candidatesSummary(query, data.total, inShortageTotal, data.best_match_total ?? 0) };
-	}
-	const shown = resolved.cis.slice(0, LINKED_LIMIT);
-	const meds = await getMedicines(db, shown);
-	const medicines = shown.flatMap((c) => {
-		const m = meds.get(c);
-		return m ? [{ cis: m.cis, name: m.name }] : [];
-	});
+	if (group === undefined) return candidatesData(db, query, resolved);
+	const medicines = (await orderedMedicines(db, resolved.cis.slice(0, LINKED_LIMIT))).map((m) => ({ cis: m.cis, name: m.name }));
 	const row = group === null ? null : (resolved.cis.map((c) => shortages.get(c)?.current).find((s) => s?.id === group) ?? null);
 	const shortage = row ? toShortageSummary(row, now) : null;
 	const related = shortage ? [] : (await possiblyRelated(db, normalize(query))).map((s) => toShortageSummary(s, now));
@@ -213,8 +204,6 @@ async function byCandidates(
 	return { data: { kind: "aggregated", query, total: resolved.total, shortage, medicines, possibly_related_shortages: related }, summary };
 }
 
-const result = (dates: SourceDates, now: Date, out: { data: Data; summary: string }) => toolResult(out.summary, envelope(out.data, dates, now));
-
 export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_availability",
 	title: "Get availability",
@@ -222,24 +211,20 @@ export const getAvailability: Tool<typeof inputSchema, typeof outputSchema> = {
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, shortage_id, name }): Promise<ToolOutcome> {
-		if ([cis, shortage_id, name].filter((a) => a !== undefined).length !== 1) {
-			return { result: errorResult(EXACTLY_ONE("cis, shortage_id or name"), await loadSourceDates(db).catch(() => UNKNOWN_DATES)) };
-		}
+		const invalid = await exactlyOne(db, { cis, shortage_id, name });
+		if (invalid !== null) return invalid;
 		const dates = await loadSourceDates(db);
-		if (shortage_id !== undefined) {
-			const out = await byShortageId(db, now, shortage_id);
-			return { result: result(dates, now, out), cis: out.cis };
-		}
+		if (shortage_id !== undefined) return { result: toolResult(await byShortageId(db, now, shortage_id), dates, now) };
 		if (cis !== undefined) {
 			const medicine = (await getMedicines(db, [cis])).get(cis);
-			return { result: result(dates, now, medicine ? await byCis(db, now, medicine) : notFound(`CIS ${cis}`, [])), cis };
+			return { result: toolResult(medicine ? await byCis(db, now, medicine) : notFound(`CIS ${cis}`, []), dates, now), cis };
 		}
 		const resolved = await resolveName(db, name as string);
-		if (resolved.kind === "candidates") return { result: result(dates, now, await byCandidates(db, now, name as string, resolved)) };
+		if (resolved.kind === "candidates") return { result: toolResult(await byCandidates(db, now, name as string, resolved), dates, now) };
 		if (resolved.kind === "not_found") {
 			const related = (await possiblyRelated(db, normalize(name as string))).map((s) => toShortageSummary(s, now));
-			return { result: result(dates, now, notFound(`"${name}"`, related, resolved.did_you_mean)) };
+			return { result: toolResult(notFound(`"${name}"`, related, resolved.did_you_mean), dates, now) };
 		}
-		return { result: result(dates, now, await byCis(db, now, resolved.medicine)), cis: resolved.medicine.cis };
+		return { result: toolResult(await byCis(db, now, resolved.medicine), dates, now), cis: resolved.medicine.cis };
 	},
 };

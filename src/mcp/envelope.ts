@@ -45,6 +45,9 @@ export async function loadSourceDates(db: D1Database): Promise<SourceDates> {
 	};
 }
 
+/** The source dates, or unknown dates when they cannot be read. */
+export const sourceDatesOrUnknown = (db: D1Database): Promise<SourceDates> => loadSourceDates(db).catch(() => UNKNOWN_DATES);
+
 export function envelopeSchema<D extends z.ZodType>(data: D) {
 	return outputObject({
 		data,
@@ -84,8 +87,9 @@ export function sourceLine(dates: SourceDates): string {
 
 const SAFETY_LINE = `Safety: ${SAFETY}`;
 
-/** A non-error result: the summary ending with the safety and source lines, then the JSON of the envelope. */
-export function toolResult<D>(summary: string, env: Envelope<D>): CallToolResult {
+/** A non-error result: the summary ending with the safety and source lines, then the JSON of the envelope of the data. */
+export function toolResult<D>({ data, summary }: { data: D; summary: string }, dates: SourceDates, now: Date): CallToolResult {
+	const env = envelope(data, dates, now);
 	const text = `${summary}\n${SAFETY_LINE}\n${sourceLine(env.source)}\n\n${JSON.stringify(env)}`;
 	return { content: [{ type: "text", text }], structuredContent: env };
 }

@@ -2,7 +2,10 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fetchBytes } from "./bdpm/download";
 import { FILES, validateAndMap } from "./bdpm/map";
-import { decodeCp1252, decodeUtf8, parseBanner, parseTsv } from "./bdpm/parse";
+import { decodeCp1252 } from "../src/lib/cp1252";
+import { parseTsv } from "../src/lib/tsv";
+import { errorMessage } from "../src/ingest/http";
+import { decodeUtf8, parseBanner } from "./bdpm/parse";
 import { buildImportSql } from "./bdpm/sql";
 
 const BASE = "https://base-donnees-publique.medicaments.gouv.fr";
@@ -57,6 +60,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-	console.error(err instanceof Error ? err.message : String(err));
+	console.error(errorMessage(err));
 	process.exit(1);
 });

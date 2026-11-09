@@ -25,7 +25,7 @@ export interface Health {
 		imported_at: string | null;
 	};
 	counts: { listed: number; by_status: Record<Status, number>; medicines: number; mitm: number; bdpm_dispo: number };
-	match: { listed: number; matched_ge_0_8: number; rate: number | null };
+	match: { matched_ge_0_8: number; rate: number | null };
 	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; unmatched: number };
 	generated_at: string;
 }
@@ -82,7 +82,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 			by_status: Object.fromEntries(STATUSES.map((s) => [s, statusCounts.get(s) ?? 0])) as Record<Status, number>,
 			...t,
 		},
-		match: { listed: listedCount, matched_ge_0_8: matched, rate: listedCount === 0 ? null : Math.round((matched / listedCount) * 1000) / 1000 },
+		match: { matched_ge_0_8: matched, rate: listedCount === 0 ? null : Math.round((matched / listedCount) * 1000) / 1000 },
 		quality: {
 			unknown_status: l?.unknown_status ?? 0,
 			scope_inconnu: l?.scope_inconnu ?? 0,
