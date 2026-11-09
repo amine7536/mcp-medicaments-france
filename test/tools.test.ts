@@ -250,6 +250,71 @@ describe("search_medicine", () => {
 		expect(s).toContain(`Expected return (ANSM wording): "${MONTH_RAW}"`);
 		expect(s).not.toMatch(/2026-11-01|2026-11-30/);
 	});
+
+	describe("same-name rows", () => {
+		const twin = "TWINBRAND 5 mg, comprimé";
+		const extra: Array<{ cis: string; name: string; holder: string | null; marketing_status: string | null }> = [
+			{ cis: "60200900", name: twin, holder: "LAB TWIN A", marketing_status: MEDICINE_MARKETED },
+			{ cis: "60200901", name: twin, holder: "LAB TWIN B", marketing_status: "Non commercialisée" },
+			{ cis: "60200902", name: twin, holder: null, marketing_status: null },
+			{ cis: "60200903", name: "TWINBRAND 10 mg, comprimé", holder: "LAB TWIN C", marketing_status: MEDICINE_MARKETED },
+		];
+		const substance = "TWININE";
+
+		beforeAll(async () => {
+			await seed();
+			const db = env.DB;
+			await db.batch(
+				extra.flatMap((m) => [
+					db
+						.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, form, holder, marketing_status, bdpm_updated_at) VALUES (?, ?, ?, 'comprimé', ?, ?, ?)")
+						.bind(m.cis, m.name, normalize(m.name), m.holder, m.marketing_status, BDPM_RELEASE),
+					db.prepare("INSERT INTO substances (cis, substance_name, substance_norm, nature) VALUES (?, ?, ?, 'SA')").bind(m.cis, substance, normalize(substance)),
+					db.prepare("INSERT INTO medicines_fts (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)").bind(m.cis, normalize(m.name), normalize(substance)),
+					db.prepare("INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)").bind(m.cis, normalize(m.name), normalize(substance)),
+				]),
+			);
+		});
+
+		afterAll(seed);
+
+		it("tells same-name rows apart by holder and marketing status, in data and text", async () => {
+			const { data, result } = await call(searchMedicine, { query: "twinbrand" });
+			const rows = new Map<string, Record<string, unknown>>(data.results.map((r: { cis: string }) => [r.cis, r]));
+			expect([...rows.keys()].sort()).toEqual(extra.map((m) => m.cis));
+			const lines = summary(result).split("\n");
+			const lineOf = (cis: string) => {
+				const found = lines.filter((l) => l.includes(`CIS ${cis}`));
+				expect(found).toHaveLength(1);
+				return found[0] as string;
+			};
+			for (const m of extra) {
+				const row = rows.get(m.cis);
+				const line = lineOf(m.cis);
+				const shared = extra.filter((o) => o.name === m.name).length > 1;
+				if (shared && m.holder !== null && m.marketing_status !== null) {
+					expect(row).toMatchObject({ holder: m.holder, marketing_status: m.marketing_status });
+					expect(line).toContain(m.holder);
+					expect(line).toContain(m.marketing_status);
+				} else {
+					expect(row).not.toHaveProperty("holder");
+					expect(row).not.toHaveProperty("marketing_status");
+					expect(line).toContain(`(CIS ${m.cis})`);
+					for (const o of extra) if (o.holder !== null) expect(line).not.toContain(o.holder);
+				}
+			}
+		});
+
+		it("checks names over the shown rows only", async () => {
+			const all = await call(searchMedicine, { query: "twinbrand 5" });
+			expect(all.data.results[0].name).toBe(twin);
+			expect(all.data.results.filter((r: { name: string }) => r.name === twin).length).toBeGreaterThan(1);
+			const { data } = await call(searchMedicine, { query: "twinbrand 5", limit: 1 });
+			expect(data.results).toHaveLength(1);
+			expect(data.results[0]).not.toHaveProperty("holder");
+			expect(data.results[0]).not.toHaveProperty("marketing_status");
+		});
+	});
 });
 
 describe("get_availability", () => {

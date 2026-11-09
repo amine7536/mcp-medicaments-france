@@ -88,6 +88,12 @@ export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 		property: "best_match",
 		schema: { type: "boolean", const: true },
 	},
+	...["holder", "marketing_status"].map((property) => ({
+		tool: "search_medicine",
+		path: "/properties/data/oneOf/0/properties/results/items",
+		property,
+		schema: { type: "string" },
+	})),
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);

@@ -48,6 +48,10 @@ export const Data = z.discriminatedUnion("kind", [
 				is_mitm: z.boolean(),
 				shortage: ShortageSummary.nullable(),
 				shortage_note: z.literal(SHORTAGE_NOTE).optional(),
+				/** Only on a row whose name another row of the results shares, and only when known. */
+				holder: z.string().optional(),
+				/** Only on a row whose name another row of the results shares, and only when known. */
+				marketing_status: z.string().optional(),
 			}),
 		),
 		unmatched_shortages: z.array(ShortageSummary),
@@ -92,15 +96,22 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 			const m = meds.get(c);
 			return m ? [{ m, s }] : [];
 		});
-		const results = ranked.map(({ m, s }) => ({
-			cis: m.cis,
-			name: m.name,
-			form: m.form,
-			substances: m.substances,
-			is_mitm: m.is_mitm,
-			shortage: s ? toShortageSummary(s, now) : null,
-			...(s ? {} : { shortage_note: SHORTAGE_NOTE }),
-		}));
+		const nameCount = new Map<string, number>();
+		for (const { m } of ranked) nameCount.set(m.name, (nameCount.get(m.name) ?? 0) + 1);
+		const results = ranked.map(({ m, s }) => {
+			const shared = (nameCount.get(m.name) ?? 0) > 1;
+			return {
+				cis: m.cis,
+				name: m.name,
+				form: m.form,
+				substances: m.substances,
+				is_mitm: m.is_mitm,
+				shortage: s ? toShortageSummary(s, now) : null,
+				...(s ? {} : { shortage_note: SHORTAGE_NOTE }),
+				...(shared && m.holder !== null ? { holder: m.holder } : {}),
+				...(shared && m.marketing_status !== null ? { marketing_status: m.marketing_status } : {}),
+			};
+		});
 		const unmatched_shortages = unmatched.map((s) => toShortageSummary(s, now));
 
 		const suggestion = did_you_mean === null ? "" : ` Did you mean "${did_you_mean}"?`;
@@ -110,7 +121,9 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 			const of = capped ? ` (${total} matches: ranked over the ${MATCH_CAP} most relevant and every one in rupture or tension)` : "";
 			lines.push(fuzzy ? `No exact match for "${query}".${suggestion} Closest matches:` : `${results.length} medicine(s) found for "${query}"${of}:`);
 			for (const r of results) {
-				lines.push(`- ${r.name} (CIS ${r.cis})${r.is_mitm ? ", MITM" : ""}: ${r.shortage ? describeShortage(r.shortage) : SHORTAGE_NOTE}`);
+				// A same-name row also names its holder and marketing status, so text-only readers can tell the rows apart.
+				const tell = [`CIS ${r.cis}`, r.holder, r.marketing_status].filter((v) => v !== undefined).join(", ");
+				lines.push(`- ${r.name} (${tell})${r.is_mitm ? ", MITM" : ""}: ${r.shortage ? describeShortage(r.shortage) : SHORTAGE_NOTE}`);
 			}
 		}
 		if (unmatched_shortages.length > 0) {
