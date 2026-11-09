@@ -9,7 +9,7 @@ export const RUNNING_TTL_MS = 20 * 60 * 1000;
 const DETAIL_CONCURRENCY = 4;
 const MESSAGE_MAX = 500;
 
-export interface IngestOptions {
+interface IngestOptions {
 	/** Minimum rows of the BDPM shortage file (default 200). */
 	dispoMinRows?: number;
 	/** Minimum delay between two request starts in one detail lane (default 250 ms). */
@@ -18,7 +18,7 @@ export interface IngestOptions {
 	afterIngest?: typeof afterIngest;
 }
 
-export type RunStatus = "ok" | "aborted" | "error";
+type RunStatus = "ok" | "aborted" | "error";
 
 export interface IngestResult {
 	id: number;

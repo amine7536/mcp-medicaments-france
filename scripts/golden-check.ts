@@ -91,7 +91,7 @@ export function parseStream(output: string): ParsedStream {
 	return parsed;
 }
 
-export type Options = { url: string; runs: number; prompt: number | null; log: string | undefined; bare: boolean };
+type Options = { url: string; runs: number; prompt: number | null; log: string | undefined; bare: boolean };
 
 /** Validated golden options, or null when any value is missing or malformed. */
 export function options(values: { url?: string; runs?: string; prompt?: string; log?: string; bare?: boolean }): Options | null {

@@ -2,7 +2,7 @@ import type { Detail, DetailFields, ListRow } from "./ansm";
 
 type DetailColumns = Omit<DetailFields, "dci">;
 
-export interface StoredShortage extends DetailColumns {
+interface StoredShortage extends DetailColumns {
 	id: string;
 	status: string;
 	dci_raw: string | null;
@@ -14,7 +14,7 @@ export interface StoredShortage extends DetailColumns {
 
 export type DetailOutcome = { ok: true; detail: Detail } | { ok: false };
 
-export interface DiffContext {
+interface DiffContext {
 	now: string;
 	bootstrap: boolean;
 }
@@ -69,12 +69,11 @@ const LIST_KEYS = [
 const RETURN_WORDING_NOISE = /[ \t\n\r\u00a0\u2009\u202f.:;,]/g;
 
 /** True when both expected-return texts are null, or equal once lowercased and stripped of spacing and punctuation. */
-export function sameReturnWording(a: string | null, b: string | null): boolean {
+function sameReturnWording(a: string | null, b: string | null): boolean {
 	if (a === null || b === null) return a === b;
 	return a.toLowerCase().replace(RETURN_WORDING_NOISE, "") === b.toLowerCase().replace(RETURN_WORDING_NOISE, "");
 }
 
-/** Loads every stored shortage in one query. */
 export async function loadShortages(db: D1Database): Promise<Map<string, StoredShortage>> {
 	const { results } = await db
 		.prepare(

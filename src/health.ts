@@ -5,9 +5,9 @@ import { isUndetermined } from "./lib/dates";
 import { isStale } from "./mcp/envelope";
 import { PROBABLE_MATCH_BELOW } from "./mcp/schemas";
 
-export const HEALTH_MAX_AGE_SECONDS = 300;
+const HEALTH_MAX_AGE_SECONDS = 300;
 
-export type HealthStatus = "ok" | "stale" | "degraded";
+type HealthStatus = "ok" | "stale" | "degraded";
 
 interface Run {
 	started_at: string;
@@ -39,7 +39,7 @@ const LISTED_SQL = `SELECT
 FROM shortages s WHERE s.listed = 1`;
 
 /** Health status: `stale` without a recent ok ANSM run, else `degraded` when the latest run failed or is stuck. */
-export function healthStatus(lastOkAt: string | null, lastRun: Run | null, now: Date): HealthStatus {
+function healthStatus(lastOkAt: string | null, lastRun: Run | null, now: Date): HealthStatus {
 	if (isStale(lastOkAt, now)) return "stale";
 	if (lastRun === null) return "ok";
 	if (lastRun.status === "aborted" || lastRun.status === "error") return "degraded";

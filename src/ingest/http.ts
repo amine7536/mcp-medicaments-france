@@ -5,7 +5,7 @@ export const ANSM_ORIGIN = "https://ansm.sante.fr";
 export const ANSM_LIST_URL = `${ANSM_ORIGIN}/disponibilites-des-produits-de-sante/medicaments`;
 export const DISPO_URL = "https://base-donnees-publique.medicaments.gouv.fr/download/file/CIS_CIP_Dispo_Spec.txt";
 
-export const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 

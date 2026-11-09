@@ -5,7 +5,7 @@ import type { Candidates, NotFound, ShortageRow, ShortageSummary } from "./schem
 import { NOT_FOUND_HINT } from "./tool";
 
 export const RESOLVE_LIMIT = 10;
-export const RELATED_LIMIT = 5;
+const RELATED_LIMIT = 5;
 
 export type Resolution =
 	| { kind: "cis"; medicine: MedicineRow }
@@ -109,7 +109,7 @@ export async function candidatesData(
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */
-export function brandToken(norm: string): string | null {
+function brandToken(norm: string): string | null {
 	const first = tokens(norm)[0];
 	return first !== undefined && first.length >= 3 && !/^\d+$/.test(first) ? first : null;
 }
@@ -124,7 +124,6 @@ export const NO_GUARANTEE = "This does not guarantee availability in your pharma
 
 export const relatedList = (related: ShortageSummary[]): string => related.map((s) => `${s.name} (${s.status})`).join(", ");
 
-/** How many medicines match a name: "1 medicine matches" or "<n> medicines match". */
 export const matchCount = (name: string, total: number): string => `${total} ${total === 1 ? "medicine matches" : "medicines match"} "${name}"`;
 
 export const candidatesSummary = (name: string, total: number, inShortageTotal: number, bestMatchTotal: number): string =>

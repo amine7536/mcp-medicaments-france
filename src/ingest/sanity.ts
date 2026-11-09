@@ -1,13 +1,13 @@
 import type { ListRow } from "./ansm";
 
-export const MIN_ROWS = 200;
+const MIN_ROWS = 200;
 
-export interface SanityContext {
+interface SanityContext {
 	previousOkSeen: number | null;
 	currentlyListedIds: Set<string>;
 }
 
-export type SanityResult = { ok: true } | { ok: false; reason: string };
+type SanityResult = { ok: true } | { ok: false; reason: string };
 
 /** Abort rules run before any write; the first matching rule wins. */
 export function checkSanity(rows: Pick<ListRow, "id" | "status">[], ctx: SanityContext): SanityResult {

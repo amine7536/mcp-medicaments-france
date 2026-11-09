@@ -1,4 +1,4 @@
-export interface TsvOptions {
+interface TsvOptions {
 	/** Drop every empty or whitespace-only line instead of only a trailing empty one; line numbers then count the kept lines. */
 	skipEmptyLines?: boolean;
 }

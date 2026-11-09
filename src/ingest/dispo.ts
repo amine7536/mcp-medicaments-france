@@ -3,7 +3,7 @@ import { insertChunks } from "../lib/db";
 import { parseTsv } from "../lib/tsv";
 import { DISPO_URL, errorMessage, type Fetcher, get, log } from "./http";
 
-export interface DispoRow {
+interface DispoRow {
 	cis: string;
 	status_code: number;
 	status_label: string;

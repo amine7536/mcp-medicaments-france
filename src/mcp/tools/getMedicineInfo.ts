@@ -23,7 +23,7 @@ import { exactlyOne, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 /** Presentations listed in the summary; the full list is in the structured content. */
 export const SUMMARY_LIMIT = 10;
 /** Safety information titles listed in the summary; the full list is in the structured content. */
-export const SAFETY_SUMMARY_LIMIT = 5;
+const SAFETY_SUMMARY_LIMIT = 5;
 export const SAFETY_ADVICE = "See the ANSM pages for details; do not stop or change a treatment without asking your doctor or pharmacist.";
 export const NO_SAFETY_INFORMATION = "No current ANSM safety information listed in the BDPM.";
 
@@ -60,7 +60,7 @@ const rates = (p: Presentation): string =>
  * The conflict between an ANSM marketing stop and the BDPM, null when no linked listed entry is a marketing stop or no box is marketed.
  * `entries` are the listed entries linked to the medicine, in shortage order; the first marketing stop is reported.
  */
-export function statusConflict(entries: readonly ShortageRow[], presentations: readonly Presentation[]): string | null {
+function statusConflict(entries: readonly ShortageRow[], presentations: readonly Presentation[]): string | null {
 	const stop = entries.find((e) => e.status === "arret_commercialisation");
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED).length;
 	if (stop === undefined || marketed === 0) return null;
@@ -69,7 +69,7 @@ export function statusConflict(entries: readonly ShortageRow[], presentations: r
 }
 
 /** The medicine line, the ANSM shortage status and status conflict when any, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`). */
-export function infoSummary(
+function infoSummary(
 	medicine: Medicine,
 	presentations: Presentation[],
 	conditions: string[],

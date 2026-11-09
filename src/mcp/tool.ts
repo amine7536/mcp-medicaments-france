@@ -8,7 +8,7 @@ export const ANNOTATIONS: ToolAnnotations = { readOnlyHint: true, destructiveHin
 export const INFO_ONLY = "Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.";
 
 export const UNAVAILABLE = "Service temporarily unavailable, please try again later.";
-export const EXACTLY_ONE = (args: string): string => `Provide exactly one of ${args}.`;
+const EXACTLY_ONE = (args: string): string => `Provide exactly one of ${args}.`;
 
 export const NOT_FOUND_HINT = "Check the spelling or search by active substance (DCI).";
 
@@ -32,7 +32,7 @@ export interface ToolContext {
 }
 
 /** Parsed arguments of a tool, as the SDK hands them to its callback. */
-export type ToolArgs<I extends z.ZodObject> = StandardSchemaWithJSON.InferOutput<I>;
+type ToolArgs<I extends z.ZodObject> = StandardSchemaWithJSON.InferOutput<I>;
 
 export interface Tool<I extends z.ZodObject, O extends z.ZodType> {
 	name: string;
