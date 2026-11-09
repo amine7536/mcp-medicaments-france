@@ -214,6 +214,53 @@ describe("/mcp", () => {
 			worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL, { method: "POST" }), { ...env, MCP_LIMIT: { limit } }, ctx),
 		).rejects.toThrow("limiter down");
 	});
+
+	it("answers the CORS preflight with 200, no body and the CORS headers", async () => {
+		const res = await exports.default.fetch(URL, {
+			method: "OPTIONS",
+			headers: { Origin: "http://localhost:6274", "Access-Control-Request-Method": "POST" },
+		});
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("");
+		expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+		expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+		expect(res.headers.get("Access-Control-Allow-Headers")).toContain("MCP-Protocol-Version");
+	});
+
+	it("rejects a non-localhost Origin with a 403 JSON-RPC error and serves no tool", async () => {
+		const res = await exports.default.fetch(URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Origin: "https://inspector.example" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+		});
+		expect(res.status).toBe(403);
+		expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+		const body = (await res.json()) as { error?: { code: number }; result?: unknown };
+		expect(body.error?.code).toBe(-32000);
+		expect(body.result).toBeUndefined();
+	});
+
+	it("serves initialize to a localhost Origin", async () => {
+		const init = await rpc(
+			1,
+			"initialize",
+			{ protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "test", version: "1.0.0" } },
+			{ Origin: "http://localhost:6274" },
+		);
+		expect(init.result).toMatchObject({ protocolVersion: PROTOCOL_VERSION });
+	});
+
+	it("a served POST carries the CORS headers", async () => {
+		const res = await exports.default.fetch(URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping", params: {} }),
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+		expect(res.headers.get("Access-Control-Expose-Headers")).toBe("mcp-session-id");
+		await res.text();
+	});
 });
 
 describe("unknown paths", () => {
