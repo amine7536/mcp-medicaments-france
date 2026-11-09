@@ -110,12 +110,22 @@ describe("/mcp", () => {
 	it("withAddedFields adds listed fields and rejects bad entries", () => {
 		const fixtures = { tool: { type: "object", properties: { a: { type: "string" } }, required: ["a"], additionalProperties: false } };
 		const before = structuredClone(fixtures);
-		const added = withAddedFields(fixtures, [{ tool: "tool", path: "", property: "b", schema: { type: "integer" } }]);
+		const added = withAddedFields(fixtures, [{ tool: "tool", path: "", property: "b", schema: { type: "integer" } }], []);
 		expect(added.tool.properties).toEqual({ a: { type: "string" }, b: { type: "integer" } });
 		expect(added.tool.required).toEqual(["a"]);
 		expect(fixtures).toEqual(before);
-		expect(() => withAddedFields(fixtures, [{ tool: "tool", path: "/properties/a", property: "b", schema: {} }])).toThrow();
-		expect(() => withAddedFields(fixtures, [{ tool: "tool", path: "", property: "a", schema: {} }])).toThrow();
+		expect(() => withAddedFields(fixtures, [{ tool: "tool", path: "/properties/a", property: "b", schema: {} }], [])).toThrow();
+		expect(() => withAddedFields(fixtures, [{ tool: "tool", path: "", property: "a", schema: {} }], [])).toThrow();
+	});
+
+	it("withAddedFields appends listed enum values and rejects bad entries", () => {
+		const fixtures = { tool: { type: "object", properties: { a: { anyOf: [{ type: "string", enum: ["x", "y"] }, { type: "null" }] } } } };
+		const before = structuredClone(fixtures);
+		const added = withAddedFields(fixtures, [], [{ tool: "tool", path: "/properties/a/anyOf/0", value: "z" }]);
+		expect(added.tool.properties.a.anyOf[0]?.enum).toEqual(["x", "y", "z"]);
+		expect(fixtures).toEqual(before);
+		expect(() => withAddedFields(fixtures, [], [{ tool: "tool", path: "/properties/a/anyOf/1", value: "z" }])).toThrow();
+		expect(() => withAddedFields(fixtures, [], [{ tool: "tool", path: "/properties/a/anyOf/0", value: "x" }])).toThrow();
 	});
 
 	it("serves no output object that forbids extra properties", async () => {

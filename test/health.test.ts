@@ -79,6 +79,11 @@ describe("loadHealth", () => {
 		expect(quality).toEqual({ unknown_status: 2, scope_inconnu: 1, return_unparsed: 1, unmatched: 3 + 5 });
 	});
 
+	it("does not count the indérminée typo as unparsed", async () => {
+		await addShortage("2007", "tension", "ville", "Date de remise à disposition prévue indérminée", null);
+		expect((await loadHealth(env.DB, NOW)).quality.return_unparsed).toBe(0);
+	});
+
 	it("has a null rate without listed shortages", async () => {
 		await env.DB.prepare("DELETE FROM shortages").run();
 		const { match, counts } = await loadHealth(env.DB, NOW);
