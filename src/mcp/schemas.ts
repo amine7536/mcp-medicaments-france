@@ -36,6 +36,8 @@ export const ExpectedReturn = outputObject({
 	part: z.enum(RETURN_PARTS).nullable(),
 	raw: z.string().nullable(),
 	passed: z.boolean(),
+	/** A "début" or "mi" month return past this service's cutoff (the 10th, or the 20th) while `passed` is false; absent otherwise. */
+	likely_overdue: z.literal(true).optional(),
 });
 export type ExpectedReturn = z.infer<typeof ExpectedReturn>;
 
@@ -146,8 +148,27 @@ export interface ShortageRow {
 /** The UTC calendar date of `now`, `YYYY-MM-DD`. */
 export const utcDate = (now: Date): string => now.toISOString().slice(0, 10);
 
+/** Day of the month after which a "début" or "mi" month return is read as likely overdue. Not an ANSM date. */
+const LIKELY_OVERDUE_AFTER_DAY = { debut: 10, mi: 20 } as const;
+
+/** Whether a "début" or "mi" month return is past its cutoff while its window has not ended. */
+function likelyOverdue(row: ShortageRow, today: string, passed: boolean): boolean {
+	const part = row.expected_return_part;
+	const earliest = row.expected_return_earliest;
+	if (passed || row.expected_return_precision !== "month" || earliest === null || (part !== "debut" && part !== "mi")) return false;
+	return today > `${earliest.slice(0, 8)}${String(LIKELY_OVERDUE_AFTER_DAY[part]).padStart(2, "0")}`;
+}
+
+/** Summary sentence of a likely overdue "début" or "mi" return. */
+export function likelyOverdueNote(part: "debut" | "mi"): string {
+	const period = part === "debut" ? "début" : "mi";
+	return `The announced "${period}" period has likely passed (read by this service as after the ${LIKELY_OVERDUE_AFTER_DAY[part]}th of the month; not an ANSM date)`;
+}
+
 export function toShortageSummary(row: ShortageRow, now: Date): ShortageSummary {
 	const latest = row.expected_return_latest;
+	const today = utcDate(now);
+	const passed = latest !== null && latest < today;
 	return {
 		shortage_id: row.id,
 		name: row.raw_name,
@@ -162,7 +183,8 @@ export function toShortageSummary(row: ShortageRow, now: Date): ShortageSummary 
 			precision: row.expected_return_precision,
 			part: row.expected_return_part,
 			raw: row.expected_return_raw,
-			passed: latest !== null && latest < utcDate(now),
+			passed,
+			...(likelyOverdue(row, today, passed) ? { likely_overdue: true as const } : {}),
 		},
 		returned_at: row.returned_at,
 		ansm_updated_at: row.ansm_updated_at,
@@ -180,5 +202,6 @@ export function describeShortage(s: ShortageSummary): string {
 	let line = parts.join(", ");
 	if (s.expected_return.raw !== null) line += `. Expected return (ANSM wording): "${s.expected_return.raw}"`;
 	if (s.expected_return.passed) line += ". The announced return date has passed";
+	if (s.expected_return.likely_overdue && (s.expected_return.part === "debut" || s.expected_return.part === "mi")) line += `. ${likelyOverdueNote(s.expected_return.part)}`;
 	return `${line}.`;
 }

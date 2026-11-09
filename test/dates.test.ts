@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ExpectedReturn, parseExpectedReturn, parseFrDate } from "../src/lib/dates";
+import { type ExpectedReturn, isUndetermined, parseExpectedReturn, parseFrDate } from "../src/lib/dates";
 
 const NONE: ExpectedReturn = { earliest: null, latest: null, precision: null, part: null };
 const P = "Date de remise à disposition prévue";
@@ -55,6 +55,33 @@ describe("parseExpectedReturn: rules", () => {
 		["Rupture de stock", NONE],
 	])("%s", (line, expected) => {
 		expect(parseExpectedReturn(line)).toEqual(expected);
+	});
+
+	it("parses a part of a quarter and a season", () => {
+		expect(parseExpectedReturn("Remise à disposition prévue à la fin du troisième trimestre 2026")).toEqual(r("2026-07-01", "2026-09-30", "quarter", "fin"));
+		expect(parseExpectedReturn(`${P} : été 2027`)).toEqual(r("2027-06-01", "2027-08-31", "season"));
+	});
+
+	it.each<[string, ExpectedReturn]>([
+		[`${P} début du premier trimestre 2027`, r("2027-01-01", "2027-03-31", "quarter", "debut")],
+		[`${P} mi du 2ème trimestre 2027`, r("2027-04-01", "2027-06-30", "quarter", "mi")],
+		[`${P} printemps 2027`, r("2027-03-01", "2027-05-31", "season")],
+		[`${P} été 2027`, r("2027-06-01", "2027-08-31", "season")],
+		[`${P} automne 2027`, r("2027-09-01", "2027-11-30", "season")],
+		[`${P} hiver 2026`, r("2026-12-01", "2027-02-28", "season")],
+		[`${P} hiver 2027`, r("2027-12-01", "2028-02-29", "season")],
+		[`${P} été 1999`, NONE],
+		[`${P} hiver 2101`, NONE],
+		[`${P} fin du troisième trimestre 2924`, NONE],
+	])("quarter part and season: %s", (line, expected) => {
+		expect(parseExpectedReturn(line)).toEqual(expected);
+	});
+
+	it("isUndetermined accepts the indéterminée wording and its indérminée typo only", () => {
+		expect(isUndetermined(`${P} : indéterminée.`)).toBe(true);
+		expect(isUndetermined(`${P} INDÉTERMINÉE`)).toBe(true);
+		expect(isUndetermined(`${P} indérminée`)).toBe(true);
+		expect(isUndetermined(`${P} été 2027`)).toBe(false);
 	});
 
 	it("treats the indérminée typo as indeterminate", () => {

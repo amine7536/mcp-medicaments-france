@@ -7,7 +7,7 @@ import { log } from "../src/ingest/http";
 import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { CHANGE_TYPES, describeShortage, ean13CheckDigit, isValidEan13, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { CHANGE_TYPES, describeShortage, ean13CheckDigit, isValidEan13, likelyOverdueNote, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
 import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from "../src/mcp/resolve";
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
@@ -299,6 +299,66 @@ describe("get_availability", () => {
 		expect(s).toContain(`Expected return (ANSM wording): "${MONTH_RAW}"`);
 		expect(s).not.toMatch(/2026-11-01|2026-11-30/);
 		expect(s).not.toContain("has passed");
+	});
+
+	it("flags a début or mi return as likely overdue after its cutoff", async () => {
+		const id = SHORTAGES.dolipraneRupture.id;
+		const at = (date: string) => new Date(`${date}T12:00:00.000Z`);
+		const setPart = (part: string | null) => env.DB.prepare("UPDATE shortages SET expected_return_part = ? WHERE id = ?").bind(part, id).run();
+		const overdue = async (date: string, shortageId = id) => (await call(getAvailability, { shortage_id: shortageId }, at(date))).data.shortage.expected_return;
+		try {
+			await setPart("debut");
+			expect((await overdue("2026-11-10")).likely_overdue).toBeUndefined();
+			expect((await overdue("2026-11-11")).likely_overdue).toBe(true);
+			expect(await overdue("2026-12-01")).toMatchObject({ passed: true });
+			expect((await overdue("2026-12-01")).likely_overdue).toBeUndefined();
+			await setPart("mi");
+			expect((await overdue("2026-11-20")).likely_overdue).toBeUndefined();
+			expect(await overdue("2026-11-21")).toMatchObject({ passed: false, likely_overdue: true });
+			await setPart("fin");
+			expect((await overdue("2026-11-21")).likely_overdue).toBeUndefined();
+		} finally {
+			await setPart(null);
+		}
+		expect(await overdue("2026-09-30", SHORTAGES.amoxicilline.id)).toMatchObject({ precision: "day", passed: false });
+		expect((await overdue("2026-09-30", SHORTAGES.amoxicilline.id)).likely_overdue).toBeUndefined();
+	});
+
+	it("adds the likely overdue sentence to the summary only when likely_overdue is set", async () => {
+		const id = SHORTAGES.dolipraneRupture.id;
+		const setPart = (part: string | null) => env.DB.prepare("UPDATE shortages SET expected_return_part = ? WHERE id = ?").bind(part, id).run();
+		try {
+			for (const [part, date, flagged] of [
+				["debut", "2026-11-10", false],
+				["debut", "2026-11-11", true],
+				["mi", "2026-11-20", false],
+				["mi", "2026-11-21", true],
+			] as const) {
+				await setPart(part);
+				const { data, result } = await call(getAvailability, { shortage_id: id }, new Date(`${date}T12:00:00.000Z`));
+				expect(data.shortage.expected_return.likely_overdue === true).toBe(flagged);
+				expect(summary(result).includes(likelyOverdueNote(part))).toBe(flagged);
+				expect(summary(result).includes(likelyOverdueNote(part === "debut" ? "mi" : "debut"))).toBe(false);
+			}
+		} finally {
+			await setPart(null);
+		}
+	});
+
+	it("returns a season return through the published schema", async () => {
+		const id = SHORTAGES.dolipraneRupture.id;
+		const er = SHORTAGES.dolipraneRupture.er;
+		const set = (precision: string, earliest: string, latest: string) =>
+			env.DB.prepare("UPDATE shortages SET expected_return_precision = ?, expected_return_earliest = ?, expected_return_latest = ?, expected_return_part = NULL WHERE id = ?")
+				.bind(precision, earliest, latest, id)
+				.run();
+		try {
+			await set("season", "2027-06-01", "2027-08-31");
+			const { data } = await call(getAvailability, { shortage_id: id });
+			expect(data.shortage.expected_return).toMatchObject({ earliest: "2027-06-01", latest: "2027-08-31", precision: "season", part: null, passed: false });
+		} finally {
+			await set(er.precision, er.earliest, er.latest);
+		}
 	});
 
 	it("flags a passed return date and a probable match", async () => {

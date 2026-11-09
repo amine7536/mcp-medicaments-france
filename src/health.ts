@@ -1,6 +1,7 @@
 import { STATUSES, type Status } from "./ingest/ansm";
 import { log } from "./ingest/http";
 import { RUNNING_TTL_MS } from "./ingest/run";
+import { isUndetermined } from "./lib/dates";
 import { isStale } from "./mcp/envelope";
 import { PROBABLE_MATCH_BELOW } from "./mcp/schemas";
 
@@ -24,9 +25,6 @@ export interface Health {
 	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; unmatched: number };
 	generated_at: string;
 }
-
-/** An expected return that cannot be parsed because ANSM states it is undetermined. */
-const UNDETERMINED = /indétermin/i;
 
 const LISTED_SQL = `SELECT
 	COUNT(*) AS listed,
@@ -69,7 +67,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 	const l = first<{ listed: number; matched: number; unknown_status: number; scope_inconnu: number; unmatched: number }>(listed);
 	const listedCount = l?.listed ?? 0;
 	const matched = l?.matched ?? 0;
-	const returnUnparsed = ((unparsed?.results ?? []) as Array<{ raw: string }>).filter((r) => !UNDETERMINED.test(r.raw)).length;
+	const returnUnparsed = ((unparsed?.results ?? []) as Array<{ raw: string }>).filter((r) => !isUndetermined(r.raw)).length;
 
 	return {
 		status: healthStatus(lastOkAt, run, now),

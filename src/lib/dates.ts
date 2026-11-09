@@ -1,6 +1,6 @@
 import { normalize } from "./normalize";
 
-export const RETURN_PRECISIONS = ["day", "month", "quarter", "year"] as const;
+export const RETURN_PRECISIONS = ["day", "month", "quarter", "year", "season"] as const;
 export const RETURN_PARTS = ["debut", "mi", "fin"] as const;
 
 export interface ExpectedReturn {
@@ -33,6 +33,7 @@ const LEADING_WORDS = new Set([
 	"PREVUE",
 	"PREVU",
 	"LE",
+	"LA",
 	"AU",
 	"MIEUX",
 	"NIVEAU",
@@ -57,7 +58,10 @@ const RE_NUMERIC = /^(\d{1,2}\/\d{1,2}\/\d{4})(?= |$)/;
 const RE_DAY = new RegExp(`^(?:(1) ER|(\\d{1,2})) ${MONTH} ${YEAR}`);
 const RE_PART_MONTH = new RegExp(`^(DEBUT|MI|FIN) ${MONTH} ${YEAR}`);
 const RE_MONTH = new RegExp(`^(?:COURANT )?${MONTH} ${YEAR}`);
-const RE_QUARTER = new RegExp(`^(PREMIER|1 ?ER|DEUXIEME|2 ?EME|SECOND|TROISIEME|3 ?EME|QUATRIEME|4 ?EME) TRIMESTRE ${YEAR}`);
+const ORDINAL = "(PREMIER|1 ?ER|DEUXIEME|2 ?EME|SECOND|TROISIEME|3 ?EME|QUATRIEME|4 ?EME)";
+const RE_PART_QUARTER = new RegExp(`^(DEBUT|MI|FIN) DU ${ORDINAL} TRIMESTRE ${YEAR}`);
+const RE_QUARTER = new RegExp(`^${ORDINAL} TRIMESTRE ${YEAR}`);
+const RE_SEASON = new RegExp(`^(PRINTEMPS|ETE|AUTOMNE|HIVER) ${YEAR}`);
 const RE_PART_YEAR = new RegExp(`^(?:(DEBUT)|(FIN)(?: D ANNEE)?) ${YEAR}`);
 const RE_YEAR = new RegExp(`^(?:COURANT )?${YEAR}`);
 
@@ -98,6 +102,22 @@ function year(y: number, part: ExpectedReturn["part"]): ExpectedReturn {
 	return { earliest: iso(y, 1, 1), latest: iso(y, 12, 31), precision: "year", part };
 }
 
+function quarter(y: number, ordinal: string, part: ExpectedReturn["part"]): ExpectedReturn {
+	const q = QUARTERS.find(([re]) => re.test(ordinal))?.[1] as number;
+	const first = (q - 1) * 3 + 1;
+	return { earliest: iso(y, first, 1), latest: iso(y, first + 2, lastDay(y, first + 2)), precision: "quarter", part };
+}
+
+/** First month of each season; a season spans three months, winter running into the next year. */
+const SEASONS: Record<string, number> = { PRINTEMPS: 3, ETE: 6, AUTOMNE: 9, HIVER: 12 };
+
+function season(y: number, name: string): ExpectedReturn {
+	const first = SEASONS[name] as number;
+	const endYear = first === 12 ? y + 1 : y;
+	const endMonth = ((first + 1) % 12) + 1;
+	return { earliest: iso(y, first, 1), latest: iso(endYear, endMonth, lastDay(endYear, endMonth)), precision: "season", part: null };
+}
+
 const PARTS: Record<string, ExpectedReturn["part"]> = { DEBUT: "debut", MI: "mi", FIN: "fin" };
 const monthIndex = (name: string): number => MONTHS.indexOf(name) + 1;
 
@@ -109,10 +129,16 @@ function tailOf(t: string): string | null {
 	return words.join(" ");
 }
 
+/** Whether an ANSM expected-return line states the return is undetermined (including the "indérminée" typo). */
+export function isUndetermined(line: string): boolean {
+	const t = normalize(line);
+	return t.includes("INDETERMINE") || t.includes("INDERMINE");
+}
+
 /** Parses an ANSM expected-return line into a date window. Never invents a single day. */
 export function parseExpectedReturn(line: string): ExpectedReturn {
+	if (isUndetermined(line)) return NONE;
 	const t = normalize(line);
-	if (t.includes("INDETERMINE") || t.includes("INDERMINE")) return NONE;
 	const tail = tailOf(t);
 	if (tail === null) return NONE;
 
@@ -135,17 +161,17 @@ export function parseExpectedReturn(line: string): ExpectedReturn {
 		y = Number(m[2]);
 		return yearInRange(y) ? month(y, monthIndex(m[1] as string), null) : NONE;
 	}
+	if ((m = RE_PART_QUARTER.exec(tail))) {
+		y = Number(m[3]);
+		return yearInRange(y) ? quarter(y, m[2] as string, PARTS[m[1] as string] ?? null) : NONE;
+	}
 	if ((m = RE_QUARTER.exec(tail))) {
 		y = Number(m[2]);
-		if (!yearInRange(y)) return NONE;
-		const q = QUARTERS.find(([re]) => re.test(m?.[1] as string))?.[1] as number;
-		const first = (q - 1) * 3 + 1;
-		return {
-			earliest: iso(y, first, 1),
-			latest: iso(y, first + 2, lastDay(y, first + 2)),
-			precision: "quarter",
-			part: null,
-		};
+		return yearInRange(y) ? quarter(y, m[1] as string, null) : NONE;
+	}
+	if ((m = RE_SEASON.exec(tail))) {
+		y = Number(m[2]);
+		return yearInRange(y) ? season(y, m[1] as string) : NONE;
 	}
 	if ((m = RE_PART_YEAR.exec(tail))) {
 		y = Number(m[3]);

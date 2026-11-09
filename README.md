@@ -60,7 +60,7 @@ Every result carries the sources, their update dates, the coverage note, the dis
 - ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available.
 - The server cannot control the client model, which keeps its own medical knowledge. It is not a substitute for a pharmacist or doctor.
 - Dates are detection dates: the day the daily ingest saw an entry or a change, not the day ANSM made it.
-- Scope (city, hospital) and expected return are parsed from ANSM free text. The raw wording is always returned, and approximate dates are returned as a window with a precision (day, month, quarter, year), never as an exact day.
+- Scope (city, hospital) and expected return are parsed from ANSM free text. The raw wording is always returned, and approximate dates are returned as a window with a precision (day, month, quarter, year, season), never as an exact day. A "début" or "mi" month return is flagged `likely_overdue` after the 10th or the 20th of that month: this service's reading, not an ANSM date.
 - Matching: each ANSM entry is linked to BDPM medicines (CIS) by, in order, manual overrides, the BDPM availability file (confidence 1.0), exact normalized names (0.95), then fuzzy name similarity on the same brand. An entry with a best match of confidence ≥ 0.8 counts as matched. Match rate: **94.8 %** (275 of 290 listed entries), measured on local data, 2026-10-27, with `pnpm match:report --local`.
 
 ## Data sources and licence
