@@ -1,7 +1,8 @@
-import { type ExpectedReturn, parseExpectedReturn, parseFrDate } from "../lib/dates";
+import { type ExpectedReturn, isUndetermined, parseExpectedReturn, parseFrDate } from "../lib/dates";
 import { sha256Hex } from "../lib/hash";
 import { consume } from "../lib/html";
-import { decodeEntities, normalize } from "../lib/normalize";
+import { decodeHTML } from "entities/decode";
+import { normalize } from "../lib/normalize";
 import { log } from "./http";
 
 export const STATUSES = ["rupture", "tension", "arret_commercialisation", "remise_a_disposition", "autre"] as const;
@@ -50,7 +51,7 @@ const STATUS_BY_LABEL: Record<string, Status> = {
 
 /** Decodes entities, collapses whitespace and trims. */
 function clean(s: string): string {
-	return decodeEntities(s).replace(/\s+/g, " ").trim();
+	return decodeHTML(s).replace(/\s+/g, " ").trim();
 }
 
 export function mapStatus(label: string): Status {
@@ -236,8 +237,7 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 		if (line !== null) {
 			expected_return_raw = line;
 			expected = parseExpectedReturn(line);
-			const t = normalize(line);
-			if (expected.earliest === null && !t.includes("INDETERMINE") && !t.includes("INDERMINE")) log("return_unparsed", { id });
+			if (expected.earliest === null && !isUndetermined(line)) log("return_unparsed", { id });
 		}
 	}
 

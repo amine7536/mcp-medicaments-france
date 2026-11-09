@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeEntities, ftsTokens, normalize, tokens } from "../src/lib/normalize";
+import { ftsTokens, normalize, tokens } from "../src/lib/normalize";
 
 describe("normalize", () => {
 	it.each([
@@ -21,13 +21,7 @@ describe("normalize", () => {
 		expect(normalize("chlorhydrate d&#039;amiodarone")).toBe("CHLORHYDRATE D AMIODARONE");
 		expect(normalize("<p>Nif&eacute;dipine</p>")).toBe("NIFEDIPINE");
 		expect(normalize("a&nbsp;b &amp; c")).toBe("A B C");
-	});
-
-	it("decodes Latin-1 and oelig entities", () => {
-		expect(decodeEntities("&micro;")).toBe("µ");
-		expect(decodeEntities("&deg;")).toBe("°");
-		expect(decodeEntities("&oslash;")).toBe("ø");
-		expect(decodeEntities("&oelig;&OElig;&aelig;&AElig;&szlig;")).toBe("œŒæÆß");
+		expect(normalize("10 &micro;g")).toBe("10 MCG");
 	});
 
 	it("maps the Œ and Æ ligatures", () => {
@@ -54,23 +48,6 @@ describe("normalize", () => {
 		expect(normalize("crème 0,1%")).toBe("CREME 0.1 POUR CENT");
 		expect(normalize("10 000 U.I.")).toBe("10 000 UI");
 		expect(normalize("MG/4ML")).toBe("MG/4 ML");
-	});
-});
-
-describe("decodeEntities", () => {
-	it("decodes named, accented and numeric entities", () => {
-		expect(decodeEntities("&amp;&lt;&gt;&quot;&apos;")).toBe("&<>\"'");
-		expect(decodeEntities("&eacute;&egrave;&agrave;&ccedil;&ocirc;&Eacute;")).toBe("éèàçôÉ");
-		expect(decodeEntities("&#039;&#233;&#xE9;&#XE8;")).toBe("'ééè");
-		expect(decodeEntities("&nbsp;")).toBe(" ");
-	});
-
-	it("decodes HTML5-only named entities", () => {
-		expect(decodeEntities("&hellip;&rsquo;")).toBe("…’");
-	});
-
-	it("keeps tags and unknown entities", () => {
-		expect(decodeEntities("<b>&unknown;</b>")).toBe("<b>&unknown;</b>");
 	});
 });
 

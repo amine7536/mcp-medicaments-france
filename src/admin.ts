@@ -1,14 +1,11 @@
 import { runIngest } from "./ingest/run";
+import { sha256 } from "./lib/hash";
 
 const json = (body: unknown, status: number): Response => Response.json(body, { status });
 
-async function digest(s: string): Promise<ArrayBuffer> {
-	return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-}
-
 /** Constant-time comparison of the SHA-256 digests of `a` and `b`. */
 async function safeEqual(a: string, b: string): Promise<boolean> {
-	const [da, db] = await Promise.all([digest(a), digest(b)]);
+	const [da, db] = await Promise.all([sha256(a), sha256(b)]);
 	return crypto.subtle.timingSafeEqual(da, db);
 }
 

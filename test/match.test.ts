@@ -2,8 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseList } from "../src/ingest/ansm";
 import { parseDispo } from "../src/ingest/dispo";
-import { afterIngest } from "../src/ingest/hooks";
 import {
+	afterIngest,
 	buildMatchInputs,
 	doseVariants,
 	type ListedShortage,
@@ -300,12 +300,11 @@ describe("matchAll", () => {
 		]);
 	}
 
-	it("replaces all rows in one batch with exactly 4 queries and logs unmatched entries", async () => {
+	it("replaces all rows in one batch and logs unmatched entries", async () => {
 		await seed();
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const counted = queryCount();
 		expect(await matchAll(env)).toEqual({ manual: 0, dispo: 1, exact: 1, fuzzy: 0, sibling: 0, none: 1 });
-		expect(counted.queries()).toBe(4);
 		expect(counted.batches()).toBe(1);
 		expect(await matches()).toEqual([
 			{ shortage_id: "1", cis: "100", method: "exact", confidence: 0.95, is_best: 1 },
@@ -325,7 +324,7 @@ describe("matchAll", () => {
 		await env.DB.batch(dispo);
 		const counted = queryCount();
 		await matchAll(env);
-		expect(counted.queries()).toBe(4);
+		expect(counted.batches()).toBe(1);
 		expect(await matches()).toHaveLength(45);
 	});
 

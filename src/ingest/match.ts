@@ -1,4 +1,5 @@
 import manualMatches from "../data/manual_matches.json";
+import { insertChunks } from "../lib/db";
 import { NUMERIC, tokens } from "../lib/normalize";
 import { log } from "./http";
 
@@ -53,7 +54,6 @@ interface Candidate {
 	confidence: number;
 }
 
-const ROWS_PER_INSERT = 20; // 5 columns x 20 rows = 100 bound parameters (limit 100)
 const FUZZY_MIN_SCORE = 0.8;
 const DOSE = String.raw`\d+(?:\.\d+)? (?:MG|G|MCG|UI)`;
 /** The first dose list: two or more doses separated by single spaces, `ET` before the last, each delimited by a space or the string ends. */
@@ -252,18 +252,20 @@ export async function matchAll(env: Env): Promise<MatchCounts> {
 		counts.sibling += matched.filter((r) => r.method === "sibling").length;
 		rows.push(...matched);
 	}
-	const stmts: D1PreparedStatement[] = [db.prepare("DELETE FROM shortage_matches")];
-	for (let i = 0; i < rows.length; i += ROWS_PER_INSERT) {
-		const chunk = rows.slice(i, i + ROWS_PER_INSERT);
-		stmts.push(
-			db
-				.prepare(
-					"INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES " +
-						chunk.map(() => "(?, ?, ?, ?, ?)").join(", "),
-				)
-				.bind(...chunk.flatMap((r) => [r.shortage_id, r.cis, r.method, r.confidence, r.is_best])),
-		);
-	}
-	await db.batch(stmts);
+	await db.batch([
+		db.prepare("DELETE FROM shortage_matches"),
+		...insertChunks(
+			db,
+			"shortage_matches",
+			["shortage_id", "cis", "method", "confidence", "is_best"],
+			rows.map((r) => [r.shortage_id, r.cis, r.method, r.confidence, r.is_best]),
+		),
+	]);
 	return counts;
+}
+
+/** Runs after a successful diff; returns a fragment for the run message. */
+export async function afterIngest(env: Env, _run: { id: number; bootstrap: boolean }): Promise<string> {
+	const c = await matchAll(env);
+	return `match: manual=${c.manual} dispo=${c.dispo} exact=${c.exact} fuzzy=${c.fuzzy} none=${c.none} sibling=${c.sibling}`;
 }

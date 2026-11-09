@@ -1,6 +1,7 @@
 import { decodeCp1252 } from "../lib/cp1252";
+import { insertChunks } from "../lib/db";
 import { parseTsv } from "../lib/tsv";
-import { DISPO_URL, type Fetcher, get, log } from "./http";
+import { DISPO_URL, errorMessage, type Fetcher, get, log } from "./http";
 
 export interface DispoRow {
 	cis: string;
@@ -11,7 +12,6 @@ export interface DispoRow {
 
 const COLS = 8;
 const DISPO_FILE = "CIS_CIP_Dispo_Spec.txt";
-const ROWS_PER_INSERT = 25; // 4 columns x 25 rows = 100 bound parameters (limit 100)
 
 /** Decodes and validates `CIS_CIP_Dispo_Spec.txt`; throws on any malformed line or too few rows. */
 export function parseDispo(bytes: ArrayBuffer | Uint8Array, minRows = 200): DispoRow[] {
@@ -32,14 +32,15 @@ export function parseDispo(bytes: ArrayBuffer | Uint8Array, minRows = 200): Disp
 
 /** Atomically replaces `bdpm_dispo` with `rows` (one batch). */
 export async function replaceDispo(db: D1Database, rows: DispoRow[]): Promise<void> {
-	const stmts: D1PreparedStatement[] = [db.prepare("DELETE FROM bdpm_dispo")];
-	for (let i = 0; i < rows.length; i += ROWS_PER_INSERT) {
-		const chunk = rows.slice(i, i + ROWS_PER_INSERT);
-		const sql =
-			"INSERT INTO bdpm_dispo (cis, status_code, status_label, ansm_path) VALUES " + chunk.map(() => "(?, ?, ?, ?)").join(", ");
-		stmts.push(db.prepare(sql).bind(...chunk.flatMap((r) => [r.cis, r.status_code, r.status_label, r.ansm_path])));
-	}
-	await db.batch(stmts);
+	await db.batch([
+		db.prepare("DELETE FROM bdpm_dispo"),
+		...insertChunks(
+			db,
+			"bdpm_dispo",
+			["cis", "status_code", "status_label", "ansm_path"],
+			rows.map((r) => [r.cis, r.status_code, r.status_label, r.ansm_path]),
+		),
+	]);
 }
 
 /** Fetches, validates and stores the BDPM shortage file. On any failure the table is kept. */
@@ -50,7 +51,7 @@ export async function ingestDispo(db: D1Database, fetcher: Fetcher, minRows = 20
 		await replaceDispo(db, parseDispo(await res.arrayBuffer(), minRows));
 		return "ok";
 	} catch (err) {
-		log("dispo_failed", { reason: err instanceof Error ? err.message : String(err) });
+		log("dispo_failed", { reason: errorMessage(err) });
 		return "failed";
 	}
 }
