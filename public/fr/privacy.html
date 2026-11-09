@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confidentialité · Médicaments en France</title>
+<link rel="alternate" hreflang="fr" href="https://medicaments-france.a3e.dev/privacy?lang=fr">
+<link rel="alternate" hreflang="en" href="https://medicaments-france.a3e.dev/privacy?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://medicaments-france.a3e.dev/privacy">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+<div class="wrap">
+<div class="top">
+<a class="site" href="/?lang=fr">Médicaments en France</a>
+<nav class="lang" aria-label="Langue / Language"><a href="/privacy?lang=fr" hreflang="fr" lang="fr" aria-current="true">FR</a> | <a href="/privacy?lang=en" hreflang="en" lang="en">EN</a></nav>
+</div>
+<h1>Confidentialité</h1>
+</div>
+</header>
+<main class="wrap">
+<section>
+<h2>Ce que le service enregistre</h2>
+<p>Pour chaque appel d'outil : le nom de l'outil, le résultat (succès ou erreur), la durée, le code CIS du médicament quand il y en a un, et la date. Ces données servent à mesurer l'usage et la fiabilité du service. Elles sont conservées trois mois dans Cloudflare Workers Analytics Engine.</p>
+</section>
+<section>
+<h2>Ce que le service n'enregistre pas</h2>
+<p>Ni compte, ni cookie, ni adresse IP, ni user agent, ni texte des questions. La page web ne charge aucun script de suivi.</p>
+</section>
+<section>
+<h2>Hébergement</h2>
+<p>Le service est hébergé par Cloudflare. Pour servir chaque requête et limiter le nombre d'appels au serveur MCP (environ 60 par minute et par adresse IP), Cloudflare traite l'adresse IP sans que le service la conserve. Les journaux d'erreurs du service, conservés sept jours, ne contiennent pas le détail des requêtes. <a href="https://www.cloudflare.com/privacypolicy/">Politique de confidentialité de Cloudflare</a></p>
+</section>
+<section>
+<h2>Partage</h2>
+<p>Aucune donnée n'est vendue ni partagée avec des tiers, en dehors de l'hébergement par Cloudflare.</p>
+</section>
+<section>
+<h2>Contact</h2>
+<p>Pour toute question ou demande, ouvrez un ticket sur GitHub (les tickets sont publics). <a href="https://github.com/amine7536/mcp-medicaments-france/issues">https://github.com/amine7536/mcp-medicaments-france/issues</a></p>
+</section>
+<p class="small">Dernière mise à jour : 2026-10-29</p>
+</main>
+<footer>
+<div class="wrap">
+<div>
+<p>Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat, la durée, le code CIS et la date sont enregistrés. <a href="/privacy?lang=fr">Politique de confidentialité</a></p>
+<p>Service indépendant.</p>
+<p>Ce service n'est ni approuvé ni soutenu par l'ANSM, la HAS ou l'UNCAM.</p>
+</div>
+<ul class="links">
+<li><a href="https://github.com/amine7536/mcp-medicaments-france">Code source</a></li>
+<li><a href="https://github.com/amine7536/mcp-medicaments-france/issues">Signaler un problème</a></li>
+<li><a href="/health">État du service</a></li>
+</ul>
+</div>
+</footer>
+</body>
+</html>
