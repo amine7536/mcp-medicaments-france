@@ -19,6 +19,7 @@ interface Run {
 export interface Health {
 	status: HealthStatus;
 	ansm: { last_ok_at: string | null; last_run: Run | null };
+	/** `imported_at`: start of the latest successful BDPM import, as in the tool envelope. */
 	bdpm: { release: string | null; imported_at: string | null };
 	counts: { listed: number; by_status: Record<Status, number>; medicines: number; mitm: number; bdpm_dispo: number };
 	match: { listed: number; matched_ge_0_8: number; rate: number | null };
@@ -49,7 +50,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 		db.prepare("SELECT finished_at FROM ingest_runs WHERE source = 'ansm' AND status = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1"),
 		db.prepare("SELECT started_at, finished_at, status, message FROM ingest_runs WHERE source = 'ansm' ORDER BY started_at DESC, id DESC LIMIT 1"),
 		db.prepare(
-			"SELECT bdpm_release AS release, finished_at AS imported_at FROM ingest_runs WHERE source = 'bdpm' AND status = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1",
+			"SELECT bdpm_release AS release, started_at AS imported_at FROM ingest_runs WHERE source = 'bdpm' AND status = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1",
 		),
 		db.prepare("SELECT status, COUNT(*) AS n FROM shortages WHERE listed = 1 GROUP BY status"),
 		db.prepare("SELECT (SELECT COUNT(*) FROM medicines) AS medicines, (SELECT COUNT(*) FROM mitm) AS mitm, (SELECT COUNT(*) FROM bdpm_dispo) AS bdpm_dispo"),
