@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Médicaments en France</title>
+<meta name="description" content="Recherchez un médicament vendu en France par nom (ex. Doliprane, amoxicilline), code CIS ou code CIP13 (sur la boîte) : présentations, prix, taux de remboursement Sécurité sociale, conditions de prescription et de délivrance (ordonnance), informations de sécurité ANSM et statut de médicament d'intérêt thérapeutique majeur (MITM). Vérifiez s'il est en rupture de stock ou en tension d'approvisionnement, avec la date de retour prévue, et consultez les ruptures en cours et les changements récents.">
+<link rel="alternate" hreflang="fr" href="https://medicaments-france.a3e.dev/?lang=fr">
+<link rel="alternate" hreflang="en" href="https://medicaments-france.a3e.dev/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://medicaments-france.a3e.dev/">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="notice" role="note">
+<div class="wrap"><p><strong>Attention :</strong> information uniquement, pas un avis médical. Ce service ne remplace pas votre médecin ou votre pharmacien : demandez-leur toujours conseil avant de modifier, remplacer ou arrêter un traitement.</p></div>
+</div>
+<header>
+<div class="wrap">
+<div class="top">
+<a class="site" href="/?lang=fr">Médicaments en France</a>
+<nav class="lang" aria-label="Langue / Language"><a href="/?lang=fr" hreflang="fr" lang="fr" aria-current="true">FR</a> | <a href="/?lang=en" hreflang="en" lang="en">EN</a></nav>
+</div>
+<h1>Médicaments en France</h1>
+<p class="lead">Recherchez un médicament vendu en France par nom (ex. Doliprane, amoxicilline), code CIS ou code CIP13 (sur la boîte) : présentations, prix, taux de remboursement Sécurité sociale, conditions de prescription et de délivrance (ordonnance), informations de sécurité ANSM et statut de médicament d'intérêt thérapeutique majeur (MITM). Vérifiez s'il est en rupture de stock ou en tension d'approvisionnement, avec la date de retour prévue, et consultez les ruptures en cours et les changements récents.</p>
+<div class="endpoint">
+<span class="sr-only">Adresse du serveur MCP</span>
+<span class="pill">MCP</span>
+<code>https://medicaments-france.a3e.dev/mcp</code>
+<button type="button" class="copy primary" data-copy="https://medicaments-france.a3e.dev/mcp" data-done="Copié" aria-label="Copier l'adresse du serveur" hidden>Copier</button>
+</div>
+</div>
+</header>
+<main class="wrap">
+<section id="exemples">
+<h2>Exemples</h2>
+<div class="body">
+<dl>
+<dt>« L'Aspirine est-elle en rupture ? »</dt>
+<dd>Statut de rupture selon l'ANSM, date de retour annoncée, lien vers la fiche ANSM et date de mise à jour.</dd>
+<dt>« Quels sont les médicaments en tension pour la cardiologie ? »</dt>
+<dd>Liste des tensions d'approvisionnement du domaine Cardiologie selon l'ANSM, avec les dates de retour annoncées.</dd>
+<dt>« Qu'est-ce qui a changé cette semaine ? »</dt>
+<dd>Nouvelles ruptures, remises à disposition et changements de date de retour détectés par le service.</dd>
+<dt>« L'amoxicilline est-elle un MITM ? »</dt>
+<dd>Indique si le médicament figure sur la liste des médicaments d'intérêt thérapeutique majeur de la BDPM.</dd>
+<dt>« J'ai une boîte avec le code 3400931922766, qu'est-ce que c'est et combien elle coûte ? »</dt>
+<dd>Nom du médicament, prix public et taux de remboursement de la boîte selon la BDPM.</dd>
+<dt>« La Dépakine nécessite-t-elle une ordonnance particulière ? »</dt>
+<dd>Conditions de prescription et de délivrance de la BDPM, citées mot pour mot, et informations de sécurité en cours de l'ANSM avec leurs liens.</dd>
+<dt>« Mon médicament n'est pas listé, il est donc disponible ? »</dt>
+<dd>Non : l'absence de la liste ne garantit pas la disponibilité ; demandez à votre pharmacien.</dd>
+<dt>« Par quoi remplacer le Brevibloc ? »</dt>
+<dd>Refus : aucun médicament de remplacement n'est proposé ; seul un médecin ou un pharmacien peut choisir une alternative.</dd>
+</dl>
+<h3>Réponses réelles</h3>
+<p class="note">Réponses de Claude via ce serveur, capturées le 28/10/2026 avec la consigne de répondre en quelques phrases. Les données ont pu changer depuis.</p>
+<div class="chat" role="log" aria-label="Exemple de conversation avec Claude">
+<div class="chat-head"><span>Claude + medicaments-france</span><span>28/10/2026</span></div>
+<div class="chat-body">
+<div class="msg user"><p>« L'Aspirine est-elle en rupture ? »</p></div>
+<div class="msg bot"><span class="who">Claude</span><p>Parmi les présentations d'Aspirine, seule l'ASPIRINE ARROW 75 mg, comprimé gastro-résistant figure sur la liste de l'ANSM : elle est en tension d'approvisionnement en ville et en rupture à l'hôpital, sans date de retour connue (fiche ANSM : https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments/acide-acetylsalicylique-75-mg-comprime-gastro-resistant-acide-acetylsalicylique, mise à jour le 21/05/2026). Les autres présentations d'Aspirine ne figurent pas sur cette liste, mais cela ne garantit pas qu'elles soient disponibles, car l'ANSM recense surtout les médicaments d'intérêt thérapeutique majeur. Seul votre pharmacien ou votre médecin peut vous dire quoi faire pour votre traitement. Sources : ANSM (données récupérées le 28/10/2026) et BDPM (version du 29/09/2026).</p></div>
+<div class="msg user"><p>« Quels sont les médicaments en tension pour la cardiologie ? »</p></div>
+<div class="msg bot"><span class="who">Claude</span><p>L'ANSM recense 23 médicaments de cardiologie en tension d'approvisionnement. Parmi les plus récemment mis à jour, entre le 6 et le 26 octobre 2026 : Volibris (ambrisentan, à l'hôpital), Nifédipine Viatris LP 30 mg (retour prévu début décembre 2026), Tarka LP 240/2 mg (février 2027), Winrevair 60 mg, Adempas 0,5 mg (novembre 2026) et Modamide 5 mg (janvier 2027). Plusieurs traitements courants sont aussi concernés : furosémide 20 et 40 mg en comprimés, propranolol 40 mg, trandolapril 2 et 4 mg, aspirine 75 mg gastro-résistante (en rupture à l'hôpital), clopidogrel 75 mg et Calciparine (héparine calcique, plusieurs dosages). La liste comprend également Nilemdo, Repatha, Praluent, bosentan 125 mg, nitrendipine, Dobutamine Panpharma (à l'hôpital), Colchimax et Colchicine Opocalcium. Sources : ANSM (données récupérées le 28/10/2026) et BDPM (version du 29/09/2026) ; un médicament absent de la liste n'est pas forcément disponible. Pour toute question sur un traitement, parlez-en à votre pharmacien ou à votre médecin.</p></div>
+<div class="msg user"><p>« Par quoi remplacer le Brevibloc ? »</p></div>
+<div class="msg bot"><span class="who">Claude</span><p>Je ne peux pas vous indiquer de remplaçant : seul un médecin ou un pharmacien (ici, la pharmacie hospitalière) peut choisir une alternative. D'après l'ANSM (fiche mise à jour le 26/10/2026), Brevibloc 100 mg/10 ml en flacon injectable est en rupture de stock à l'hôpital, avec un retour prévu courant 2027 : https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments/brevibloc-100-mg-10-ml-solution-injectable-en-flacon-esmolol-chlorhydrate-d. Brevibloc 10 mg/ml en solution pour perfusion ne figure pas dans la liste des ruptures de l'ANSM, mais ça ne garantit pas qu'il soit disponible. Sources : ANSM (données récupérées le 28/10/2026) et BDPM (version du 29/09/2026).</p></div>
+</div>
+</div>
+</div>
+</section>
+
+<section>
+<h2>Ajouter le serveur</h2>
+<div class="body">
+<div class="tabs">
+<div class="tabbar">
+<div role="tablist" aria-label="Clients MCP" hidden>
+<button type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Claude</button>
+<button type="button" role="tab" id="tab-claude-code" aria-controls="panel-claude-code" aria-selected="false">Claude Code</button>
+<button type="button" role="tab" id="tab-cursor" aria-controls="panel-cursor" aria-selected="false">Cursor</button>
+</div>
+<button type="button" class="copy secondary" data-done="Copié" hidden>Copier</button>
+</div>
+<div role="tabpanel" id="panel-claude" aria-labelledby="tab-claude">
+<h3 class="panel-title">Claude</h3>
+<p><a href="https://claude.ai/directory/connectors/medicaments-france">Ajouter depuis l'annuaire des connecteurs Claude</a></p>
+<p>Ou, dans Claude, ouvrez Customize &gt; Connectors, choisissez Add custom connector, collez l'adresse ci-dessus et sélectionnez No sign-in.</p>
+</div>
+<div role="tabpanel" id="panel-claude-code" aria-labelledby="tab-claude-code" data-label="Copier la commande">
+<h3 class="panel-title">Claude Code</h3>
+<p>Dans un terminal :</p>
+<pre><code>claude mcp add --transport http medicaments-france https://medicaments-france.a3e.dev/mcp</code></pre>
+</div>
+<div role="tabpanel" id="panel-cursor" aria-labelledby="tab-cursor" data-label="Copier la configuration">
+<h3 class="panel-title">Cursor</h3>
+<p>Dans le fichier mcp.json :</p>
+<pre><code>{
+  "mcpServers": {
+    "medicaments-france": {
+      "url": "https://medicaments-france.a3e.dev/mcp"
+    }
+  }
+}</code></pre>
+</div>
+</div>
+<p>Tout autre client MCP compatible Streamable HTTP fonctionne avec l'adresse ci-dessus.</p>
+</div>
+</section>
+
+<section>
+<h2>Outils</h2>
+<div class="body">
+<div class="table-wrap">
+<table>
+<thead><tr><th>Outil</th><th>Ce qu'il répond</th></tr></thead>
+<tbody>
+<tr><td><code>search_medicine</code></td><td>Trouve un médicament par son nom ou sa substance et indique s'il est en rupture.</td></tr>
+<tr><td><code>get_availability</code></td><td>Donne le statut d'un médicament : rupture ou tension, date de retour annoncée, historique.</td></tr>
+<tr><td><code>list_current_shortages</code></td><td>Liste les ruptures et tensions en cours, par statut, ville ou hôpital, ou domaine médical.</td></tr>
+<tr><td><code>recent_changes</code></td><td>Montre ce qui a changé ces derniers jours.</td></tr>
+<tr><td><code>is_major_therapeutic_interest</code></td><td>Indique si un médicament est d'intérêt thérapeutique majeur (MITM).</td></tr>
+<tr><td><code>get_medicine_info</code></td><td>Donne les boîtes d'un médicament (code CIP13, commercialisation, prix, taux de remboursement), ses conditions de prescription et de délivrance, les informations de sécurité en cours publiées par l'ANSM, et son statut de rupture ANSM en cours.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section>
+<h2>Ce que ce service ne fait pas</h2>
+<div class="body">
+<ul>
+<li>Il ne donne aucun conseil médical : pas de remplacement, pas de changement de dose, pas d'arrêt de traitement.</li>
+<li>Il ne connaît pas le stock des pharmacies : les données de l'ANSM sont nationales.</li>
+<li>Un médicament absent de la liste n'est pas forcément disponible : l'ANSM publie surtout les ruptures de médicaments d'intérêt thérapeutique majeur déclarées par les fabricants.</li>
+</ul>
+</div>
+</section>
+
+<section>
+<h2>Données</h2>
+<div class="body">
+<div class="table-wrap">
+<table>
+<thead><tr><th>Source</th><th>Contenu</th><th>Mise à jour</th></tr></thead>
+<tbody>
+<tr><td><a href="https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments">ANSM</a></td><td>Ruptures, tensions, remises à disposition</td><td>Chaque jour</td></tr>
+<tr><td><a href="https://base-donnees-publique.medicaments.gouv.fr">BDPM</a></td><td>Médicaments, substances, présentations, conditions de prescription, liste MITM, informations de sécurité</td><td>Chaque semaine</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">Date exacte de la dernière mise à jour : <a href="/health">/health</a></p>
+<p class="small">Code sous licence MIT. Données réutilisées selon les conditions de leurs sources : sans modification, avec la source et la date de mise à jour.</p>
+</div>
+</section>
+</main>
+<footer>
+<div class="wrap">
+<div>
+<p>Pas de compte, pas de cookie. Pour chaque appel, seuls le nom de l'outil, le résultat, la durée, le code CIS et la date sont enregistrés. <a href="/privacy?lang=fr">Politique de confidentialité</a></p>
+<p>Service indépendant.</p>
+<p>Ce service n'est ni approuvé ni soutenu par l'ANSM, la HAS ou l'UNCAM.</p>
+</div>
+<ul class="links">
+<li><a href="https://github.com/amine7536/mcp-medicaments-france">Code source</a></li>
+<li><a href="https://github.com/amine7536/mcp-medicaments-france/issues">Signaler un problème</a></li>
+<li><a href="/health">État du service</a></li>
+</ul>
+</div>
+</footer>
+<p class="sr-only" aria-live="polite"></p>
+<script src="/landing.js"></script>
+</body>
+</html>

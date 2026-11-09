@@ -3,20 +3,23 @@ import { Hono } from "hono";
 import { methodNotAllowed } from "hono/method-not-allowed";
 import { handleAdminIngest } from "./admin";
 import { handleHealth } from "./health";
-import { handleIcon } from "./icon";
 import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
-import { type Lang, renderLanding, renderPrivacy, resolveLang } from "./landing";
 import { createServer } from "./mcp/server";
 
 const RETRY_AFTER_SECONDS = 60;
 
-/** An HTML page in the language picked from `?lang` or `Accept-Language`. */
-function handlePage(request: Request, url: URL, render: (lang: Lang) => string): Response {
-	const lang = resolveLang(url, request.headers.get("Accept-Language"));
-	return new Response(render(lang), {
+/** The static page at `/<lang>/<page>` in the language picked from `?lang`, then the first `Accept-Language` tag, then French. */
+async function handlePage(request: Request, env: Env, page: "" | "privacy"): Promise<Response> {
+	const url = new URL(request.url);
+	const param = url.searchParams.get("lang");
+	const first = (request.headers.get("Accept-Language") ?? "").split(",")[0].split(";")[0].trim().toLowerCase();
+	const lang = param === "fr" || param === "en" ? param : first.startsWith("en") ? "en" : "fr";
+	const asset = await env.ASSETS.fetch(new URL(`/${lang}/${page}`, url));
+	return new Response(asset.body, {
+		status: asset.status,
 		headers: {
-			"content-type": "text/html; charset=utf-8",
+			"content-type": asset.headers.get("content-type") ?? "text/html; charset=utf-8",
 			"Cache-Control": "public, max-age=3600",
 			Vary: "Accept-Language",
 			"Content-Language": lang,
@@ -46,9 +49,8 @@ app.use(
 			c.json({ error: "method_not_allowed" }, 405, { Allow: methods.join(", ") }),
 	}),
 );
-app.get("/", (c) => handlePage(c.req.raw, new URL(c.req.url), renderLanding));
-app.get("/privacy", (c) => handlePage(c.req.raw, new URL(c.req.url), renderPrivacy));
-app.get("/icon.svg", () => handleIcon());
+app.get("/", (c) => handlePage(c.req.raw, c.env, ""));
+app.get("/privacy", (c) => handlePage(c.req.raw, c.env, "privacy"));
 // Hono types executionCtx narrowly; at runtime it is the Worker's ExecutionContext passed through app.fetch.
 app.get("/health", (c) => handleHealth(c.req.raw, c.env, c.executionCtx as ExecutionContext));
 app.all("/admin/ingest", (c) => handleAdminIngest(c.req.raw, c.env, c.executionCtx as ExecutionContext));
