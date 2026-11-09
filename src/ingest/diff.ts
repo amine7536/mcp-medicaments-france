@@ -31,8 +31,6 @@ const DELIST_AFTER_MISSES = 2;
 const RETURN_TRACKED = new Set(["rupture", "tension"]);
 
 const DETAIL_KEYS = [
-	"ansm_published_at",
-	"ansm_detail_updated_at",
 	"situation_start",
 	"scope",
 	"scope_raw",
@@ -44,8 +42,6 @@ const DETAIL_KEYS = [
 ] as const satisfies readonly (keyof DetailColumns)[];
 
 const EMPTY_DETAIL: DetailColumns = {
-	ansm_published_at: null,
-	ansm_detail_updated_at: null,
 	situation_start: null,
 	scope: "inconnu",
 	scope_raw: null,

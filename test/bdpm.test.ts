@@ -146,7 +146,6 @@ describe("validateAndMap", () => {
 			denomination_norm: "NIFEDIPINE VIATRIS LP 30 MG",
 			form: "comprimé",
 			routes: null,
-			amm_status: "Autorisation active",
 			marketing_status: "Commercialisée",
 			holder: "VIATRIS",
 			bdpm_updated_at: "2026-09-29",
@@ -158,7 +157,7 @@ describe("validateAndMap", () => {
 		compo.push(compoRow(1, "FRACTION THERAPEUTIQUE", "FT"));
 		const { substances } = validateAndMap(input({ compo }));
 		expect(substances).toHaveLength(25_000);
-		expect(substances.every((s) => s.nature === "SA")).toBe(true);
+		expect(substances.some((s) => s.substance_name === "FRACTION THERAPEUTIQUE")).toBe(false);
 	});
 
 	it("counts skipped rows", () => {

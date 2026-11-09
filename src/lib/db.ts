@@ -295,7 +295,6 @@ export interface LinkedMedicine {
 	cis: string;
 	name: string;
 	match_confidence: number;
-	is_best: number;
 }
 
 /** A shortage by id (listed or not) with every medicine linked to it, by CIS. */
@@ -304,7 +303,7 @@ export async function getShortage(db: D1Database, id: string): Promise<{ shortag
 		db.prepare(`SELECT ${SHORTAGE_COLUMNS}, ${BEST_CONFIDENCE} FROM shortages s WHERE s.id = ?`).bind(id),
 		db
 			.prepare(
-				"SELECT sm.cis, m.denomination AS name, sm.confidence AS match_confidence, sm.is_best FROM shortage_matches sm JOIN medicines m ON m.cis = sm.cis WHERE sm.shortage_id = ? ORDER BY sm.cis",
+				"SELECT sm.cis, m.denomination AS name, sm.confidence AS match_confidence FROM shortage_matches sm JOIN medicines m ON m.cis = sm.cis WHERE sm.shortage_id = ? ORDER BY sm.cis",
 			)
 			.bind(id),
 	]);

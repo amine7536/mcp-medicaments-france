@@ -26,8 +26,6 @@ export const SCOPES = ["ville", "hopital", "ville_hopital", "inconnu"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 export interface DetailFields {
-	ansm_published_at: string | null;
-	ansm_detail_updated_at: string | null;
 	situation_start: string | null;
 	dci: string | null;
 	scope: Scope;
@@ -173,7 +171,6 @@ export function pickReturnLine(lis: string[]): string | null {
 
 /** Parses an ANSM detail page. `status` is the entry's list status; `id` is used for logging. */
 export async function parseDetail(html: string, status: Status, id: string): Promise<Detail> {
-	let meta = "";
 	let period = "";
 	let dci: string | null = null;
 	let title = "";
@@ -184,11 +181,6 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 
 	await consume(
 		new HTMLRewriter()
-			.on("div.page-header-meta span", {
-				text(chunk) {
-					meta += chunk.text;
-				},
-			})
 			.on("span.period", {
 				text(chunk) {
 					period += chunk.text;
@@ -234,9 +226,6 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 		html,
 	);
 
-	const metaNorm = normalize(meta);
-	const published = /PUBLIE LE (\d{1,2}\/\d{1,2}\/\d{4})/.exec(metaNorm);
-	const updated = /MIS A JOUR LE (\d{1,2}\/\d{1,2}\/\d{4})/.exec(metaNorm);
 	const observations = lis.map(clean).filter((li) => li !== "");
 	const { scope, scope_raw } = parseScope(observations);
 
@@ -253,8 +242,6 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 	}
 
 	const fields: DetailFields = {
-		ansm_published_at: published ? parseFrDate(published[1] as string) : null,
-		ansm_detail_updated_at: updated ? parseFrDate(updated[1] as string) : null,
 		situation_start: parseFrDate(clean(period).replace(/^au\s+/i, "")),
 		dci,
 		scope,
