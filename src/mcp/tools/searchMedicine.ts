@@ -2,7 +2,7 @@ import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicines, MATCH_CAP, searchNames, unmatchedShortages } from "../../lib/db";
 import { normalize, tokens } from "../../lib/normalize";
 import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
-import { inShortage } from "../resolve";
+import { inShortage, matchCount } from "../resolve";
 import { Cip13, Cis, describeShortage, isValidEan13, outputObject, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
@@ -116,10 +116,12 @@ export const searchMedicine: Tool<typeof inputSchema, typeof outputSchema> = {
 
 		const suggestion = did_you_mean === null ? "" : ` Did you mean "${did_you_mean}"?`;
 		const lines: string[] = [];
-		if (results.length === 0) lines.push(`No medicine found for "${query}". ${NOT_FOUND_HINT}${suggestion}`);
+		if (results.length === 0 && only_in_shortage && !fuzzy && total > 0) lines.push(`${matchCount(query, total)}; none in rupture or tension.`);
+		else if (results.length === 0) lines.push(`No medicine found for "${query}". ${NOT_FOUND_HINT}${suggestion}`);
 		else {
-			const of = capped ? ` (${total} matches: ranked over the ${MATCH_CAP} most relevant and every one in rupture or tension)` : "";
-			lines.push(fuzzy ? `No exact match for "${query}".${suggestion} Closest matches:` : `${results.length} medicine(s) found for "${query}"${of}:`);
+			const shown = results.length < total ? `; showing ${results.length}${only_in_shortage ? " in rupture or tension" : ""}` : "";
+			const ranked = capped ? ` (ranked over the ${MATCH_CAP} most relevant and every one in rupture or tension)` : "";
+			lines.push(fuzzy ? `No exact match for "${query}".${suggestion} Closest matches:` : `${matchCount(query, total)}${shown}${ranked}:`);
 			for (const r of results) {
 				// A same-name row also names its holder and marketing status, so text-only readers can tell the rows apart.
 				const tell = [`CIS ${r.cis}`, r.holder, r.marketing_status].filter((v) => v !== undefined).join(", ");
