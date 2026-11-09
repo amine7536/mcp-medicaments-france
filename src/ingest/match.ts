@@ -32,7 +32,6 @@ interface MatchInputs {
 	byBrand: Map<string, Array<{ cis: string; brand: string; tokens: Set<string> }>>;
 	/** ANSM data-id to CIS overrides. */
 	manual: Record<string, string[]>;
-	/** CIS to medicine. */
 	byCis: Map<string, Medicine>;
 	/** Name shape (see `nameShape`) to the medicines with that shape. */
 	byShape: Map<string, Medicine[]>;
@@ -79,10 +78,8 @@ function nameShape(m: Medicine): string | null {
 	return JSON.stringify([tokens(m.denomination_norm).map((t) => (NUMERIC.test(t) ? "#" : t)), m.form]);
 }
 
-/** The numeric tokens of a medicine name, in order. */
 const doses = (m: Medicine): string => JSON.stringify(tokens(m.denomination_norm).filter((t) => NUMERIC.test(t)));
 
-/** Groups `rows` by `key`, keeping `value` of each row. */
 function index<T, V>(rows: T[], key: (r: T) => string, value: (r: T) => V): Map<string, V[]> {
 	return new Map([...Map.groupBy(rows, key)].map(([k, group]) => [k, group.map(value)]));
 }

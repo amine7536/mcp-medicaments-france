@@ -124,7 +124,6 @@ export const NO_GUARANTEE = "This does not guarantee availability in your pharma
 
 export const relatedList = (related: ShortageSummary[]): string => related.map((s) => `${s.name} (${s.status})`).join(", ");
 
-/** How many medicines match a name: "1 medicine matches" or "<n> medicines match". */
 export const matchCount = (name: string, total: number): string => `${total} ${total === 1 ? "medicine matches" : "medicines match"} "${name}"`;
 
 export const candidatesSummary = (name: string, total: number, inShortageTotal: number, bestMatchTotal: number): string =>

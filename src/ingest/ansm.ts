@@ -49,7 +49,6 @@ const STATUS_BY_LABEL: Record<string, Status> = {
 	"arrêt de commercialisation": "arret_commercialisation",
 };
 
-/** Decodes entities, collapses whitespace and trims. */
 function clean(s: string): string {
 	return decodeHTML(s).replace(/\s+/g, " ").trim();
 }

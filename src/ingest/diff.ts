@@ -74,7 +74,6 @@ function sameReturnWording(a: string | null, b: string | null): boolean {
 	return a.toLowerCase().replace(RETURN_WORDING_NOISE, "") === b.toLowerCase().replace(RETURN_WORDING_NOISE, "");
 }
 
-/** Loads every stored shortage in one query. */
 export async function loadShortages(db: D1Database): Promise<Map<string, StoredShortage>> {
 	const { results } = await db
 		.prepare(

@@ -436,7 +436,6 @@ export async function recentChanges(
 /** The `marketing_status` of a presentation that is on the market. */
 export const MARKETED = "Déclaration de commercialisation";
 
-/** The CIS of the presentation with this CIP13, or null. */
 export async function cisByCip13(db: D1Database, cip13: string): Promise<string | null> {
 	return db.prepare("SELECT cis FROM presentations WHERE cip13 = ?").bind(cip13).first<string>("cis");
 }
