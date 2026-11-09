@@ -215,6 +215,18 @@ describe("search_medicine", () => {
 		expect(zymad.data.results).toEqual([]);
 	});
 
+	it("states the match total when fewer results are shown", async () => {
+		const one = await call(searchMedicine, { query: "doliprane", limit: 1 });
+		expect(one.data.results.length).toBeLessThan(one.data.total);
+		expect(firstLine(one.result)).toContain(String(one.data.total));
+		expect(firstLine(one.result)).toContain(String(one.data.results.length));
+		const zymad = await call(searchMedicine, { query: "zymad", only_in_shortage: true });
+		expect(zymad.data).toMatchObject({ results: [], fuzzy: false });
+		expect(zymad.data.total).toBeGreaterThan(0);
+		expect(firstLine(zymad.result)).toContain(String(zymad.data.total));
+		expect(firstLine(zymad.result)).not.toContain(NOT_FOUND_HINT);
+	});
+
 	it("finds by active substance and by prefix", async () => {
 		const { data } = await call(searchMedicine, { query: "paracétamol" });
 		expect(data.results).toHaveLength(2);

@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type Health, loadHealth } from "../src/health";
 import worker from "../src/index";
 import { normalize } from "../src/lib/normalize";
+import { loadSourceDates } from "../src/mcp/envelope";
 import { resetDb } from "./db";
-import { ANSM_LAST_INGEST, BDPM_RELEASE, NOW, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, NOW, seed } from "./seed";
 
 const URL = "https://medicaments-france.a3e.dev/health";
 
@@ -50,7 +51,7 @@ describe("loadHealth", () => {
 				last_ok_at: ANSM_LAST_INGEST,
 				last_run: { started_at: "2026-10-27T05:00:00.000Z", finished_at: ANSM_LAST_INGEST, status: "ok", message: null },
 			},
-			bdpm: { release: BDPM_RELEASE, imported_at: "2026-10-05T06:10:00.000Z" },
+			bdpm: { release: BDPM_RELEASE, imported_at: BDPM_IMPORTED_AT },
 			// The delisted rupture (1008) is not counted.
 			counts: {
 				listed: 7,
@@ -64,6 +65,10 @@ describe("loadHealth", () => {
 			quality: { unknown_status: 1, scope_inconnu: 0, return_unparsed: 0, unmatched: 3 },
 			generated_at: NOW.toISOString(),
 		} satisfies Health);
+	});
+
+	it("reports the BDPM import time the tool envelope reports", async () => {
+		expect((await loadHealth(env.DB, NOW)).bdpm.imported_at).toBe((await loadSourceDates(env.DB)).bdpm_imported_at);
 	});
 
 	it("counts parser drift on listed rows only", async () => {
