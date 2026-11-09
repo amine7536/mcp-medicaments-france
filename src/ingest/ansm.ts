@@ -1,7 +1,8 @@
-import { type ExpectedReturn, parseExpectedReturn, parseFrDate } from "../lib/dates";
+import { type ExpectedReturn, isUndetermined, parseExpectedReturn, parseFrDate } from "../lib/dates";
 import { sha256Hex } from "../lib/hash";
 import { consume } from "../lib/html";
-import { decodeEntities, normalize } from "../lib/normalize";
+import { decodeHTML } from "entities/decode";
+import { normalize } from "../lib/normalize";
 import { log } from "./http";
 
 export const STATUSES = ["rupture", "tension", "arret_commercialisation", "remise_a_disposition", "autre"] as const;
@@ -26,8 +27,6 @@ export const SCOPES = ["ville", "hopital", "ville_hopital", "inconnu"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 export interface DetailFields {
-	ansm_published_at: string | null;
-	ansm_detail_updated_at: string | null;
 	situation_start: string | null;
 	dci: string | null;
 	scope: Scope;
@@ -50,12 +49,11 @@ const STATUS_BY_LABEL: Record<string, Status> = {
 	"arrêt de commercialisation": "arret_commercialisation",
 };
 
-/** Decodes entities, collapses whitespace and trims. */
 function clean(s: string): string {
-	return decodeEntities(s).replace(/\s+/g, " ").trim();
+	return decodeHTML(s).replace(/\s+/g, " ").trim();
 }
 
-export function mapStatus(label: string): Status {
+function mapStatus(label: string): Status {
 	return STATUS_BY_LABEL[label.replace(/[’‘]/g, "'").toLowerCase()] ?? "autre";
 }
 
@@ -173,7 +171,6 @@ export function pickReturnLine(lis: string[]): string | null {
 
 /** Parses an ANSM detail page. `status` is the entry's list status; `id` is used for logging. */
 export async function parseDetail(html: string, status: Status, id: string): Promise<Detail> {
-	let meta = "";
 	let period = "";
 	let dci: string | null = null;
 	let title = "";
@@ -184,11 +181,6 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 
 	await consume(
 		new HTMLRewriter()
-			.on("div.page-header-meta span", {
-				text(chunk) {
-					meta += chunk.text;
-				},
-			})
 			.on("span.period", {
 				text(chunk) {
 					period += chunk.text;
@@ -234,9 +226,6 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 		html,
 	);
 
-	const metaNorm = normalize(meta);
-	const published = /PUBLIE LE (\d{1,2}\/\d{1,2}\/\d{4})/.exec(metaNorm);
-	const updated = /MIS A JOUR LE (\d{1,2}\/\d{1,2}\/\d{4})/.exec(metaNorm);
 	const observations = lis.map(clean).filter((li) => li !== "");
 	const { scope, scope_raw } = parseScope(observations);
 
@@ -247,14 +236,11 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 		if (line !== null) {
 			expected_return_raw = line;
 			expected = parseExpectedReturn(line);
-			const t = normalize(line);
-			if (expected.earliest === null && !t.includes("INDETERMINE") && !t.includes("INDERMINE")) log("return_unparsed", { id });
+			if (expected.earliest === null && !isUndetermined(line)) log("return_unparsed", { id });
 		}
 	}
 
 	const fields: DetailFields = {
-		ansm_published_at: published ? parseFrDate(published[1] as string) : null,
-		ansm_detail_updated_at: updated ? parseFrDate(updated[1] as string) : null,
 		situation_start: parseFrDate(clean(period).replace(/^au\s+/i, "")),
 		dci,
 		scope,

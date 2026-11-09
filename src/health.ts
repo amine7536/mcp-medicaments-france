@@ -5,9 +5,9 @@ import { isUndetermined } from "./lib/dates";
 import { isStale } from "./mcp/envelope";
 import { PROBABLE_MATCH_BELOW } from "./mcp/schemas";
 
-export const HEALTH_MAX_AGE_SECONDS = 300;
+const HEALTH_MAX_AGE_SECONDS = 300;
 
-export type HealthStatus = "ok" | "stale" | "degraded";
+type HealthStatus = "ok" | "stale" | "degraded";
 
 interface Run {
 	started_at: string;
@@ -25,7 +25,7 @@ export interface Health {
 		imported_at: string | null;
 	};
 	counts: { listed: number; by_status: Record<Status, number>; medicines: number; mitm: number; bdpm_dispo: number };
-	match: { listed: number; matched_ge_0_8: number; rate: number | null };
+	match: { matched_ge_0_8: number; rate: number | null };
 	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; unmatched: number };
 	generated_at: string;
 }
@@ -39,7 +39,7 @@ const LISTED_SQL = `SELECT
 FROM shortages s WHERE s.listed = 1`;
 
 /** Health status: `stale` without a recent ok ANSM run, else `degraded` when the latest run failed or is stuck. */
-export function healthStatus(lastOkAt: string | null, lastRun: Run | null, now: Date): HealthStatus {
+function healthStatus(lastOkAt: string | null, lastRun: Run | null, now: Date): HealthStatus {
 	if (isStale(lastOkAt, now)) return "stale";
 	if (lastRun === null) return "ok";
 	if (lastRun.status === "aborted" || lastRun.status === "error") return "degraded";
@@ -82,7 +82,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 			by_status: Object.fromEntries(STATUSES.map((s) => [s, statusCounts.get(s) ?? 0])) as Record<Status, number>,
 			...t,
 		},
-		match: { listed: listedCount, matched_ge_0_8: matched, rate: listedCount === 0 ? null : Math.round((matched / listedCount) * 1000) / 1000 },
+		match: { matched_ge_0_8: matched, rate: listedCount === 0 ? null : Math.round((matched / listedCount) * 1000) / 1000 },
 		quality: {
 			unknown_status: l?.unknown_status ?? 0,
 			scope_inconnu: l?.scope_inconnu ?? 0,

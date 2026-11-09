@@ -1,6 +1,7 @@
+import { decodeHTML } from "entities/decode";
 import * as z from "zod";
 import { parseFrDate } from "../../src/lib/dates";
-import { decodeEntities, normalize } from "../../src/lib/normalize";
+import { normalize } from "../../src/lib/normalize";
 
 export const FILES = {
 	cisBdpm: { name: "CIS_bdpm.txt", cols: 12, floor: 12_000 },
@@ -17,33 +18,30 @@ export interface MedicineRow {
 	denomination_norm: string;
 	form: string | null;
 	routes: string | null;
-	amm_status: string | null;
 	marketing_status: string | null;
 	holder: string | null;
 	bdpm_updated_at: string;
 }
 
-export interface SubstanceRow {
+interface SubstanceRow {
 	cis: string;
-	substance_code: string | null;
 	substance_name: string;
 	substance_norm: string;
 	dosage: string | null;
-	nature: string | null;
 }
 
-export interface MitmRow {
+interface MitmRow {
 	cis: string;
 	atc_code: string;
 }
 
-export interface FtsRow {
+interface FtsRow {
 	cis: string;
 	denomination_norm: string;
 	substances_norm: string;
 }
 
-export interface PresentationRow {
+interface PresentationRow {
 	cip13: string;
 	cip7: string | null;
 	cis: string;
@@ -60,14 +58,14 @@ export interface PresentationRow {
 	reimbursement_indications: string | null;
 }
 
-export interface PrescriptionConditionRow {
+interface PrescriptionConditionRow {
 	cis: string;
 	condition: string;
 	/** 1-based source order within the CIS. */
 	position: number;
 }
 
-export interface SafetyInformationRow {
+interface SafetyInformationRow {
 	cis: string;
 	title: string;
 	url: string;
@@ -75,7 +73,7 @@ export interface SafetyInformationRow {
 	ends_on: string;
 }
 
-export interface Skipped {
+interface Skipped {
 	medicines: number;
 	substances: number;
 	mitm: number;
@@ -208,7 +206,7 @@ export function parseAnchor(cell: string): { title: string; url: string } | null
 	const href = HREF_RE.exec(cell);
 	const inner = INNER_RE.exec(cell);
 	if (!href || !inner) return null;
-	return { url: href[2] as string, title: decodeEntities((inner[1] as string).replace(/<[^>]*>/g, "")).trim() };
+	return { url: href[2] as string, title: decodeHTML((inner[1] as string).replace(/<[^>]*>/g, "")).trim() };
 }
 
 /** Columns: CIS, start date, end date (ISO), HTML anchor to the ANSM page. Throws on any invalid row. */
@@ -256,7 +254,6 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 			denomination_norm: normalize(denomination),
 			form: opt(r[2]),
 			routes: opt(r[3]),
-			amm_status: opt(r[4]),
 			marketing_status: opt(r[6]),
 			holder: opt(r[10]),
 			bdpm_updated_at: bannerDate,
@@ -274,11 +271,9 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 		}
 		substances.push({
 			cis: req(r[0]),
-			substance_code: opt(r[2]),
 			substance_name: name,
 			substance_norm: normalize(name),
 			dosage: opt(r[4]),
-			nature: opt(r[6]),
 		});
 	}
 

@@ -24,6 +24,18 @@ const SHORTAGE_COLUMNS = [
 	.map((c) => `s.${c}`)
 	.join(", ");
 
+/** INSERT statements of `rows` (values in `columns` order), `floor(100 / columns)` rows each: D1 binds at most 100 parameters per query. */
+export function insertChunks(db: D1Database, table: string, columns: readonly string[], rows: readonly (readonly unknown[])[]): D1PreparedStatement[] {
+	const perInsert = Math.floor(100 / columns.length);
+	const tuple = `(${columns.map(() => "?").join(", ")})`;
+	const stmts: D1PreparedStatement[] = [];
+	for (let i = 0; i < rows.length; i += perInsert) {
+		const chunk = rows.slice(i, i + perInsert);
+		stmts.push(db.prepare(`INSERT INTO ${table} (${columns.join(", ")}) VALUES ${chunk.map(() => tuple).join(", ")}`).bind(...chunk.flat()));
+	}
+	return stmts;
+}
+
 /** Best confidence among a shortage's matches, null when unmatched. */
 const BEST_CONFIDENCE = "(SELECT MAX(m.confidence) FROM shortage_matches m WHERE m.shortage_id = s.id) AS match_confidence";
 
@@ -37,7 +49,7 @@ const all = async <T>(stmt: D1PreparedStatement): Promise<T[]> => (await stmt.al
 const json = (values: readonly string[]): string => JSON.stringify(values);
 
 /** FTS5 query of a free-text name: each `ftsTokens` token as a prefix, implicitly ANDed. Null when there is no token. */
-export function ftsQuery(text: string): string | null {
+function ftsQuery(text: string): string | null {
 	const toks = ftsTokens(normalize(text));
 	return toks.length === 0 ? null : toks.map((t) => `"${t}"*`).join(" ");
 }
@@ -45,13 +57,13 @@ export function ftsQuery(text: string): string | null {
 /** Exact matches fetched per name query; `total` still counts every match. */
 export const MATCH_CAP = 1000;
 /** Trigram rows fetched for the misspelling fallback. */
-export const FUZZY_ROWS = 50;
+const FUZZY_ROWS = 50;
 /** Minimum share of the query trigrams a fallback row must contain. */
-export const FUZZY_MIN_SIMILARITY = 0.5;
+const FUZZY_MIN_SIMILARITY = 0.5;
 /** The BDPM marketing status of a medicine on the market. */
 export const MEDICINE_MARKETED = "Commercialisée";
 
-export interface NameRow {
+interface NameRow {
 	cis: string;
 	denomination_norm: string;
 	marketing_status: string | null;
@@ -61,7 +73,7 @@ export interface NameMatch extends NameRow {
 	tier: 0 | 1 | 2;
 }
 
-export interface NameSearch {
+interface NameSearch {
 	/** Ranked: exact matches, or fallback matches when nothing matches exactly. */
 	matches: NameMatch[];
 	/** Every exact match (not only the fetched ones), or the number of kept fallback matches. */
@@ -108,7 +120,7 @@ export function queryTrigrams(norm: string): string[] {
 
 const shared = (trigrams: readonly string[], text: string): number => trigrams.filter((t) => text.includes(t)).length;
 
-export interface FuzzyRow extends NameRow {
+interface FuzzyRow extends NameRow {
 	substances_norm: string | null;
 }
 
@@ -230,6 +242,12 @@ export async function getMedicines(db: D1Database, cis: readonly string[]): Prom
 	return out;
 }
 
+/** The medicines of a CIS list, in that order; unknown CIS are skipped. */
+export async function orderedMedicines(db: D1Database, cis: readonly string[]): Promise<MedicineRow[]> {
+	const meds = await getMedicines(db, cis);
+	return cis.flatMap((c) => meds.get(c) ?? []);
+}
+
 /** ATC code per CIS (null when the CIS is not on the MITM list); unknown CIS are absent. */
 export async function mitmCodes(db: D1Database, cis: readonly string[]): Promise<Map<string, string | null>> {
 	if (cis.length === 0) return new Map();
@@ -239,7 +257,7 @@ export async function mitmCodes(db: D1Database, cis: readonly string[]): Promise
 	return new Map(rows.map((r) => [r.cis, r.atc_code]));
 }
 
-export interface CisShortages {
+interface CisShortages {
 	current: ShortageRow;
 	/** The other listed shortages linked to the CIS, in the same order. */
 	others: ShortageRow[];
@@ -291,11 +309,10 @@ export async function unmatchedShortages(db: D1Database, toks: readonly string[]
 	);
 }
 
-export interface LinkedMedicine {
+interface LinkedMedicine {
 	cis: string;
 	name: string;
 	match_confidence: number;
-	is_best: number;
 }
 
 /** A shortage by id (listed or not) with every medicine linked to it, by CIS. */
@@ -304,7 +321,7 @@ export async function getShortage(db: D1Database, id: string): Promise<{ shortag
 		db.prepare(`SELECT ${SHORTAGE_COLUMNS}, ${BEST_CONFIDENCE} FROM shortages s WHERE s.id = ?`).bind(id),
 		db
 			.prepare(
-				"SELECT sm.cis, m.denomination AS name, sm.confidence AS match_confidence, sm.is_best FROM shortage_matches sm JOIN medicines m ON m.cis = sm.cis WHERE sm.shortage_id = ? ORDER BY sm.cis",
+				"SELECT sm.cis, m.denomination AS name, sm.confidence AS match_confidence FROM shortage_matches sm JOIN medicines m ON m.cis = sm.cis WHERE sm.shortage_id = ? ORDER BY sm.cis",
 			)
 			.bind(id),
 	]);
@@ -332,7 +349,7 @@ export function getHistory(db: D1Database, shortageId: string): Promise<HistoryR
 	);
 }
 
-export interface ShortageFilter {
+interface ShortageFilter {
 	statuses: readonly string[];
 	/** Accepted `scope` values; null for any. */
 	scopes: readonly string[] | null;
@@ -381,7 +398,7 @@ export async function areaKnown(db: D1Database, areaNorm: string): Promise<boole
 	return row !== null;
 }
 
-export interface ChangeRow extends HistoryRow {
+interface ChangeRow extends HistoryRow {
 	id: number;
 	shortage_id: string;
 	name: string;
@@ -419,12 +436,11 @@ export async function recentChanges(
 /** The `marketing_status` of a presentation that is on the market. */
 export const MARKETED = "Déclaration de commercialisation";
 
-/** The CIS of the presentation with this CIP13, or null. */
 export async function cisByCip13(db: D1Database, cip13: string): Promise<string | null> {
 	return db.prepare("SELECT cis FROM presentations WHERE cip13 = ?").bind(cip13).first<string>("cis");
 }
 
-export interface MedicineInfo {
+interface MedicineInfo {
 	presentations: Presentation[];
 	prescription_conditions: string[];
 	safety_information: SafetyInformation[];

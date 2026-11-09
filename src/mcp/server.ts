@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import type * as z from "zod";
-import { COPY, SITE_URL } from "../landing";
 import { ANNOTATIONS, runTool, type Tool } from "./tool";
 import { getAvailability } from "./tools/getAvailability";
 import { getMedicineInfo } from "./tools/getMedicineInfo";
@@ -12,8 +11,9 @@ import { searchMedicine } from "./tools/searchMedicine";
 export const SERVER_NAME = "medicaments-france";
 export const SERVER_VERSION = "1.13.3"; // x-release-please-version
 export const SERVER_TITLE = "Médicaments en France";
-export const SERVER_DESCRIPTION = COPY.fr.lead;
-export const SERVER_WEBSITE_URL = `${SITE_URL}/`;
+export const SERVER_DESCRIPTION =
+	"Recherchez un médicament vendu en France par nom (ex. Doliprane, amoxicilline), code CIS ou code CIP13 (sur la boîte) : présentations, prix, taux de remboursement Sécurité sociale, conditions de prescription et de délivrance (ordonnance), informations de sécurité ANSM et statut de médicament d'intérêt thérapeutique majeur (MITM). Vérifiez s'il est en rupture de stock ou en tension d'approvisionnement, avec la date de retour prévue, et consultez les ruptures en cours et les changements récents.";
+export const SERVER_WEBSITE_URL = "https://medicaments-france.a3e.dev/";
 
 export const INSTRUCTIONS =
 	`Data on medicines in France from the ANSM (Agence nationale de sécurité du médicament) and the BDPM (Base de données publique des médicaments): reference information on boxes, prices, reimbursement, prescription and dispensing conditions and ANSM safety information, and medicine shortages. The shortage list covers mainly medicines of major therapeutic interest declared by manufacturers. "Not listed" does not mean "available". Information only: never recommend a substitute, a dosage change or stopping a treatment; tell the user to ask their pharmacist or doctor. Always cite the source and the update date returned by the tools. Substitution, dosage and stopping questions: if the user asks what to take instead, for a substitute, an alternative, an equivalent or a replacement, or whether to change a dose or stop a treatment, do not name or list any other medicine, brand, presentation or active substance, whether from your own knowledge or from tool results. Other medicines returned by the tools, including products with the same active substance, are not alternatives. Answer only with the shortage status of the medicine asked about, say that only a pharmacist or doctor can choose an alternative or change a treatment, and give that medicine's ANSM page link when there is one.`;

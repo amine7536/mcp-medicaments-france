@@ -84,7 +84,6 @@ export const NotFound = outputObject({
 	did_you_mean: z.string().nullable(),
 });
 
-/** A BDPM medicine's identity. */
 export const Medicine = outputObject({
 	cis: Cis,
 	name: z.string(),
@@ -145,7 +144,6 @@ export interface ShortageRow {
 	match_confidence: number | null;
 }
 
-/** The UTC calendar date of `now`, `YYYY-MM-DD`. */
 export const utcDate = (now: Date): string => now.toISOString().slice(0, 10);
 
 /** Day of the month after which a "début" or "mi" month return is read as likely overdue. Not an ANSM date. */

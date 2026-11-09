@@ -1,14 +1,14 @@
 import type { CallToolResult, StandardSchemaWithJSON, ToolAnnotations } from "@modelcontextprotocol/server";
 import type * as z from "zod";
 import { log } from "../ingest/http";
-import { errorResult, loadSourceDates, UNKNOWN_DATES } from "./envelope";
+import { errorResult, sourceDatesOrUnknown } from "./envelope";
 
 export const ANNOTATIONS: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
 export const INFO_ONLY = "Information only: never use this to recommend a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in the results are not alternatives.";
 
 export const UNAVAILABLE = "Service temporarily unavailable, please try again later.";
-export const EXACTLY_ONE = (args: string): string => `Provide exactly one of ${args}.`;
+const EXACTLY_ONE = (args: string): string => `Provide exactly one of ${args}.`;
 
 export const NOT_FOUND_HINT = "Check the spelling or search by active substance (DCI).";
 
@@ -18,13 +18,21 @@ export interface ToolOutcome {
 	cis?: string | null;
 }
 
+/** The error outcome when not exactly one of the alternative arguments (in their order) is given, else null. */
+export async function exactlyOne(db: D1Database, args: Record<string, unknown>): Promise<ToolOutcome | null> {
+	if (Object.values(args).filter((a) => a !== undefined).length === 1) return null;
+	const keys = Object.keys(args);
+	const names = `${keys.slice(0, -1).join(", ")} or ${keys.at(-1)}`;
+	return { result: errorResult(EXACTLY_ONE(names), await sourceDatesOrUnknown(db)) };
+}
+
 export interface ToolContext {
 	db: D1Database;
 	now: Date;
 }
 
 /** Parsed arguments of a tool, as the SDK hands them to its callback. */
-export type ToolArgs<I extends z.ZodObject> = StandardSchemaWithJSON.InferOutput<I>;
+type ToolArgs<I extends z.ZodObject> = StandardSchemaWithJSON.InferOutput<I>;
 
 export interface Tool<I extends z.ZodObject, O extends z.ZodType> {
 	name: string;
@@ -50,7 +58,7 @@ export async function runTool<I extends z.ZodObject, O extends z.ZodType>(
 		outcome = await tool.handler({ db: env.DB, now: new Date() }, args);
 	} catch (err) {
 		log("tool_error", { tool: tool.name, error: String(err) }, "error");
-		const dates = await loadSourceDates(env.DB).catch(() => UNKNOWN_DATES);
+		const dates = await sourceDatesOrUnknown(env.DB);
 		outcome = { result: errorResult(UNAVAILABLE, dates) };
 	}
 	try {

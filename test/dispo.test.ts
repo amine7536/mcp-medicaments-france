@@ -18,12 +18,8 @@ describe("parseDispo", () => {
 		expect(rows).toHaveLength(50);
 		expect(rows[0]).toEqual({
 			cis: "63922956",
-			cip13: null,
 			status_code: 1,
 			status_label: "Rupture de stock",
-			date_debut: "2026-10-26",
-			date_maj: "2026-10-26",
-			date_remise: null,
 			ansm_path: "/disponibilites-des-produits-de-sante/medicaments/brevibloc-100-mg-10-ml-solution-injectable-en-flacon-esmolol-chlorhydrate-d",
 		});
 		const labels = rows.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.status_label]: (acc[r.status_label] ?? 0) + 1 }), {});
@@ -33,7 +29,6 @@ describe("parseDispo", () => {
 			"Rupture de stock": 8,
 			"Tension d'approvisionnement": 25,
 		});
-		expect(rows.filter((r) => r.cip13 !== null)).toHaveLength(3);
 		expect(rows.every((r) => r.ansm_path.startsWith("/") && !r.ansm_path.endsWith("/"))).toBe(true);
 	});
 
@@ -45,13 +40,6 @@ describe("parseDispo", () => {
 	it("drops empty lines and strips a trailing slash", () => {
 		const line = "60000001\t\t2\tTension\t01/01/2026\t\t\thttps://ansm.sante.fr/a/b/";
 		expect(parseDispo(new TextEncoder().encode(`${line}\r\n\r\n${line}\n`), 2).map((r) => r.ansm_path)).toEqual(["/a/b", "/a/b"]);
-	});
-
-	it("keeps rejecting dates before 2000", () => {
-		const line = "60000001\t\t2\tTension\t31/12/1999\t01/01/2000\t\thttps://ansm.sante.fr/a/b";
-		const [row] = parseDispo(new TextEncoder().encode(line), 1);
-		expect(row?.date_debut).toBeNull();
-		expect(row?.date_maj).toBe("2000-01-01");
 	});
 });
 

@@ -1,15 +1,15 @@
 import { type ListRow, parseDetail, parseList } from "./ansm";
 import { applyDiff, type DetailOutcome, type DiffCounts, loadShortages, needsDetail } from "./diff";
 import { ingestDispo } from "./dispo";
-import { afterIngest } from "./hooks";
-import { ANSM_LIST_URL, ANSM_ORIGIN, type Fetcher, get, log } from "./http";
+import { ANSM_LIST_URL, ANSM_ORIGIN, errorMessage, type Fetcher, get, log } from "./http";
+import { afterIngest } from "./match";
 import { checkSanity } from "./sanity";
 
 export const RUNNING_TTL_MS = 20 * 60 * 1000;
 const DETAIL_CONCURRENCY = 4;
 const MESSAGE_MAX = 500;
 
-export interface IngestOptions {
+interface IngestOptions {
 	/** Minimum rows of the BDPM shortage file (default 200). */
 	dispoMinRows?: number;
 	/** Minimum delay between two request starts in one detail lane (default 250 ms). */
@@ -18,7 +18,7 @@ export interface IngestOptions {
 	afterIngest?: typeof afterIngest;
 }
 
-export type RunStatus = "ok" | "aborted" | "error";
+type RunStatus = "ok" | "aborted" | "error";
 
 export interface IngestResult {
 	id: number;
@@ -27,8 +27,6 @@ export interface IngestResult {
 	counts: Partial<DiffCounts>;
 	detailsFetched: number;
 }
-
-const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /** Fetches and parses detail pages with `DETAIL_CONCURRENCY` lanes, each spacing its request starts. */
 async function fetchDetails(rows: ListRow[], fetcher: Fetcher, intervalMs: number): Promise<Map<string, DetailOutcome>> {

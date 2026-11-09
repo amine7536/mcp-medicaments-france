@@ -1,22 +1,40 @@
-import { createMcpHandler } from "agents/mcp/server";
+import { createMcpHandler, localhostAllowedOrigins, originValidationResponse } from "@modelcontextprotocol/server";
 import { Hono } from "hono";
 import { methodNotAllowed } from "hono/method-not-allowed";
 import { handleAdminIngest } from "./admin";
 import { handleHealth } from "./health";
-import { handleIcon } from "./icon";
 import { log } from "./ingest/http";
 import { runIngest } from "./ingest/run";
-import { type Lang, renderLanding, renderPrivacy, resolveLang } from "./landing";
 import { createServer } from "./mcp/server";
 
 const RETRY_AFTER_SECONDS = 60;
 
-/** An HTML page in the language picked from `?lang` or `Accept-Language`. */
-function handlePage(request: Request, url: URL, render: (lang: Lang) => string): Response {
-	const lang = resolveLang(url, request.headers.get("Accept-Language"));
-	return new Response(render(lang), {
+const MCP_CORS_HEADERS = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, mcp-session-id, MCP-Protocol-Version, Mcp-Method, Mcp-Name",
+	"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+	"Access-Control-Expose-Headers": "mcp-session-id",
+	"Access-Control-Max-Age": "86400",
+};
+
+/** A copy of the response with the `/mcp` CORS headers set, keeping its status and body stream. */
+function withCors(response: Response): Response {
+	const headers = new Headers(response.headers);
+	for (const [name, value] of Object.entries(MCP_CORS_HEADERS)) headers.set(name, value);
+	return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+/** The static page at `/<lang>/<page>` in the language picked from `?lang`, then the first `Accept-Language` tag, then French. */
+async function handlePage(request: Request, env: Env, page: "" | "privacy"): Promise<Response> {
+	const url = new URL(request.url);
+	const param = url.searchParams.get("lang");
+	const first = (request.headers.get("Accept-Language") ?? "").split(",")[0].split(";")[0].trim().toLowerCase();
+	const lang = param === "fr" || param === "en" ? param : first.startsWith("en") ? "en" : "fr";
+	const asset = await env.ASSETS.fetch(new URL(`/${lang}/${page}`, url));
+	return new Response(asset.body, {
+		status: asset.status,
 		headers: {
-			"content-type": "text/html; charset=utf-8",
+			"content-type": asset.headers.get("content-type") ?? "text/html; charset=utf-8",
 			"Cache-Control": "public, max-age=3600",
 			Vary: "Accept-Language",
 			"Content-Language": lang,
@@ -24,7 +42,10 @@ function handlePage(request: Request, url: URL, render: (lang: Lang) => string):
 	});
 }
 
-/** `/mcp`: per-IP rate limit, then a stateless MCP handler built for this request. */
+/**
+ * `/mcp`: per-IP rate limit, then a 403 for a browser Origin other than localhost (or this `*.workers.dev` host),
+ * the CORS preflight answer, or a stateless MCP handler built for this request; every answer after the rate limit carries the CORS headers.
+ */
 async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 	const { success } = await env.MCP_LIMIT.limit({ key: ip });
@@ -34,7 +55,12 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
 			{ status: 429, headers: { "Retry-After": String(RETRY_AFTER_SECONDS) } },
 		);
 	}
-	return createMcpHandler(() => createServer(env, ctx), { route: "/mcp" })(request, env, ctx);
+	const hostname = new URL(request.url).hostname;
+	const allowedOrigins = hostname.endsWith(".workers.dev") ? [...localhostAllowedOrigins(), hostname] : localhostAllowedOrigins();
+	const rejected = originValidationResponse(request, allowedOrigins);
+	if (rejected) return withCors(rejected);
+	if (request.method === "OPTIONS") return withCors(new Response(null, { status: 200 }));
+	return withCors(await createMcpHandler(() => createServer(env, ctx)).fetch(request));
 }
 
 const app = new Hono<{ Bindings: Env }>({ getPath: (req) => new URL(req.url).pathname });
@@ -46,9 +72,8 @@ app.use(
 			c.json({ error: "method_not_allowed" }, 405, { Allow: methods.join(", ") }),
 	}),
 );
-app.get("/", (c) => handlePage(c.req.raw, new URL(c.req.url), renderLanding));
-app.get("/privacy", (c) => handlePage(c.req.raw, new URL(c.req.url), renderPrivacy));
-app.get("/icon.svg", () => handleIcon());
+app.get("/", (c) => handlePage(c.req.raw, c.env, ""));
+app.get("/privacy", (c) => handlePage(c.req.raw, c.env, "privacy"));
 // Hono types executionCtx narrowly; at runtime it is the Worker's ExecutionContext passed through app.fetch.
 app.get("/health", (c) => handleHealth(c.req.raw, c.env, c.executionCtx as ExecutionContext));
 app.all("/admin/ingest", (c) => handleAdminIngest(c.req.raw, c.env, c.executionCtx as ExecutionContext));

@@ -1,11 +1,11 @@
-import { currentShortages, getMedicines, MATCH_CAP, type MedicineRow, type NameMatch, relatedShortages, searchNames } from "../lib/db";
+import { currentShortages, getMedicines, MATCH_CAP, type MedicineRow, type NameMatch, orderedMedicines, relatedShortages, searchNames } from "../lib/db";
 import { normalize, NUMERIC, tokens } from "../lib/normalize";
 import type * as z from "zod";
 import type { Candidates, NotFound, ShortageRow, ShortageSummary } from "./schemas";
 import { NOT_FOUND_HINT } from "./tool";
 
 export const RESOLVE_LIMIT = 10;
-export const RELATED_LIMIT = 5;
+const RELATED_LIMIT = 5;
 
 export type Resolution =
 	| { kind: "cis"; medicine: MedicineRow }
@@ -75,51 +75,41 @@ export async function resolveName(db: D1Database, name: string, cap: number = MA
 export const inShortage = (status: string | undefined): boolean => status === "rupture" || status === "tension";
 
 /**
- * The `candidates` data of a resolution: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise in resolution
- * order, with holder, marketing and shortage status, MITM status and ATC code, `best_match` on the best matches shown and
- * `best_match_total` when there is one. `inShortageTotal` counts them across all matches; it stays out of the data because
- * #71 is closed.
+ * The `candidates` data of a resolution and its summary: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise
+ * in resolution order, with holder, marketing and shortage status, MITM status and ATC code, `best_match` on the best matches
+ * shown and `best_match_total` when there is one. The count in rupture or tension across all matches is in the summary only.
  */
 export async function candidatesData(
 	db: D1Database,
+	query: string,
 	resolved: Extract<Resolution, { kind: "candidates" }>,
-): Promise<{ data: z.infer<typeof Candidates>; inShortageTotal: number }> {
+): Promise<{ data: z.infer<typeof Candidates>; summary: string }> {
 	const shortages = await currentShortages(db, resolved.cis);
 	const isInShortage = (c: string): boolean => inShortage(shortages.get(c)?.current.status);
 	const shown = resolved.cis.toSorted((a, b) => Number(isInShortage(b)) - Number(isInShortage(a))).slice(0, RESOLVE_LIMIT);
-	const meds = await getMedicines(db, shown);
 	const best = new Set(resolved.best);
-	const candidates = shown.flatMap((c) => {
-		const m = meds.get(c);
-		return m
-			? [
-					{
-						cis: m.cis,
-						name: m.name,
-						holder: m.holder,
-						marketing_status: m.marketing_status,
-						shortage_status: shortages.get(c)?.current.status ?? null,
-						is_mitm: m.is_mitm,
-						atc_code: m.atc_code,
-						...(best.has(c) ? { best_match: true as const } : {}),
-					},
-				]
-			: [];
-	});
-	return {
-		data: {
-			kind: "candidates",
-			total: resolved.total,
-			capped: resolved.capped,
-			candidates,
-			...(resolved.best.length > 0 ? { best_match_total: resolved.best.length } : {}),
-		},
-		inShortageTotal: resolved.cis.filter(isInShortage).length,
+	const candidates = (await orderedMedicines(db, shown)).map((m) => ({
+		cis: m.cis,
+		name: m.name,
+		holder: m.holder,
+		marketing_status: m.marketing_status,
+		shortage_status: shortages.get(m.cis)?.current.status ?? null,
+		is_mitm: m.is_mitm,
+		atc_code: m.atc_code,
+		...(best.has(m.cis) ? { best_match: true as const } : {}),
+	}));
+	const data = {
+		kind: "candidates" as const,
+		total: resolved.total,
+		capped: resolved.capped,
+		candidates,
+		...(resolved.best.length > 0 ? { best_match_total: resolved.best.length } : {}),
 	};
+	return { data, summary: candidatesSummary(query, data.total, resolved.cis.filter(isInShortage).length, data.best_match_total ?? 0) };
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */
-export function brandToken(norm: string): string | null {
+function brandToken(norm: string): string | null {
 	const first = tokens(norm)[0];
 	return first !== undefined && first.length >= 3 && !/^\d+$/.test(first) ? first : null;
 }
@@ -134,7 +124,6 @@ export const NO_GUARANTEE = "This does not guarantee availability in your pharma
 
 export const relatedList = (related: ShortageSummary[]): string => related.map((s) => `${s.name} (${s.status})`).join(", ");
 
-/** How many medicines match a name: "1 medicine matches" or "<n> medicines match". */
 export const matchCount = (name: string, total: number): string => `${total} ${total === 1 ? "medicine matches" : "medicines match"} "${name}"`;
 
 export const candidatesSummary = (name: string, total: number, inShortageTotal: number, bestMatchTotal: number): string =>

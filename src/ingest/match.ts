@@ -1,8 +1,9 @@
 import manualMatches from "../data/manual_matches.json";
+import { insertChunks } from "../lib/db";
 import { NUMERIC, tokens } from "../lib/normalize";
 import { log } from "./http";
 
-export type MatchMethod = "manual" | "dispo" | "exact" | "fuzzy" | "sibling";
+type MatchMethod = "manual" | "dispo" | "exact" | "fuzzy" | "sibling";
 
 export interface ListedShortage {
 	id: string;
@@ -18,7 +19,7 @@ export interface Medicine {
 	holder: string | null;
 }
 
-export interface MatchInputs {
+interface MatchInputs {
 	shortages: ListedShortage[];
 	medicines: Medicine[];
 	/** CIS of the `medicines` table; candidates outside it are dropped. */
@@ -31,13 +32,12 @@ export interface MatchInputs {
 	byBrand: Map<string, Array<{ cis: string; brand: string; tokens: Set<string> }>>;
 	/** ANSM data-id to CIS overrides. */
 	manual: Record<string, string[]>;
-	/** CIS to medicine. */
 	byCis: Map<string, Medicine>;
 	/** Name shape (see `nameShape`) to the medicines with that shape. */
 	byShape: Map<string, Medicine[]>;
 }
 
-export interface MatchRow {
+interface MatchRow {
 	shortage_id: string;
 	cis: string;
 	method: MatchMethod;
@@ -46,14 +46,13 @@ export interface MatchRow {
 }
 
 /** Entries per strategy (`none` when unmatched), and `sibling`: the number of sibling rows. */
-export type MatchCounts = Record<MatchMethod | "none", number>;
+type MatchCounts = Record<MatchMethod | "none", number>;
 
 interface Candidate {
 	cis: string;
 	confidence: number;
 }
 
-const ROWS_PER_INSERT = 20; // 5 columns x 20 rows = 100 bound parameters (limit 100)
 const FUZZY_MIN_SCORE = 0.8;
 const DOSE = String.raw`\d+(?:\.\d+)? (?:MG|G|MCG|UI)`;
 /** The first dose list: two or more doses separated by single spaces, `ET` before the last, each delimited by a space or the string ends. */
@@ -74,15 +73,13 @@ export function doseVariants(norm: string): string[] {
 }
 
 /** Name tokens with every number replaced by `#`, and the form; null without a form. Medicines differing only by dose share it. */
-export function nameShape(m: Medicine): string | null {
+function nameShape(m: Medicine): string | null {
 	if (m.form === null) return null;
 	return JSON.stringify([tokens(m.denomination_norm).map((t) => (NUMERIC.test(t) ? "#" : t)), m.form]);
 }
 
-/** The numeric tokens of a medicine name, in order. */
 const doses = (m: Medicine): string => JSON.stringify(tokens(m.denomination_norm).filter((t) => NUMERIC.test(t)));
 
-/** Groups `rows` by `key`, keeping `value` of each row. */
 function index<T, V>(rows: T[], key: (r: T) => string, value: (r: T) => V): Map<string, V[]> {
 	return new Map([...Map.groupBy(rows, key)].map(([k, group]) => [k, group.map(value)]));
 }
@@ -121,7 +118,7 @@ export function buildMatchInputs(
 }
 
 /** Loads the matching inputs with exactly 3 read queries. */
-export async function loadMatchInputs(db: D1Database): Promise<MatchInputs> {
+async function loadMatchInputs(db: D1Database): Promise<MatchInputs> {
 	const [shortages, dispo, medicines] = await Promise.all([
 		db.prepare("SELECT id, ansm_path, raw_name, raw_name_norm FROM shortages WHERE listed = 1").all<ListedShortage>(),
 		db.prepare("SELECT ansm_path, cis FROM bdpm_dispo").all<{ ansm_path: string; cis: string }>(),
@@ -191,7 +188,7 @@ const STRATEGIES: Array<[MatchMethod, (inputs: MatchInputs, s: ListedShortage) =
  * Medicines not in `linked` whose name shape (name and form, numbers aside) is a linked medicine's and whose doses
  * are a linked medicine's, with the highest confidence among the linked medicines of that shape.
  */
-export function matchSiblings(inputs: MatchInputs, linked: Candidate[]): Candidate[] {
+function matchSiblings(inputs: MatchInputs, linked: Candidate[]): Candidate[] {
 	const linkedCis = new Set(linked.map((c) => c.cis));
 	const meds = linked.flatMap((c) => {
 		const m = inputs.byCis.get(c.cis);
@@ -252,18 +249,20 @@ export async function matchAll(env: Env): Promise<MatchCounts> {
 		counts.sibling += matched.filter((r) => r.method === "sibling").length;
 		rows.push(...matched);
 	}
-	const stmts: D1PreparedStatement[] = [db.prepare("DELETE FROM shortage_matches")];
-	for (let i = 0; i < rows.length; i += ROWS_PER_INSERT) {
-		const chunk = rows.slice(i, i + ROWS_PER_INSERT);
-		stmts.push(
-			db
-				.prepare(
-					"INSERT INTO shortage_matches (shortage_id, cis, method, confidence, is_best) VALUES " +
-						chunk.map(() => "(?, ?, ?, ?, ?)").join(", "),
-				)
-				.bind(...chunk.flatMap((r) => [r.shortage_id, r.cis, r.method, r.confidence, r.is_best])),
-		);
-	}
-	await db.batch(stmts);
+	await db.batch([
+		db.prepare("DELETE FROM shortage_matches"),
+		...insertChunks(
+			db,
+			"shortage_matches",
+			["shortage_id", "cis", "method", "confidence", "is_best"],
+			rows.map((r) => [r.shortage_id, r.cis, r.method, r.confidence, r.is_best]),
+		),
+	]);
 	return counts;
+}
+
+/** Runs after a successful diff; returns a fragment for the run message. */
+export async function afterIngest(env: Env, _run: { id: number; bootstrap: boolean }): Promise<string> {
+	const c = await matchAll(env);
+	return `match: manual=${c.manual} dispo=${c.dispo} exact=${c.exact} fuzzy=${c.fuzzy} none=${c.none} sibling=${c.sibling}`;
 }

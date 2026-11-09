@@ -1,10 +1,10 @@
 import * as z from "zod";
-import { aggregationGroup, getMedicines, type MedicineRow, mitmCodes } from "../../lib/db";
-import { envelope, envelopeSchema, errorResult, loadSourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesData, candidatesSummary, notFound, type Resolution, resolveName } from "../resolve";
+import { aggregationGroup, getMedicines, type MedicineRow, mitmCodes, orderedMedicines } from "../../lib/db";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { candidatesData, notFound, type Resolution, resolveName } from "../resolve";
 import { LINKED_LIMIT } from "./getAvailability";
 import { Candidates, Cis, NotFound, outputObject } from "../schemas";
-import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
+import { exactlyOne, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 export const MITM_DEFINITION =
 	"MITM (médicaments d'intérêt thérapeutique majeur) are medicines for which an interruption of treatment may endanger the patient's life in the short or medium term, or represents a significant loss of chance.";
@@ -72,8 +72,7 @@ export async function byCandidates(
 				resolved.cis.map((c) => codes.get(c) ?? null),
 			);
 	if (group === undefined) {
-		const { data, inShortageTotal } = await candidatesData(db, resolved);
-		const summary = candidatesSummary(query, data.total, inShortageTotal, data.best_match_total ?? 0);
+		const { data, summary } = await candidatesData(db, query, resolved);
 		// A capped match set is incomplete, so its mix would be wrong.
 		if (resolved.capped) return { data, summary };
 		const listed = resolved.cis.flatMap((c) => codes.get(c) ?? []);
@@ -83,12 +82,7 @@ export async function byCandidates(
 		if (data.total <= data.candidates.length) return { data, summary: text };
 		return { data: { ...data, mitm_total: listed.length, atc_codes: atcCodes }, summary: text };
 	}
-	const shown = resolved.cis.slice(0, LINKED_LIMIT);
-	const meds = await getMedicines(db, shown);
-	const medicines = shown.flatMap((c) => {
-		const m = meds.get(c);
-		return m ? [{ cis: m.cis, name: m.name }] : [];
-	});
+	const medicines = (await orderedMedicines(db, resolved.cis.slice(0, LINKED_LIMIT))).map((m) => ({ cis: m.cis, name: m.name }));
 	const is_mitm = group !== null;
 	const summary = is_mitm
 		? `All ${resolved.total} medicines matching "${query}" are on the BDPM MITM list (ATC ${group}). ${MITM_DEFINITION}`
@@ -105,31 +99,22 @@ export const isMajorTherapeuticInterest: Tool<typeof inputSchema, typeof outputS
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, name }): Promise<ToolOutcome> {
-		if ((cis === undefined) === (name === undefined)) {
-			return { result: errorResult(EXACTLY_ONE("cis or name"), await loadSourceDates(db).catch(() => UNKNOWN_DATES)) };
-		}
+		const invalid = await exactlyOne(db, { cis, name });
+		if (invalid !== null) return invalid;
 		const dates = await loadSourceDates(db);
 		const source = `BDPM MITM list, release ${dates.bdpm_release ?? "unknown"}`;
 		let medicine: MedicineRow | undefined;
 		if (cis !== undefined) {
 			medicine = (await getMedicines(db, [cis])).get(cis);
-			if (medicine === undefined) return { result: toNotFound(`CIS ${cis}`), cis };
+			if (medicine === undefined) return { result: toolResult(notFound(`CIS ${cis}`, []), dates, now), cis };
 		} else {
 			const resolved = await resolveName(db, name as string);
-			if (resolved.kind === "candidates") {
-				const out = await byCandidates(db, name as string, resolved, source);
-				return { result: toolResult(out.summary, envelope(out.data, dates, now)) };
-			}
-			if (resolved.kind === "not_found") return { result: toNotFound(`"${name}"`, resolved.did_you_mean) };
+			if (resolved.kind === "candidates") return { result: toolResult(await byCandidates(db, name as string, resolved, source), dates, now) };
+			if (resolved.kind === "not_found") return { result: toolResult(notFound(`"${name}"`, [], resolved.did_you_mean), dates, now) };
 			medicine = resolved.medicine;
 		}
 		const { cis: code, name: label, is_mitm, atc_code } = medicine;
 		const summary = `${label} (CIS ${code}) ${is_mitm ? `is on the BDPM MITM list (ATC ${atc_code})` : "is not on the BDPM MITM list"}. ${MITM_DEFINITION}`;
-		return { result: toolResult(summary, envelope({ kind: "mitm" as const, cis: code, name: label, is_mitm, atc_code, source }, dates, now)), cis: code };
-
-		function toNotFound(what: string, did_you_mean: string | null = null) {
-			const out = notFound(what, [], did_you_mean);
-			return toolResult(out.summary, envelope(out.data, dates, now));
-		}
+		return { result: toolResult({ data: { kind: "mitm" as const, cis: code, name: label, is_mitm, atc_code, source }, summary }, dates, now), cis: code };
 	},
 };

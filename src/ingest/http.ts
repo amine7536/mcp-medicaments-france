@@ -5,7 +5,7 @@ export const ANSM_ORIGIN = "https://ansm.sante.fr";
 export const ANSM_LIST_URL = `${ANSM_ORIGIN}/disponibilites-des-produits-de-sante/medicaments`;
 export const DISPO_URL = "https://base-donnees-publique.medicaments.gouv.fr/download/file/CIS_CIP_Dispo_Spec.txt";
 
-export const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -13,6 +13,9 @@ export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 export function get(fetcher: Fetcher, url: string): Promise<Response> {
 	return fetcher(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 }
+
+/** The message of an error, or the thrown value as a string. */
+export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /** One JSON log line; `error` lines go to stderr. */
 export function log(event: string, fields: Record<string, unknown> = {}, level: "info" | "error" = "info"): void {

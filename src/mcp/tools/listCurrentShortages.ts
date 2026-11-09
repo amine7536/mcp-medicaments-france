@@ -1,12 +1,12 @@
 import * as z from "zod";
 import { areaKnown, listedAreas, listShortages } from "../../lib/db";
 import { normalize } from "../../lib/normalize";
-import { envelope, envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { Cis, describeShortage, outputObject, Scope, ShortageSummary, Status, toShortageSummary } from "../schemas";
 import { INFO_ONLY, type Tool } from "../tool";
 
 /** `scope` filter value → accepted `shortages.scope` values: a city or hospital filter includes city-and-hospital entries. */
-export const SCOPE_MATCHES: Record<z.infer<typeof Scope>, string[]> = {
+const SCOPE_MATCHES: Record<z.infer<typeof Scope>, string[]> = {
 	ville: ["ville", "ville_hopital"],
 	hopital: ["hopital", "ville_hopital"],
 	ville_hopital: ["ville_hopital"],
@@ -63,6 +63,6 @@ export const listCurrentShortages: Tool<typeof inputSchema, typeof outputSchema>
 		if (available_areas !== undefined) lines.push(`No entry for this therapeutic area. Areas used by ANSM: ${available_areas.join(", ")}.`);
 		for (const s of items) lines.push(`- ${describeShortage(s)}`);
 		if (next_offset !== null) lines.push(`More results: call again with offset ${next_offset}.`);
-		return { result: toolResult(lines.join("\n"), envelope({ kind: "list" as const, total, items, next_offset, ...(available_areas === undefined ? {} : { available_areas }) }, dates, now)) };
+		return { result: toolResult({ data: { kind: "list" as const, total, items, next_offset, ...(available_areas === undefined ? {} : { available_areas }) }, summary: lines.join("\n") }, dates, now) };
 	},
 };

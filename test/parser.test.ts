@@ -123,26 +123,23 @@ describe("parseList on synthetic rows", () => {
 });
 
 describe("parseDetail", () => {
-	it("reads published/updated dates, period and the DCI block", async () => {
+	it("reads the period and the DCI block", async () => {
 		const d = await parseDetail(fixtureText("ansm/detail-1566.html"), "tension", "1566");
 		expect(d).toMatchObject({
-			ansm_published_at: "2026-07-29",
-			ansm_detail_updated_at: "2026-10-26",
 			situation_start: "2026-06-05",
 			dci: "Clindamycine (phosphate de)",
 		});
 		expect(d.detail_hash).toMatch(/^[0-9a-f]{64}$/);
 	});
 
-	it("leaves the update date null when absent", async () => {
+	it("reads the situation start of a page without an update date", async () => {
 		const d = await parseDetail(fixtureText("ansm/detail-rupture.html"), "rupture", "1625");
-		expect(d).toMatchObject({ ansm_published_at: "2026-10-26", ansm_detail_updated_at: null, situation_start: "2026-10-26" });
+		expect(d).toMatchObject({ situation_start: "2026-10-26" });
 	});
 
 	it("returns a null DCI without a DCI block", async () => {
 		const d = await parseDetail(fixtureText("ansm/detail-no-dci.html"), "tension", "1510");
 		expect(d.dci).toBeNull();
-		expect(d.ansm_published_at).toBe("2026-05-26");
 	});
 
 	it("1566 picks the 'prévue fin novembre 2026' line, not the other product's line", async () => {

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Médicaments en France</title>
+<meta name="description" content="Look up a medicine sold in France by name (e.g. Doliprane, amoxicillin), CIS code or CIP13 code (on the box): presentations, prices, Social Security reimbursement rate, prescription and dispensing conditions (prescription required or not), ANSM safety information and status as a medicine of major therapeutic interest (MITM). Check whether it is out of stock or under supply tension, with the expected return date, and browse current shortages and recent changes.">
+<link rel="alternate" hreflang="fr" href="https://medicaments-france.a3e.dev/?lang=fr">
+<link rel="alternate" hreflang="en" href="https://medicaments-france.a3e.dev/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://medicaments-france.a3e.dev/">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="notice" role="note">
+<div class="wrap"><p><strong>Warning:</strong> information only, not medical advice. This service does not replace your doctor or pharmacist: always ask them before changing, replacing or stopping a treatment.</p></div>
+</div>
+<header>
+<div class="wrap">
+<div class="top">
+<a class="site" href="/?lang=en" lang="fr">Médicaments en France</a>
+<nav class="lang" aria-label="Langue / Language"><a href="/?lang=fr" hreflang="fr" lang="fr">FR</a> | <a href="/?lang=en" hreflang="en" lang="en" aria-current="true">EN</a></nav>
+</div>
+<h1 lang="fr">Médicaments en France</h1>
+<p class="lead">Look up a medicine sold in France by name (e.g. Doliprane, amoxicillin), CIS code or CIP13 code (on the box): presentations, prices, Social Security reimbursement rate, prescription and dispensing conditions (prescription required or not), ANSM safety information and status as a medicine of major therapeutic interest (MITM). Check whether it is out of stock or under supply tension, with the expected return date, and browse current shortages and recent changes.</p>
+<div class="endpoint">
+<span class="sr-only">MCP server address</span>
+<span class="pill">MCP</span>
+<code>https://medicaments-france.a3e.dev/mcp</code>
+<button type="button" class="copy primary" data-copy="https://medicaments-france.a3e.dev/mcp" data-done="Copied" aria-label="Copy the server address" hidden>Copy</button>
+</div>
+</div>
+</header>
+<main class="wrap">
+<section id="examples">
+<h2>Examples</h2>
+<div class="body">
+<dl>
+<dt>"Is Aspirin in shortage?"</dt>
+<dd>Shortage status from ANSM, the announced return date, the ANSM page and its update date.</dd>
+<dt>"Which cardiology medicines are under supply tension?"</dt>
+<dd>The ANSM list of supply tensions in cardiology, with announced return dates.</dd>
+<dt>"What changed this week?"</dt>
+<dd>New shortages, returns and changed return dates detected by the service.</dd>
+<dt>"Is amoxicillin a medicine of major therapeutic interest?"</dt>
+<dd>Whether the medicine is on the BDPM list of medicines of major therapeutic interest (MITM).</dd>
+<dt>"I have a box with the code 3400931922766: what is it and how much does it cost?"</dt>
+<dd>The medicine's name, the box's public price and reimbursement rate from the BDPM.</dd>
+<dt>"Does Depakine need a special prescription?"</dt>
+<dd>The BDPM prescription and dispensing conditions, quoted verbatim, and current ANSM safety information with its links.</dd>
+<dt>"My medicine isn't listed, so it's available?"</dt>
+<dd>No: not being listed does not mean it is available; ask your pharmacist.</dd>
+<dt>"What can I take instead of Brevibloc?"</dt>
+<dd>Refusal: no replacement is suggested; only a doctor or pharmacist can choose an alternative.</dd>
+</dl>
+<h3>Real answers</h3>
+<p class="note">Answers from Claude through this server, captured on 28 October 2026 with an instruction to answer in a few sentences. The data may have changed since.</p>
+<div class="chat" role="log" aria-label="Example conversation with Claude">
+<div class="chat-head"><span>Claude + medicaments-france</span><span>28 Oct 2026</span></div>
+<div class="chat-body">
+<div class="msg user"><p>"Is Aspirin in shortage in France?"</p></div>
+<div class="msg bot"><span class="who">Claude</span><p>Only one aspirin product is in shortage: ASPIRINE ARROW 75 mg gastro-resistant tablets are listed in tension d'approvisionnement (strained supply) in pharmacies and in rupture (out of stock) in hospitals, and no return date has been set. No other aspirin product appears in the ANSM shortage list, but ANSM mainly lists shortages of essential medicines that manufacturers declare, so "not listed" doesn't guarantee it's in stock. Source: ANSM (entry updated 2026-05-21, data fetched 2026-10-28) — https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments/acide-acetylsalicylique-75-mg-comprime-gastro-resistant-acide-acetylsalicylique. If you take this product, only your pharmacist or doctor can decide on any change to your treatment.</p></div>
+<div class="msg user"><p>"Which cardiology medicines are under supply tension in France?"</p></div>
+<div class="msg bot"><span class="who">Claude</span><p>ANSM currently lists 23 cardiology medicines with a "tension d'approvisionnement" (supply tension) status. The most recent updates (October 2026) cover ambrisentan (Volibris, hospital), Nifédipine Viatris LP 30 mg (expected back early December 2026), Tarka LP 240/2 mg (February 2027), Winrevair, Adempas 0.5 mg (November 2026) and Modamide 5 mg (January 2027). Also listed are furosemide 20/40 mg tablets, Nilemdo, several Calciparine/calcium heparin presentations, nitrendipine, dobutamine Panpharma (hospital, December 2026), Repatha 140 mg and Praluent, bosentan 125 mg, and trandolapril 2/4 mg (December 2026). The list also includes propranolol 40 mg, Tarka LP 240/4 mg, aspirin 75 mg (out of stock in hospitals), clopidogrel 75 mg, and Colchimax and Colchicine Opocalcium. Many of these have no return date, and a few entries were last updated in 2024–2025, so check each one's ANSM page at https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments. Source: ANSM, ingested 2026-10-28, with BDPM 2026-09-29; ANSM mainly lists medicines of major therapeutic interest, so a medicine missing from the list may still be short, and any change to a treatment is for a pharmacist or doctor to decide.</p></div>
+<div class="msg user"><p>"What can I take instead of Brevibloc?"</p></div>
+<div class="msg bot"><span class="who">Claude</span><p>I can't suggest a replacement for Brevibloc; only your doctor or the hospital pharmacist can choose one. ANSM lists Brevibloc 100 mg/10 ml injectable solution as out of stock in hospitals, with supply expected back sometime in 2027 (ANSM, updated 2026-10-26: https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments/brevibloc-100-mg-10-ml-solution-injectable-en-flacon-esmolol-chlorhydrate-d). Brevibloc 10 mg/ml infusion solution has no shortage listed, but ANSM mainly lists shortages reported by manufacturers, so that doesn't guarantee it's available. Source: ANSM data retrieved 2026-10-28 and BDPM release 2026-09-29.</p></div>
+</div>
+</div>
+</div>
+</section>
+
+<section>
+<h2>Add the server</h2>
+<div class="body">
+<div class="tabs">
+<div class="tabbar">
+<div role="tablist" aria-label="MCP clients" hidden>
+<button type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Claude</button>
+<button type="button" role="tab" id="tab-claude-code" aria-controls="panel-claude-code" aria-selected="false">Claude Code</button>
+<button type="button" role="tab" id="tab-cursor" aria-controls="panel-cursor" aria-selected="false">Cursor</button>
+</div>
+<button type="button" class="copy secondary" data-done="Copied" hidden>Copy</button>
+</div>
+<div role="tabpanel" id="panel-claude" aria-labelledby="tab-claude">
+<h3 class="panel-title">Claude</h3>
+<p><a href="https://claude.ai/directory/connectors/medicaments-france">Add it from the Claude connectors directory</a></p>
+<p>Or, in Claude, open Customize &gt; Connectors, choose Add custom connector, paste the address above and select No sign-in.</p>
+</div>
+<div role="tabpanel" id="panel-claude-code" aria-labelledby="tab-claude-code" data-label="Copy the command">
+<h3 class="panel-title">Claude Code</h3>
+<p>In a terminal:</p>
+<pre><code>claude mcp add --transport http medicaments-france https://medicaments-france.a3e.dev/mcp</code></pre>
+</div>
+<div role="tabpanel" id="panel-cursor" aria-labelledby="tab-cursor" data-label="Copy the configuration">
+<h3 class="panel-title">Cursor</h3>
+<p>In mcp.json:</p>
+<pre><code>{
+  "mcpServers": {
+    "medicaments-france": {
+      "url": "https://medicaments-france.a3e.dev/mcp"
+    }
+  }
+}</code></pre>
+</div>
+</div>
+<p>Any other MCP client that supports Streamable HTTP works with the address above.</p>
+</div>
+</section>
+
+<section>
+<h2>Tools</h2>
+<div class="body">
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tool</th><th>What it answers</th></tr></thead>
+<tbody>
+<tr><td><code>search_medicine</code></td><td>Finds a medicine by name or active substance and shows whether it is in shortage.</td></tr>
+<tr><td><code>get_availability</code></td><td>Gives a medicine's status: shortage or supply problem, announced return date, history.</td></tr>
+<tr><td><code>list_current_shortages</code></td><td>Lists current shortages and supply problems, by status, pharmacy or hospital, or medical area.</td></tr>
+<tr><td><code>recent_changes</code></td><td>Shows what changed in the last few days.</td></tr>
+<tr><td><code>is_major_therapeutic_interest</code></td><td>Tells whether a medicine is of major therapeutic interest (MITM).</td></tr>
+<tr><td><code>get_medicine_info</code></td><td>Gives a medicine's boxes (CIP13 code, marketing status, price, reimbursement rate), its prescription and dispensing conditions, current ANSM safety information, and its current ANSM shortage status.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section>
+<h2>What this service does not do</h2>
+<div class="body">
+<ul>
+<li>It gives no medical advice: no replacement, no dose change, no stopping a treatment.</li>
+<li>It does not know pharmacy stock: ANSM data is national.</li>
+<li>A medicine missing from the list is not necessarily available: ANSM mainly publishes shortages of medicines of major therapeutic interest declared by manufacturers.</li>
+</ul>
+</div>
+</section>
+
+<section>
+<h2>Data</h2>
+<div class="body">
+<div class="table-wrap">
+<table>
+<thead><tr><th>Source</th><th>Content</th><th>Updated</th></tr></thead>
+<tbody>
+<tr><td><a href="https://ansm.sante.fr/disponibilites-des-produits-de-sante/medicaments">ANSM</a></td><td>Shortages, supply problems, returns</td><td>Daily</td></tr>
+<tr><td><a href="https://base-donnees-publique.medicaments.gouv.fr">BDPM</a></td><td>Medicines, substances, presentations, prescription conditions, MITM list, safety information</td><td>Weekly</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">Exact date of the last update: <a href="/health">/health</a></p>
+<p class="small">Code under the MIT licence. Data reused under the terms of its sources: unaltered, with the source and update date.</p>
+</div>
+</section>
+</main>
+<footer>
+<div class="wrap">
+<div>
+<p>No accounts, no cookies. For each call, only the tool name, the result, the duration, the CIS code and the date are stored. <a href="/privacy?lang=en">Privacy policy</a></p>
+<p>Independent service.</p>
+<p>This service is not approved or endorsed by ANSM, HAS or UNCAM.</p>
+</div>
+<ul class="links">
+<li><a href="https://github.com/amine7536/mcp-medicaments-france">Source code</a></li>
+<li><a href="https://github.com/amine7536/mcp-medicaments-france/issues">Report a problem</a></li>
+<li><a href="/health">Service status</a></li>
+</ul>
+</div>
+</footer>
+<p class="sr-only" aria-live="polite"></p>
+<script src="/landing.js"></script>
+</body>
+</html>

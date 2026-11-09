@@ -48,18 +48,8 @@ export function insertStatements(
 }
 
 const COLS = {
-	medicines: [
-		"cis",
-		"denomination",
-		"denomination_norm",
-		"form",
-		"routes",
-		"amm_status",
-		"marketing_status",
-		"holder",
-		"bdpm_updated_at",
-	],
-	substances: ["cis", "substance_code", "substance_name", "substance_norm", "dosage", "nature"],
+	medicines: ["cis", "denomination", "denomination_norm", "form", "routes", "marketing_status", "holder", "bdpm_updated_at"],
+	substances: ["cis", "substance_name", "substance_norm", "dosage"],
 	mitm: ["cis", "atc_code"],
 	medicines_fts: ["cis", "denomination_norm", "substances_norm"],
 	presentations: [
@@ -85,7 +75,7 @@ function values<T extends object>(rows: readonly T[], cols: readonly (keyof T & 
 	return rows.map((r) => cols.map((c) => r[c] as Value));
 }
 
-export interface ImportSqlInput extends Mapped {
+interface ImportSqlInput extends Mapped {
 	release: string;
 	startedAt: string;
 	finishedAt: string;

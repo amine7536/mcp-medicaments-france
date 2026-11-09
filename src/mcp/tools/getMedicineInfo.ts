@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { cisByCip13, currentShortages, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
-import { envelope, envelopeSchema, errorResult, loadSourceDates, type SourceDates, toolResult, UNKNOWN_DATES } from "../envelope";
-import { candidatesData, candidatesSummary, notFound, resolveName } from "../resolve";
+import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
+import { candidatesData, notFound, resolveName } from "../resolve";
 import {
 	Candidates,
 	Cip13,
@@ -18,12 +18,12 @@ import {
 	toShortageSummary,
 	utcDate,
 } from "../schemas";
-import { EXACTLY_ONE, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
+import { exactlyOne, INFO_ONLY, type Tool, type ToolOutcome } from "../tool";
 
 /** Presentations listed in the summary; the full list is in the structured content. */
 export const SUMMARY_LIMIT = 10;
 /** Safety information titles listed in the summary; the full list is in the structured content. */
-export const SAFETY_SUMMARY_LIMIT = 5;
+const SAFETY_SUMMARY_LIMIT = 5;
 export const SAFETY_ADVICE = "See the ANSM pages for details; do not stop or change a treatment without asking your doctor or pharmacist.";
 export const NO_SAFETY_INFORMATION = "No current ANSM safety information listed in the BDPM.";
 
@@ -60,7 +60,7 @@ const rates = (p: Presentation): string =>
  * The conflict between an ANSM marketing stop and the BDPM, null when no linked listed entry is a marketing stop or no box is marketed.
  * `entries` are the listed entries linked to the medicine, in shortage order; the first marketing stop is reported.
  */
-export function statusConflict(entries: readonly ShortageRow[], presentations: readonly Presentation[]): string | null {
+function statusConflict(entries: readonly ShortageRow[], presentations: readonly Presentation[]): string | null {
 	const stop = entries.find((e) => e.status === "arret_commercialisation");
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED).length;
 	if (stop === undefined || marketed === 0) return null;
@@ -69,7 +69,7 @@ export function statusConflict(entries: readonly ShortageRow[], presentations: r
 }
 
 /** The medicine line, the ANSM shortage status and status conflict when any, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`). */
-export function infoSummary(
+function infoSummary(
 	medicine: Medicine,
 	presentations: Presentation[],
 	conditions: string[],
@@ -122,8 +122,6 @@ async function info(db: D1Database, now: Date, m: MedicineRow, cip13: string | n
 	};
 }
 
-const result = (dates: SourceDates, now: Date, out: { data: Data; summary: string }) => toolResult(out.summary, envelope(out.data, dates, now));
-
 export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	name: "get_medicine_info",
 	title: "Get medicine info",
@@ -131,26 +129,22 @@ export const getMedicineInfo: Tool<typeof inputSchema, typeof outputSchema> = {
 	inputSchema,
 	outputSchema,
 	async handler({ db, now }, { cis, cip13, name }): Promise<ToolOutcome> {
-		if ([cis, cip13, name].filter((a) => a !== undefined).length !== 1) {
-			return { result: errorResult(EXACTLY_ONE("cis, cip13 or name"), await loadSourceDates(db).catch(() => UNKNOWN_DATES)) };
-		}
+		const invalid = await exactlyOne(db, { cis, cip13, name });
+		if (invalid !== null) return invalid;
 		const dates = await loadSourceDates(db);
 		if (cip13 !== undefined) {
 			const code = await cisByCip13(db, cip13);
 			const med = code === null ? undefined : (await getMedicines(db, [code])).get(code);
 			const out = med === undefined ? notFound(`CIP13 ${cip13}`, []) : await info(db, now, med, cip13);
-			return { result: result(dates, now, out), cis: med ? med.cis : null };
+			return { result: toolResult(out, dates, now), cis: med ? med.cis : null };
 		}
 		if (cis !== undefined) {
 			const med = (await getMedicines(db, [cis])).get(cis);
-			return { result: result(dates, now, med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, now, med, null)), cis };
+			return { result: toolResult(med === undefined ? notFound(`CIS ${cis}`, []) : await info(db, now, med, null), dates, now), cis };
 		}
 		const resolved = await resolveName(db, name as string);
-		if (resolved.kind === "candidates") {
-			const { data, inShortageTotal } = await candidatesData(db, resolved);
-			return { result: result(dates, now, { data, summary: candidatesSummary(name as string, data.total, inShortageTotal, data.best_match_total ?? 0) }) };
-		}
-		if (resolved.kind === "not_found") return { result: result(dates, now, notFound(`"${name}"`, [], resolved.did_you_mean)) };
-		return { result: result(dates, now, await info(db, now, resolved.medicine, null)), cis: resolved.medicine.cis };
+		if (resolved.kind === "candidates") return { result: toolResult(await candidatesData(db, name as string, resolved), dates, now) };
+		if (resolved.kind === "not_found") return { result: toolResult(notFound(`"${name}"`, [], resolved.did_you_mean), dates, now) };
+		return { result: toolResult(await info(db, now, resolved.medicine, null), dates, now), cis: resolved.medicine.cis };
 	},
 };

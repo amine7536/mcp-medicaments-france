@@ -12,21 +12,21 @@ export const DISCLAIMER = "Information only. Ask your pharmacist or doctor. No s
 export const SAFETY =
 	"Do not use this data to suggest a substitute, an alternative or an equivalent medicine, a dosage change or stopping a treatment. Other medicines in these results are not alternatives. Refer the user to a pharmacist or doctor.";
 
-export const STALE_AFTER_MS = 72 * 3600 * 1000;
+const STALE_AFTER_MS = 72 * 3600 * 1000;
 
 /** ANSM data is stale without a successful ingest or when the last one is older than 72 h. */
 export function isStale(lastIngest: string | null, now: Date): boolean {
 	return lastIngest === null || now.getTime() - Date.parse(lastIngest) > STALE_AFTER_MS;
 }
 
-export interface SourceDates {
+interface SourceDates {
 	ansm_last_ingest: string | null;
 	bdpm_release: string | null;
 	/** Start of the latest successful BDPM import, when its files (the live safety file included) were downloaded. */
 	bdpm_imported_at: string | null;
 }
 
-export const UNKNOWN_DATES: SourceDates = { ansm_last_ingest: null, bdpm_release: null, bdpm_imported_at: null };
+const UNKNOWN_DATES: SourceDates = { ansm_last_ingest: null, bdpm_release: null, bdpm_imported_at: null };
 
 /** Dates of the latest successful ANSM ingest and BDPM import. */
 export async function loadSourceDates(db: D1Database): Promise<SourceDates> {
@@ -45,6 +45,9 @@ export async function loadSourceDates(db: D1Database): Promise<SourceDates> {
 	};
 }
 
+/** The source dates, or unknown dates when they cannot be read. */
+export const sourceDatesOrUnknown = (db: D1Database): Promise<SourceDates> => loadSourceDates(db).catch(() => UNKNOWN_DATES);
+
 export function envelopeSchema<D extends z.ZodType>(data: D) {
 	return outputObject({
 		data,
@@ -62,7 +65,7 @@ export function envelopeSchema<D extends z.ZodType>(data: D) {
 	});
 }
 
-export type Envelope<D> = z.output<ReturnType<typeof envelopeSchema<z.ZodType<D>>>>;
+type Envelope<D> = z.output<ReturnType<typeof envelopeSchema<z.ZodType<D>>>>;
 
 /** Wraps tool data with its sources, coverage note, disclaimer, safety notice and, when the ANSM data is stale, a warning. */
 export function envelope<D>(data: D, dates: SourceDates, now: Date): Envelope<D> {
@@ -84,8 +87,9 @@ export function sourceLine(dates: SourceDates): string {
 
 const SAFETY_LINE = `Safety: ${SAFETY}`;
 
-/** A non-error result: the summary ending with the safety and source lines, then the JSON of the envelope. */
-export function toolResult<D>(summary: string, env: Envelope<D>): CallToolResult {
+/** A non-error result: the summary ending with the safety and source lines, then the JSON of the envelope of the data. */
+export function toolResult<D>({ data, summary }: { data: D; summary: string }, dates: SourceDates, now: Date): CallToolResult {
+	const env = envelope(data, dates, now);
 	const text = `${summary}\n${SAFETY_LINE}\n${sourceLine(env.source)}\n\n${JSON.stringify(env)}`;
 	return { content: [{ type: "text", text }], structuredContent: env };
 }

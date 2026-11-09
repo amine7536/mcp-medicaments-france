@@ -61,7 +61,7 @@ describe("loadHealth", () => {
 				bdpm_dispo: 0,
 			},
 			// 1001, 1006 and 1003 match at 1.0; 1002 only at 0.6.
-			match: { listed: 7, matched_ge_0_8: 3, rate: 0.429 },
+			match: { matched_ge_0_8: 3, rate: 0.429 },
 			quality: { unknown_status: 1, scope_inconnu: 0, return_unparsed: 0, unmatched: 3 },
 			generated_at: NOW.toISOString(),
 		} satisfies Health);
@@ -92,7 +92,7 @@ describe("loadHealth", () => {
 	it("has a null rate without listed shortages", async () => {
 		await env.DB.prepare("DELETE FROM shortages").run();
 		const { match, counts } = await loadHealth(env.DB, NOW);
-		expect(match).toEqual({ listed: 0, matched_ge_0_8: 0, rate: null });
+		expect(match).toEqual({ matched_ge_0_8: 0, rate: null });
 		expect(counts.by_status).toEqual({ rupture: 0, tension: 0, remise_a_disposition: 0, arret_commercialisation: 0, autre: 0 });
 	});
 
