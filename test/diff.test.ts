@@ -71,7 +71,6 @@ describe("diff", { timeout: 30_000 }, () => {
 			status: "tension",
 			expected_return_raw: "Date de remise à disposition prévue fin novembre 2026",
 			expected_return_earliest: "2026-11-01",
-			ansm_published_at: "2026-07-29",
 			missed_runs: 0,
 			listed: 1,
 		});
@@ -222,7 +221,6 @@ describe("diff", { timeout: 30_000 }, () => {
 		expect(await shortage("1566")).toMatchObject({
 			detail_hash: null,
 			expected_return_raw: before?.expected_return_raw,
-			ansm_published_at: before?.ansm_published_at,
 			ansm_updated_at: "2026-10-27",
 		});
 		expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ event: "detail_failed", id: "1566", reason: "HTTP 500" }));

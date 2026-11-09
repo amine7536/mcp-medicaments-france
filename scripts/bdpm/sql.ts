@@ -48,18 +48,8 @@ export function insertStatements(
 }
 
 const COLS = {
-	medicines: [
-		"cis",
-		"denomination",
-		"denomination_norm",
-		"form",
-		"routes",
-		"amm_status",
-		"marketing_status",
-		"holder",
-		"bdpm_updated_at",
-	],
-	substances: ["cis", "substance_code", "substance_name", "substance_norm", "dosage", "nature"],
+	medicines: ["cis", "denomination", "denomination_norm", "form", "routes", "marketing_status", "holder", "bdpm_updated_at"],
+	substances: ["cis", "substance_name", "substance_norm", "dosage"],
 	mitm: ["cis", "atc_code"],
 	medicines_fts: ["cis", "denomination_norm", "substances_norm"],
 	presentations: [

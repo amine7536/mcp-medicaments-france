@@ -17,7 +17,6 @@ export interface MedicineRow {
 	denomination_norm: string;
 	form: string | null;
 	routes: string | null;
-	amm_status: string | null;
 	marketing_status: string | null;
 	holder: string | null;
 	bdpm_updated_at: string;
@@ -25,11 +24,9 @@ export interface MedicineRow {
 
 export interface SubstanceRow {
 	cis: string;
-	substance_code: string | null;
 	substance_name: string;
 	substance_norm: string;
 	dosage: string | null;
-	nature: string | null;
 }
 
 export interface MitmRow {
@@ -256,7 +253,6 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 			denomination_norm: normalize(denomination),
 			form: opt(r[2]),
 			routes: opt(r[3]),
-			amm_status: opt(r[4]),
 			marketing_status: opt(r[6]),
 			holder: opt(r[10]),
 			bdpm_updated_at: bannerDate,
@@ -274,11 +270,9 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 		}
 		substances.push({
 			cis: req(r[0]),
-			substance_code: opt(r[2]),
 			substance_name: name,
 			substance_norm: normalize(name),
 			dosage: opt(r[4]),
-			nature: opt(r[6]),
 		});
 	}
 
