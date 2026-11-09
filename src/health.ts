@@ -19,8 +19,11 @@ interface Run {
 export interface Health {
 	status: HealthStatus;
 	ansm: { last_ok_at: string | null; last_run: Run | null };
-	/** `imported_at`: start of the latest successful BDPM import, as in the tool envelope. */
-	bdpm: { release: string | null; imported_at: string | null };
+	bdpm: {
+		release: string | null;
+		/** Start of the latest successful BDPM import, as in the tool envelope. */
+		imported_at: string | null;
+	};
 	counts: { listed: number; by_status: Record<Status, number>; medicines: number; mitm: number; bdpm_dispo: number };
 	match: { listed: number; matched_ge_0_8: number; rate: number | null };
 	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; unmatched: number };
