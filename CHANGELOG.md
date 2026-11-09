@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.13.3](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.2...v1.13.3) (2026-11-09)
+
+
+### Bug Fixes
+
+* **mcp:** add the mitm mix of all matches to the candidates data ([#82](https://github.com/amine7536/mcp-medicaments-france/issues/82)) ([4a5845b](https://github.com/amine7536/mcp-medicaments-france/commit/4a5845b406612f621c2eb141faf7937412158052))
+* **mcp:** flag late début and mi returns and parse quarter parts and seasons ([#85](https://github.com/amine7536/mcp-medicaments-france/issues/85)) ([82e8a2d](https://github.com/amine7536/mcp-medicaments-france/commit/82e8a2d92f0e9ea07bbaa09befd1fb2166f6143e))
+* **mcp:** flag the asked brand and dose and stop aggregating across doses ([#84](https://github.com/amine7536/mcp-medicaments-france/issues/84)) ([cff1a35](https://github.com/amine7536/mcp-medicaments-france/commit/cff1a35ddedca7839f7c313e3ccfe3125973007c))
+* **mcp:** show holder and marketing status on same-name search rows ([#86](https://github.com/amine7536/mcp-medicaments-france/issues/86)) ([c12f615](https://github.com/amine7536/mcp-medicaments-france/commit/c12f615180782fb91575d5ca8738523db2a8b012))
+* **mcp:** state the match total in search results and the import start in health ([#87](https://github.com/amine7536/mcp-medicaments-france/issues/87)) ([8339ae8](https://github.com/amine7536/mcp-medicaments-france/commit/8339ae8479371e8042aa4cafdbf0203ae3217835))
+
 ## [1.13.2](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.1...v1.13.2) (2026-11-07)
 
 
