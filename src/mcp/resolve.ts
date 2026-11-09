@@ -5,7 +5,7 @@ import type { Candidates, NotFound, ShortageRow, ShortageSummary } from "./schem
 import { NOT_FOUND_HINT } from "./tool";
 
 export const RESOLVE_LIMIT = 10;
-export const RELATED_LIMIT = 5;
+const RELATED_LIMIT = 5;
 
 export type Resolution =
 	| { kind: "cis"; medicine: MedicineRow }
@@ -109,7 +109,7 @@ export async function candidatesData(
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */
-export function brandToken(norm: string): string | null {
+function brandToken(norm: string): string | null {
 	const first = tokens(norm)[0];
 	return first !== undefined && first.length >= 3 && !/^\d+$/.test(first) ? first : null;
 }

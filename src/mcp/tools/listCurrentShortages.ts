@@ -6,7 +6,7 @@ import { Cis, describeShortage, outputObject, Scope, ShortageSummary, Status, to
 import { INFO_ONLY, type Tool } from "../tool";
 
 /** `scope` filter value → accepted `shortages.scope` values: a city or hospital filter includes city-and-hospital entries. */
-export const SCOPE_MATCHES: Record<z.infer<typeof Scope>, string[]> = {
+const SCOPE_MATCHES: Record<z.infer<typeof Scope>, string[]> = {
 	ville: ["ville", "ville_hopital"],
 	hopital: ["hopital", "ville_hopital"],
 	ville_hopital: ["ville_hopital"],

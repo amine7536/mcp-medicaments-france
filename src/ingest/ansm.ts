@@ -54,7 +54,7 @@ function clean(s: string): string {
 	return decodeHTML(s).replace(/\s+/g, " ").trim();
 }
 
-export function mapStatus(label: string): Status {
+function mapStatus(label: string): Status {
 	return STATUS_BY_LABEL[label.replace(/[’‘]/g, "'").toLowerCase()] ?? "autre";
 }
 

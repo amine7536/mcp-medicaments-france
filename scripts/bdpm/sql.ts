@@ -75,7 +75,7 @@ function values<T extends object>(rows: readonly T[], cols: readonly (keyof T & 
 	return rows.map((r) => cols.map((c) => r[c] as Value));
 }
 
-export interface ImportSqlInput extends Mapped {
+interface ImportSqlInput extends Mapped {
 	release: string;
 	startedAt: string;
 	finishedAt: string;

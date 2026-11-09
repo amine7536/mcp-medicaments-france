@@ -70,7 +70,7 @@ const iso = (y: number, m: number, d: number): string => `${y}-${pad(m)}-${pad(d
 const lastDay = (y: number, m: number): number => new Date(Date.UTC(y, m, 0)).getUTCDate();
 
 /** Inclusive year bounds of a parsed date. */
-export interface YearBounds {
+interface YearBounds {
 	min: number;
 	max: number;
 }

@@ -6,7 +6,7 @@ import { inShortage, matchCount } from "../resolve";
 import { Cip13, Cis, describeShortage, isValidEan13, outputObject, ShortageSummary, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
-export const UNMATCHED_LIMIT = 10;
+const UNMATCHED_LIMIT = 10;
 
 interface Found {
 	/** Ranked CIS. */

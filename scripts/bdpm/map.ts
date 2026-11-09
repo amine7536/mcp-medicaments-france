@@ -23,25 +23,25 @@ export interface MedicineRow {
 	bdpm_updated_at: string;
 }
 
-export interface SubstanceRow {
+interface SubstanceRow {
 	cis: string;
 	substance_name: string;
 	substance_norm: string;
 	dosage: string | null;
 }
 
-export interface MitmRow {
+interface MitmRow {
 	cis: string;
 	atc_code: string;
 }
 
-export interface FtsRow {
+interface FtsRow {
 	cis: string;
 	denomination_norm: string;
 	substances_norm: string;
 }
 
-export interface PresentationRow {
+interface PresentationRow {
 	cip13: string;
 	cip7: string | null;
 	cis: string;
@@ -58,14 +58,14 @@ export interface PresentationRow {
 	reimbursement_indications: string | null;
 }
 
-export interface PrescriptionConditionRow {
+interface PrescriptionConditionRow {
 	cis: string;
 	condition: string;
 	/** 1-based source order within the CIS. */
 	position: number;
 }
 
-export interface SafetyInformationRow {
+interface SafetyInformationRow {
 	cis: string;
 	title: string;
 	url: string;
@@ -73,7 +73,7 @@ export interface SafetyInformationRow {
 	ends_on: string;
 }
 
-export interface Skipped {
+interface Skipped {
 	medicines: number;
 	substances: number;
 	mitm: number;
