@@ -77,6 +77,8 @@ export const Candidates = outputObject({
 	candidates: z.array(Candidate),
 	/** How many matches carry `best_match`, shown or not; absent when none does. */
 	best_match_total: z.int().min(1).optional(),
+	/** How many matches, shown or not, are in rupture or tension (listed first); absent when none is. */
+	in_shortage_total: z.int().min(1).optional(),
 });
 export const NotFound = outputObject({
 	kind: z.literal("not_found"),

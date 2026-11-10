@@ -88,6 +88,11 @@ export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 		property: "best_match",
 		schema: { type: "boolean", const: true },
 	},
+	...[
+		{ tool: "get_availability", path: "/properties/data/oneOf/2" },
+		{ tool: "is_major_therapeutic_interest", path: "/properties/data/oneOf/2" },
+		{ tool: "get_medicine_info", path: "/properties/data/oneOf/1" },
+	].map(({ tool, path }) => ({ tool, path, property: "in_shortage_total", schema: { type: "integer", minimum: 1, maximum: 9007199254740991 } })),
 	...["holder", "marketing_status"].map((property) => ({
 		tool: "search_medicine",
 		path: "/properties/data/oneOf/0/properties/results/items",
