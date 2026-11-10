@@ -186,4 +186,66 @@ describe("schema", () => {
 			{ shortage_id: "k-status", change_type: "status_change" },
 		]);
 	});
+
+	it("the parser upgrade history migration deletes return changes from null on pages ANSM did not update that day", async () => {
+		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0012_parser_upgrade_history.sql");
+		if (migration === undefined) throw new Error("migration 0012_parser_upgrade_history.sql not loaded");
+		const r1 = "2026-11-10T05:00:29.000Z";
+		const r2 = "2026-11-10T18:45:47.335Z";
+		const r3 = "2026-11-12T05:00:30.000Z";
+		const dated = "Remise à disposition normale prévue fin 2026";
+		const text = "Date de remise à disposition normale inconnue";
+		const insertRun = env.DB.prepare("INSERT INTO ingest_runs (source, started_at, status) VALUES ('ansm', ?, 'ok')");
+		const insertShortage = env.DB.prepare(
+			`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, list_hash, first_seen_at, last_seen_at, listed, ansm_updated_at)
+			VALUES (?, '/x', 'X', 'X', 'tension', 'Tension', 'h', '2026-10-01', '2026-11-10', 1, ?)`,
+		);
+		const insertHistory = env.DB.prepare(
+			"INSERT INTO status_history (shortage_id, change_type, old_expected_return, new_expected_return, detected_at) VALUES (?, ?, ?, ?, ?)",
+		);
+		const rdc = (id: string, from: string | null, to: string, at: string) => insertHistory.bind(id, "return_date_change", from, to, at);
+		await env.DB.batch([
+			insertRun.bind(r1),
+			insertRun.bind(r2),
+			insertRun.bind(r3),
+			insertShortage.bind("p-old", "2021-05-19"),
+			insertShortage.bind("p-later", "2026-10-26"),
+			insertShortage.bind("p-sameday", "2026-11-10"),
+			insertShortage.bind("p-cron", "2026-11-11"),
+			insertShortage.bind("p-afterdetect", "2026-11-12"),
+			insertShortage.bind("p-nonnull", "2021-05-19"),
+			insertShortage.bind("p-early", "2021-05-19"),
+			insertShortage.bind("p-norun", "2021-05-19"),
+			insertShortage.bind("p-nulldate", null),
+			insertShortage.bind("p-new", "2021-05-19"),
+			insertShortage.bind("p-status", "2021-05-19"),
+			rdc("p-old", null, dated, r2),
+			rdc("p-later", null, text, r3),
+			rdc("p-sameday", null, dated, r2),
+			rdc("p-cron", null, dated, r3),
+			rdc("p-afterdetect", null, dated, r2),
+			rdc("p-nonnull", "Remise à disposition prévue fin novembre 2026.", dated, r2),
+			rdc("p-early", null, dated, "2026-11-09T21:56:27.094Z"),
+			rdc("p-norun", null, dated, "2026-11-10T03:00:00.000Z"),
+			rdc("p-nulldate", null, dated, r2),
+			rdc("p-orphan", null, dated, r2),
+			insertHistory.bind("p-new", "new", null, dated, r2),
+			insertHistory.bind("p-status", "status_change", null, null, r2),
+		]);
+		for (const query of migration.queries) await env.DB.prepare(query).run();
+
+		const { results } = await env.DB.prepare("SELECT shortage_id, change_type FROM status_history WHERE shortage_id LIKE 'p-%' ORDER BY id").all();
+		expect(results).toEqual([
+			{ shortage_id: "p-sameday", change_type: "return_date_change" },
+			{ shortage_id: "p-cron", change_type: "return_date_change" },
+			{ shortage_id: "p-afterdetect", change_type: "return_date_change" },
+			{ shortage_id: "p-nonnull", change_type: "return_date_change" },
+			{ shortage_id: "p-early", change_type: "return_date_change" },
+			{ shortage_id: "p-norun", change_type: "return_date_change" },
+			{ shortage_id: "p-nulldate", change_type: "return_date_change" },
+			{ shortage_id: "p-orphan", change_type: "return_date_change" },
+			{ shortage_id: "p-new", change_type: "new" },
+			{ shortage_id: "p-status", change_type: "status_change" },
+		]);
+	});
 });
