@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.13.4](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.3...v1.13.4) (2026-11-10)
+
+
+### Bug Fixes
+
+* **ingest:** read free-text scope and return observation lines ([#95](https://github.com/amine7536/mcp-medicaments-france/issues/95)) ([8d2a95b](https://github.com/amine7536/mcp-medicaments-france/commit/8d2a95b2e63875ece620e3f5c40696940af6a0b9))
+* **ingest:** stop recording reworded or dropped expected returns as changes ([#93](https://github.com/amine7536/mcp-medicaments-france/issues/93)) ([3163d0f](https://github.com/amine7536/mcp-medicaments-france/commit/3163d0ffe44d26f8b7172bf122873e0924456fbc))
+* **mcp:** add in_shortage_total to name-resolved candidates ([#96](https://github.com/amine7536/mcp-medicaments-france/issues/96)) ([c433f61](https://github.com/amine7536/mcp-medicaments-france/commit/c433f611665ae5add7df2856d62a666aa669d35c))
+
 ## [1.13.3](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.2...v1.13.3) (2026-11-09)
 
 
