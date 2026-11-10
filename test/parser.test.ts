@@ -200,6 +200,27 @@ describe("parseDetail", () => {
 			scope: "inconnu",
 			scope_raw: null,
 		});
+		expect(await parseDetail(fixtureText("ansm/detail-880.html"), "tension", "880")).toMatchObject({
+			scope: "ville",
+			scope_raw: "Distribution contingentée en ville de la présentation en flacon de 60 gélules",
+		});
+	});
+
+	it("256 falls back to its normale line and logs return_unparsed", async () => {
+		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const d = await parseDetail(fixtureText("ansm/detail-no-situation.html"), "rupture", "256");
+		expect(d.expected_return_raw).toBe("Date de remise à disposition normale inconnue");
+		expect(d.expected_return_earliest).toBeNull();
+		expect(spy).toHaveBeenCalledWith(JSON.stringify({ event: "return_unparsed", id: "256" }));
+	});
+
+	it("logs return_unparsed for a revient line without a date", async () => {
+		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const html = `<div class="panel-fuschia"><div class="products-block"><ul><li>L'ampoule est en rupture et revient prochainement</li></ul></div></div>`;
+		const d = await parseDetail(html, "tension", "43");
+		expect(d.expected_return_raw).toBe("L'ampoule est en rupture et revient prochainement");
+		expect(d.expected_return_earliest).toBeNull();
+		expect(spy).toHaveBeenCalledWith(JSON.stringify({ event: "return_unparsed", id: "43" }));
 	});
 
 	it("logs return_unparsed when a picked line yields no date", async () => {
@@ -208,6 +229,20 @@ describe("parseDetail", () => {
 		const d = await parseDetail(html, "rupture", "42");
 		expect(d.expected_return_raw).toBe("Date de remise à disposition prévue prochainement");
 		expect(spy).toHaveBeenCalledWith(JSON.stringify({ event: "return_unparsed", id: "42" }));
+	});
+
+	it("941 reads the free-text tension line and the revient return line", async () => {
+		const html = `<div class="panel-fuschia"><div class="products-block"><ul><li>Tension d'approvisionnement en ville ;</li>
+<li>L'ampoule de 2 ml est en rupture et revient fin d&eacute;cembre 2026.</li></ul></div></div>`;
+		expect(await parseDetail(html, "tension", "941")).toMatchObject({
+			scope: "ville",
+			scope_raw: "Tension d'approvisionnement en ville ;",
+			expected_return_raw: "L'ampoule de 2 ml est en rupture et revient fin décembre 2026.",
+			expected_return_earliest: "2026-12-01",
+			expected_return_latest: "2026-12-31",
+			expected_return_precision: "month",
+			expected_return_part: "fin",
+		});
 	});
 
 	it("does not log return_unparsed for an indeterminate line", async () => {
@@ -250,17 +285,98 @@ describe("parseScope", () => {
 	it("returns inconnu without a scope line", () => {
 		expect(parseScope(["Rupture de stock"])).toEqual({ scope: "inconnu", scope_raw: null });
 	});
+
+	it("reads a free-text <head> <side> line when there is no Situation line", () => {
+		const l891 = "Tension d’approvisionnement en ville pour tous les dosages";
+		expect(parseScope([l891])).toEqual({ scope: "ville", scope_raw: l891 });
+		expect(parseScope(["Distribution contingentée en ville", "Distribution normale à l'hôpital"])).toEqual({
+			scope: "ville",
+			scope_raw: "Distribution contingentée en ville",
+		});
+		expect(parseScope(["Contingentement quantitatif à l'hôpital."])).toEqual({
+			scope: "hopital",
+			scope_raw: "Contingentement quantitatif à l'hôpital.",
+		});
+	});
+
+	it("unions the sides of free-text lines", () => {
+		expect(parseScope(["Rupture de stock en ville et à l'hôpital"]).scope).toBe("ville_hopital");
+		expect(parseScope(["Tension d'approvisionnement à l'hôpital et en ville"]).scope).toBe("ville_hopital");
+		expect(parseScope(["Tension d'approvisionnement en ville ;", "Contingentement quantitatif à l'hôpital."])).toEqual({
+			scope: "ville_hopital",
+			scope_raw: "Tension d'approvisionnement en ville ; | Contingentement quantitatif à l'hôpital.",
+		});
+	});
+
+	it("rejects free-text lines that are not <head> <side>", () => {
+		for (const line of [
+			"Tension d'approvisionnement en Eurobiol 40 000 U, gélule gastro-résistante (flacon de 50)",
+			"Distribution contingentée sur le marché de ville ;",
+			"Boite de 1: contingentement quantitatif en ville",
+			"Le circuit hospitalier ainsi que les DROM ne sont pas impactés par ces mesures.",
+			"Disponibilité d'un stock limité de dépannage d'urgence à l'hôpital ;",
+			"Tension d’approvisionnement concernant la présentation en boîte de 60 gélules (plaquettes thermoformées) : distribution contingentée à l’hôpital et report possible sur la présentation en flacon de 60 gélules",
+		]) {
+			expect(parseScope([line])).toEqual({ scope: "inconnu", scope_raw: null });
+		}
+	});
+
+	it("ignores free-text lines when a Situation line exists", () => {
+		expect(parseScope([`${V} tension`, "Contingentement quantitatif en ville"])).toEqual({ scope: "ville", scope_raw: `${V} tension` });
+		expect(parseScope([`${V} non impacté`, `${H} non impacté`, "Tension d'approvisionnement en ville"]).scope).toBe("inconnu");
+	});
 });
 
 describe("pickReturnLine", () => {
-	it("excludes NORMALE and DE LA SPECIALITE lines", () => {
+	it("drops DE LA SPECIALITE lines and falls back to a normale line", () => {
 		expect(
 			pickReturnLine([
 				"Remise à disposition normale de la spécialité X",
 				"Remise à disposition de la spécialité Y prévue fin 2026",
 				"Date de remise à disposition normale inconnue",
 			]),
+		).toBe("Date de remise à disposition normale inconnue");
+		expect(pickReturnLine(["Remise à disposition normale de la spécialité X"])).toBeNull();
+	});
+
+	it("falls back to a normale remise line", () => {
+		expect(
+			pickReturnLine(["Situation en ville : tension ;", "Contingentement quantitatif en ville ;", "Remise à disposition normale prévue courant décembre 2026."]),
+		).toBe("Remise à disposition normale prévue courant décembre 2026.");
+		expect(
+			pickReturnLine([
+				"Tension d’approvisionnement en ville pour tous les dosages",
+				"Mise en place d’un contingentement quantitatif en ville",
+				"Les hôpitaux et les DROM ne sont pas impactés par ce contingentement",
+				"Remise à disposition normale indéterminée",
+			]),
+		).toBe("Remise à disposition normale indéterminée");
+		expect(
+			pickReturnLine([
+				"Rupture de stock de la présentation en flacon de 10 ml de Méthotrexate Accord 100 mg/mL, solution à diluer pour perfusion ;",
+				"Remise à disposition normale indéterminée de la présentation en flacon de 10 ml ;",
+				"Remise à disposition normale de la présentation en flacon de 50 ml à compter de fin novembre 2024.",
+			]),
+		).toBe("Remise à disposition normale indéterminée de la présentation en flacon de 10 ml ;");
+	});
+
+	it("falls back to a revient line, whole word only", () => {
+		const revient = "L'ampoule de 2 ml est en rupture et revient fin décembre 2026.";
+		expect(pickReturnLine(["Tension d'approvisionnement en ville ;", revient])).toBe(revient);
+		expect(pickReturnLine(["Date de remise à disposition prévue fin 2026", revient])).toBe("Date de remise à disposition prévue fin 2026");
+		expect(pickReturnLine(["Le produit reviendra en 2027"])).toBeNull();
+		expect(
+			pickReturnLine(["Rupture de stock de l’Héparine Calcique Panpharma …, avec remise à disposition prévue en octobre 2024."]),
 		).toBeNull();
+	});
+
+	it("tries the remise, normale and revient tiers in order", () => {
+		const normale = "Remise à disposition normale prévue fin 2026";
+		expect(pickReturnLine(["Remise à disposition du conditionnement en boite de 20 : indéterminée.", normale])).toBe(
+			"Remise à disposition du conditionnement en boite de 20 : indéterminée.",
+		);
+		expect(pickReturnLine([normale, "Date de remise à disposition prévue fin novembre 2026"])).toBe("Date de remise à disposition prévue fin novembre 2026");
+		expect(pickReturnLine(["L'ampoule de 2 ml est en rupture et revient fin décembre 2026.", normale])).toBe(normale);
 	});
 
 	it("prefers a page-level line over a per-pack line", () => {

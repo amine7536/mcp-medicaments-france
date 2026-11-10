@@ -44,6 +44,8 @@ const LEADING_WORDS = new Set([
 	"PARTIR",
 	"DU",
 	"EN",
+	"NORMALE",
+	"ESTIMEE",
 ]);
 
 // Ordinals as they appear after normalize() ("1er" becomes "1 ER").
@@ -121,10 +123,17 @@ function season(y: number, name: string): ExpectedReturn {
 const PARTS: Record<string, ExpectedReturn["part"]> = { DEBUT: "debut", MI: "mi", FIN: "fin" };
 const monthIndex = (name: string): number => MONTHS.indexOf(name) + 1;
 
+/** The words after "DISPOSITION", or after the first whole word "REVIENT" when there is no "DISPOSITION". */
 function tailOf(t: string): string | null {
+	let rest: string;
 	const idx = t.indexOf("DISPOSITION");
-	if (idx === -1) return null;
-	const words = t.slice(idx + "DISPOSITION".length).split(" ").filter((w) => w !== "");
+	if (idx !== -1) rest = t.slice(idx + "DISPOSITION".length);
+	else {
+		const m = /(?:^| )REVIENT(?: |$)/.exec(t);
+		if (m === null) return null;
+		rest = t.slice(m.index + m[0].length);
+	}
+	const words = rest.split(" ").filter((w) => w !== "");
 	while (words.length > 0 && LEADING_WORDS.has(words[0] as string)) words.shift();
 	return words.join(" ");
 }

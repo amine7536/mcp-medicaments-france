@@ -59,6 +59,35 @@ describe("schema", () => {
 		]);
 	});
 
+	it("the free-text observations migration clears detail_hash on listed rows with no scope line or no return", async () => {
+		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0010_refetch_free_text_observations.sql");
+		if (migration === undefined) throw new Error("migration 0010_refetch_free_text_observations.sql not loaded");
+		const insert = env.DB.prepare(
+			`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, scope_raw, expected_return_raw, list_hash, detail_hash, first_seen_at, last_seen_at, listed)
+			VALUES (?, '/x', 'X', 'X', ?, 'S', ?, ?, ?, 'h', 'd', '2026-10-01', '2026-11-09', ?)`,
+		);
+		const situation = "Situation en ville : non impacté";
+		const dated = "Date de remise à disposition prévue fin 2026";
+		await env.DB.batch([
+			insert.bind("f-inconnu-no-return", "tension", "inconnu", null, null, 1),
+			insert.bind("f-ville-no-return", "tension", "ville", "Situation en ville : tension", null, 1),
+			insert.bind("f-remise-inconnu", "remise_a_disposition", "inconnu", null, null, 1),
+			insert.bind("f-situation-return", "tension", "inconnu", situation, dated, 1),
+			insert.bind("f-ville-return", "tension", "ville", "Situation en ville : tension", dated, 1),
+			insert.bind("f-delisted", "tension", "inconnu", null, null, 0),
+		]);
+		for (const query of migration.queries) await env.DB.prepare(query).run();
+		const { results } = await env.DB.prepare("SELECT id, detail_hash FROM shortages WHERE id LIKE 'f-%' ORDER BY id").all<{ id: string; detail_hash: string | null }>();
+		expect(results).toEqual([
+			{ id: "f-delisted", detail_hash: "d" },
+			{ id: "f-inconnu-no-return", detail_hash: null },
+			{ id: "f-remise-inconnu", detail_hash: null },
+			{ id: "f-situation-return", detail_hash: "d" },
+			{ id: "f-ville-no-return", detail_hash: null },
+			{ id: "f-ville-return", detail_hash: "d" },
+		]);
+	});
+
 	it("the return change noise migration keeps dropped returns and deletes undetermined and dropped return changes", async () => {
 		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0009_return_change_noise.sql");
 		if (migration === undefined) throw new Error("migration 0009_return_change_noise.sql not loaded");

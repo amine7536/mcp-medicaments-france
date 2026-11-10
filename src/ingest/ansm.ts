@@ -133,7 +133,30 @@ export async function parseList(html: string): Promise<ListRow[]> {
 	);
 }
 
-/** Derives the impacted side(s) from the `Situation en ville / à l'hôpital :` observation lines. */
+const SCOPE_HEADS = ["RUPTURE DE STOCK", "RUPTURE", "TENSION D APPROVISIONNEMENT", "DISTRIBUTION CONTINGENTEE", "CONTINGENTEMENT QUANTITATIF"];
+const SCOPE_SIDES: Array<[string, { ville: boolean; hopital: boolean }]> = [
+	["EN VILLE ET A L HOPITAL", { ville: true, hopital: true }],
+	["A L HOPITAL ET EN VILLE", { ville: true, hopital: true }],
+	["EN VILLE", { ville: true, hopital: false }],
+	["A L HOPITAL", { ville: false, hopital: true }],
+];
+
+/** Sides stated by a free-text `<head> <side>` line ("Tension d'approvisionnement en ville ;"), or null. */
+function freeTextSides(t: string): { ville: boolean; hopital: boolean } | null {
+	for (const head of SCOPE_HEADS) {
+		if (!t.startsWith(`${head} `)) continue;
+		const rest = t.slice(head.length + 1);
+		for (const [side, sides] of SCOPE_SIDES) {
+			if (rest === side || rest.startsWith(`${side} `)) return sides;
+		}
+	}
+	return null;
+}
+
+/**
+ * Derives the impacted side(s) from the `Situation en ville / à l'hôpital :` observation lines,
+ * or, when the page has none, from free-text `<head> <side>` lines.
+ */
 export function parseScope(lis: string[]): { scope: Scope; scope_raw: string | null } {
 	const raw: string[] = [];
 	const impacted = { ville: false, hopital: false };
@@ -147,26 +170,43 @@ export function parseScope(lis: string[]): { scope: Scope; scope_raw: string | n
 		if (value.includes("NON IMPACTE")) continue;
 		if (value.includes("RUPTURE") || value.includes("TENSION")) impacted[side] = true;
 	}
+	if (raw.length === 0) {
+		for (const li of lis) {
+			const sides = freeTextSides(normalize(li));
+			if (sides === null) continue;
+			raw.push(li);
+			impacted.ville ||= sides.ville;
+			impacted.hopital ||= sides.hopital;
+		}
+	}
 	const scope: Scope =
 		impacted.ville && impacted.hopital ? "ville_hopital" : impacted.ville ? "ville" : impacted.hopital ? "hopital" : "inconnu";
 	return { scope, scope_raw: raw.length > 0 ? raw.join(" | ") : null };
 }
 
-/** Picks the observation line giving this entry's expected return, or null. */
-export function pickReturnLine(lis: string[]): string | null {
-	const candidates = lis.filter((li) => {
-		const t = normalize(li);
-		return (
-			(t.startsWith("DATE DE REMISE A DISPOSITION") || t.startsWith("REMISE A DISPOSITION")) &&
-			!t.includes("NORMALE") &&
-			!t.includes("DE LA SPECIALITE")
-		);
-	});
-	const pageLevel = candidates.find((li) => {
+const isRemiseLine = (t: string): boolean =>
+	(t.startsWith("DATE DE REMISE A DISPOSITION") || t.startsWith("REMISE A DISPOSITION")) && !t.includes("DE LA SPECIALITE");
+
+/** A page-level line (not about one pack or presentation) when there is one, else the first. */
+function preferPageLevel(lines: string[]): string | undefined {
+	const pageLevel = lines.find((li) => {
 		const t = normalize(li);
 		return !t.includes("CONDITIONNEMENT") && !t.includes("PRESENTATION");
 	});
-	return (pageLevel ?? candidates[0])?.trim() ?? null;
+	return pageLevel ?? lines[0];
+}
+
+/**
+ * Picks the observation line giving this entry's expected return, or null: a remise line, else a
+ * "remise à disposition normale" line, else the first line containing the word "revient".
+ */
+export function pickReturnLine(lis: string[]): string | null {
+	const remise = lis.filter((li) => isRemiseLine(normalize(li)));
+	const line =
+		preferPageLevel(remise.filter((li) => !normalize(li).includes("NORMALE"))) ??
+		preferPageLevel(remise.filter((li) => normalize(li).includes("NORMALE"))) ??
+		lis.find((li) => /(?:^| )REVIENT(?: |$)/.test(normalize(li)));
+	return line?.trim() ?? null;
 }
 
 /** Parses an ANSM detail page. `status` is the entry's list status; `id` is used for logging. */
