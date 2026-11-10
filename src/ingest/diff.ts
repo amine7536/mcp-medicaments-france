@@ -1,4 +1,6 @@
+import { isUndetermined, parseExpectedReturn } from "../lib/dates";
 import type { Detail, DetailFields, ListRow } from "./ansm";
+import { log } from "./http";
 
 type DetailColumns = Omit<DetailFields, "dci">;
 
@@ -10,6 +12,7 @@ interface StoredShortage extends DetailColumns {
 	detail_hash: string | null;
 	listed: number;
 	missed_runs: number;
+	expected_return_lost_raw: string | null;
 }
 
 export type DetailOutcome = { ok: true; detail: Detail } | { ok: false };
@@ -68,16 +71,28 @@ const LIST_KEYS = [
 /** Characters ANSM adds or drops when it rewords an unchanged expected return ("prévue X" -> "prévue : X."). */
 const RETURN_WORDING_NOISE = /[ \t\n\r\u00a0\u2009\u202f.:;,]/g;
 
-/** True when both expected-return texts are null, or equal once lowercased and stripped of spacing and punctuation. */
-function sameReturnWording(a: string | null, b: string | null): boolean {
-	if (a === null || b === null) return a === b;
-	return a.toLowerCase().replace(RETURN_WORDING_NOISE, "") === b.toLowerCase().replace(RETURN_WORDING_NOISE, "");
+/** Same expected return: undetermined counts as no return, then same parsed window, then same text once lowercased and stripped of spacing and punctuation. */
+function sameExpectedReturn(a: string | null, b: string | null): boolean {
+	const x = a !== null && isUndetermined(a) ? null : a;
+	const y = b !== null && isUndetermined(b) ? null : b;
+	if (x === null || y === null) return x === y;
+	const px = parseExpectedReturn(x);
+	const py = parseExpectedReturn(y);
+	if (
+		px.precision !== null &&
+		px.precision === py.precision &&
+		px.earliest === py.earliest &&
+		px.latest === py.latest &&
+		px.part === py.part
+	)
+		return true;
+	return x.toLowerCase().replace(RETURN_WORDING_NOISE, "") === y.toLowerCase().replace(RETURN_WORDING_NOISE, "");
 }
 
 export async function loadShortages(db: D1Database): Promise<Map<string, StoredShortage>> {
 	const { results } = await db
 		.prepare(
-			`SELECT id, status, dci_raw, list_hash, detail_hash, listed, missed_runs, ${DETAIL_KEYS.join(", ")} FROM shortages`,
+			`SELECT id, status, dci_raw, list_hash, detail_hash, listed, missed_runs, expected_return_lost_raw, ${DETAIL_KEYS.join(", ")} FROM shortages`,
 		)
 		.all<StoredShortage>();
 	return new Map(results.map((r) => [r.id, r]));
@@ -139,20 +154,34 @@ export async function applyDiff(
 			continue;
 		}
 
-		const cols = [...LIST_KEYS, "dci_raw", ...DETAIL_KEYS, "detail_hash"];
-		stmts.push(
-			db
-				.prepare(`UPDATE shortages SET ${cols.map((c) => `${c} = ?`).join(", ")}, last_seen_at = ?, missed_runs = 0, listed = 1 WHERE id = ?`)
-				.bind(...values, ctx.now, row.id),
-		);
 		if (old.status !== row.status) {
 			counts.entries_changed++;
 			history(row.id, "status_change", { old_status: old.status, new_status: row.status });
 		}
-		if (RETURN_TRACKED.has(old.status) && RETURN_TRACKED.has(row.status) && !sameReturnWording(old.expected_return_raw, detail.expected_return_raw)) {
-			counts.entries_changed++;
-			history(row.id, "return_date_change", { old_status: old.status, new_status: row.status, old_er: old.expected_return_raw, new_er: detail.expected_return_raw });
+		const newReturn = detail.expected_return_raw;
+		let lostReturn: string | null = null;
+		if (RETURN_TRACKED.has(old.status) && RETURN_TRACKED.has(row.status)) {
+			// After a silent drop, a returning line is compared against the dropped text, not the stored null.
+			const comeback = old.expected_return_raw === null && old.expected_return_lost_raw !== null && newReturn !== null;
+			const before = comeback ? old.expected_return_lost_raw : old.expected_return_raw;
+			if (sameExpectedReturn(before, newReturn)) {
+				lostReturn = newReturn === null ? old.expected_return_lost_raw : null;
+			} else if (newReturn === null) {
+				// A refetch with no return line is indistinguishable from a parser miss: keep the text, record nothing.
+				lostReturn = old.expected_return_raw;
+				log("return_lost", { id: row.id });
+			} else {
+				counts.entries_changed++;
+				history(row.id, "return_date_change", { old_status: old.status, new_status: row.status, old_er: before, new_er: newReturn });
+			}
 		}
+
+		const cols = [...LIST_KEYS, "dci_raw", ...DETAIL_KEYS, "detail_hash", "expected_return_lost_raw"];
+		stmts.push(
+			db
+				.prepare(`UPDATE shortages SET ${cols.map((c) => `${c} = ?`).join(", ")}, last_seen_at = ?, missed_runs = 0, listed = 1 WHERE id = ?`)
+				.bind(...values, lostReturn, ctx.now, row.id),
+		);
 		if (old.listed === 0) history(row.id, "relisted", { new_status: row.status });
 	}
 
