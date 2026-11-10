@@ -84,6 +84,31 @@ describe("parseExpectedReturn: rules", () => {
 		expect(isUndetermined(`${P} été 2027`)).toBe(false);
 	});
 
+	it("reads the date after the word revient when there is no DISPOSITION", () => {
+		expect(parseExpectedReturn("L'ampoule de 2 ml est en rupture et revient fin décembre 2026.")).toEqual(r("2026-12-01", "2026-12-31", "month", "fin"));
+		expect(parseExpectedReturn("Le produit revient le 15/12/2026")).toEqual(r("2026-12-15", "2026-12-15", "day"));
+		expect(parseExpectedReturn("Remise à disposition prévue fin 2026, le produit revient en mars 2026")).toEqual(r("2026-01-01", "2026-12-31", "year", "fin"));
+	});
+
+	it.each<[string, ExpectedReturn]>([
+		["Remise à disposition normale prévue fin 2026", r("2026-01-01", "2026-12-31", "year", "fin")],
+		["Remise à disposition normale prévue courant 2026", r("2026-01-01", "2026-12-31", "year")],
+		["Remise à disposition normale prévue courant décembre 2026.", r("2026-12-01", "2026-12-31", "month")],
+		["Remise à disposition normale estimée deuxième trimestre 2027", r("2027-04-01", "2027-06-30", "quarter")],
+		["Date de remise à disposition normale pour le flacon de 100 ml : courant 2026", NONE],
+		["Date de remise à disposition normale inconnue", NONE],
+		["Remise à disposition normale en ville indéterminée", NONE],
+	])("normale line: %s", (line, expected) => {
+		expect(parseExpectedReturn(line)).toEqual(expected);
+	});
+
+	it("isUndetermined tells the undetermined normale lines from the unparsed ones", () => {
+		expect(isUndetermined("Remise à disposition normale indéterminée")).toBe(true);
+		expect(isUndetermined("Remise à disposition normale en ville indéterminée")).toBe(true);
+		expect(isUndetermined("Date de remise à disposition normale inconnue")).toBe(false);
+		expect(isUndetermined("Date de remise à disposition normale pour le flacon de 100 ml : courant 2026")).toBe(false);
+	});
+
 	it("treats the indérminée typo as indeterminate", () => {
 		expect(parseExpectedReturn(`${P} indérminée`)).toEqual(NONE);
 	});
