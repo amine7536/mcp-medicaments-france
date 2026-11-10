@@ -115,6 +115,19 @@ describe("parseList on synthetic rows", () => {
 		expect(splitNameDci("Name*")).toEqual({ raw_name: "Name", dci_raw: null });
 	});
 
+	it("drops a trailing [MAJ] marker before splitting", () => {
+		expect(splitNameDci("Tibéral 1 g, solution injectable pour perfusion – [ornidazole] [MAJ]")).toEqual({
+			raw_name: "Tibéral 1 g, solution injectable pour perfusion",
+			dci_raw: "ornidazole",
+		});
+		expect(splitNameDci("Pediaven AP-HP G15, solution pour perfusion - [acide glutamique...magnésium (lactate de)] [MAJ] *")).toEqual({
+			raw_name: "Pediaven AP-HP G15, solution pour perfusion",
+			dci_raw: "acide glutamique...magnésium (lactate de)",
+		});
+		expect(splitNameDci("Name – [a [b]] [maj]")).toEqual({ raw_name: "Name", dci_raw: "a [b]" });
+		expect(splitNameDci("Name [MAJ]")).toEqual({ raw_name: "Name", dci_raw: null });
+	});
+
 	it("hashes the list cells", async () => {
 		const a = await one(["Rupture de stock", "01/02/2026", "A", "", "X"]);
 		const b = await one(["Rupture de stock", "02/02/2026", "A", "", "X"]);

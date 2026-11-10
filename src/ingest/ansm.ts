@@ -57,8 +57,12 @@ function mapStatus(label: string): Status {
 	return STATUS_BY_LABEL[label.replace(/[’‘]/g, "'").toLowerCase()] ?? "autre";
 }
 
-/** Splits `Name – [DCI]` at the last ` – [` / ` - [` separator. */
-export function splitNameDci(cell: string): { raw_name: string; dci_raw: string | null } {
+/** ANSM's trailing "updated" marker, optionally followed by `*`. */
+const MAJ_MARKER = /\s+\[MAJ\]\s*\*?\s*$/i;
+
+/** Splits `Name – [DCI]` at the last ` – [` / ` - [` separator, after dropping a trailing ` [MAJ]` marker. */
+export function splitNameDci(input: string): { raw_name: string; dci_raw: string | null } {
+	const cell = input.replace(MAJ_MARKER, "");
 	const matches = [...cell.matchAll(/\s[–-]\s\[/g)];
 	const last = matches.at(-1);
 	if (last === undefined) return { raw_name: cell.replace(/\*+$/, "").trim(), dci_raw: null };
