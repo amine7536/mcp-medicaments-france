@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.5](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.4...v1.13.5) (2026-11-10)
+
+
+### Bug Fixes
+
+* **ingest:** extract scope and expected return with workers ai ([#97](https://github.com/amine7536/mcp-medicaments-france/issues/97)) ([76c8994](https://github.com/amine7536/mcp-medicaments-france/commit/76c8994358d4af4827ea874d2c084c2b88708555))
+
 ## [1.13.4](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.3...v1.13.4) (2026-11-10)
 
 
