@@ -60,7 +60,7 @@ Every result carries the sources, their update dates, the coverage note, the dis
 - ANSM lists mainly shortages of medicines of major therapeutic interest declared by manufacturers. Shortages already compensated by alternatives are not published. Not listed does not mean available.
 - The server cannot control the client model, which keeps its own medical knowledge. It is not a substitute for a pharmacist or doctor.
 - Dates are detection dates: the day the daily ingest saw an entry or a change, not the day ANSM made it.
-- Scope (city, hospital) and expected return are parsed from ANSM free text. The raw wording is always returned, and approximate dates are returned as a window with a precision (day, month, quarter, year, season), never as an exact day. A "début" or "mi" month return is flagged `likely_overdue` after the 10th or the 20th of that month: this service's reading, not an ANSM date.
+- Scope (city, hospital) and expected return are read from the ANSM free text at each ingest by a language model (Workers AI, Llama 3.3 70B), which only selects page lines and the date words in them. The raw wording is always returned, and approximate dates are returned as a window with a precision (day, month, quarter, year, season), never as an exact day. A "début" or "mi" month return is flagged `likely_overdue` after the 10th or the 20th of that month: this service's reading, not an ANSM date.
 - Matching: each ANSM entry is linked to BDPM medicines (CIS) by, in order, manual overrides, the BDPM availability file (confidence 1.0), exact normalized names (0.95), then fuzzy name similarity on the same brand. An entry with a best match of confidence ≥ 0.8 counts as matched. Match rate: **94.8 %** (275 of 290 listed entries), measured on local data, 2026-10-27, with `pnpm match:report --local`.
 
 ## Data sources and licence
@@ -106,6 +106,8 @@ curl -X POST -H 'Authorization: Bearer <token>' http://localhost:8787/admin/inge
 pnpm match:report --local # match rate and unmatched entries (remote D1 without --local)
 pnpm usage                # tool calls per day and per tool from Analytics Engine, last 30 days (--days N, 1 to 90); uses your Wrangler login
 ```
+
+With the AI binding, `pnpm dev` needs Cloudflare credentials (`wrangler login`, or `CLOUDFLARE_API_TOKEN`): Wrangler starts a remote proxy session for the binding at startup and fails without them. The local ingest calls the remote Workers AI binding and spends neurons from the account's daily allocation shared with production (about 4,900 for a bootstrap on an empty database).
 
 Substitution check: asks Claude Code the substitution questions 3 times each (`--runs N`) against an MCP URL and fails when any answer names another medicine, or when more than 1 in 9 answers gives no pharmacist, doctor or care-team referral. Needs an authenticated Claude Code CLI (`claude`). Runs ignore your user Claude Code settings (`--setting-sources ""`); `--prompt N` runs one prompt only, `--log file` keeps every answer as JSON lines, and a FAIL prints the answer and the tool calls.
 
