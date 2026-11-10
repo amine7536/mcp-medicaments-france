@@ -28,12 +28,13 @@ async function addShortage(
 	earliest: string | null,
 	listed = 1,
 	lost: string | null = null,
+	detailHash: string | null = "d",
 ): Promise<void> {
 	await env.DB.prepare(
-		`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, expected_return_raw, expected_return_earliest, expected_return_lost_raw, list_hash, first_seen_at, last_seen_at, listed)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'h', ?, ?, ?)`,
+		`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, expected_return_raw, expected_return_earliest, expected_return_lost_raw, list_hash, detail_hash, first_seen_at, last_seen_at, listed)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'h', ?, ?, ?, ?)`,
 	)
-		.bind(id, `/x/${id}`, `PRODUIT ${id}`, normalize(`PRODUIT ${id}`), status, status, scope, raw, earliest, lost, ANSM_LAST_INGEST, ANSM_LAST_INGEST, listed)
+		.bind(id, `/x/${id}`, `PRODUIT ${id}`, normalize(`PRODUIT ${id}`), status, status, scope, raw, earliest, lost, detailHash, ANSM_LAST_INGEST, ANSM_LAST_INGEST, listed)
 		.run();
 }
 
@@ -70,7 +71,7 @@ describe("loadHealth", () => {
 			},
 			// 1001, 1006 and 1003 match at 1.0; 1002 only at 0.6.
 			match: { matched_ge_0_8: 3, rate: 0.429 },
-			quality: { unknown_status: 1, scope_inconnu: 0, return_unparsed: 0, return_lost: 0, unmatched: 3 },
+			quality: { unknown_status: 1, scope_inconnu: 0, return_unparsed: 0, return_lost: 0, unmatched: 3, detail_pending: 0 },
 			generated_at: NOW.toISOString(),
 		} satisfies Health);
 	});
@@ -89,7 +90,20 @@ describe("loadHealth", () => {
 		const { quality, counts } = await loadHealth(env.DB, NOW);
 		expect(counts.listed).toBe(12);
 		// 2005 is delisted; 2004 and 2006 are neither rupture nor tension; 2002/2003 are undetermined.
-		expect(quality).toEqual({ unknown_status: 2, scope_inconnu: 1, return_unparsed: 1, return_lost: 0, unmatched: 3 + 5 });
+		expect(quality).toEqual({ unknown_status: 2, scope_inconnu: 1, return_unparsed: 1, return_lost: 0, unmatched: 3 + 5, detail_pending: 0 });
+	});
+
+	it("does not count an inconnue return as unparsed", async () => {
+		await addShortage("2011", "rupture", "ville", "Date de remise à disposition normale inconnue", null);
+		expect((await loadHealth(env.DB, NOW)).quality.return_unparsed).toBe(0);
+	});
+
+	it("counts listed rows waiting for a detail refetch", async () => {
+		await addShortage("2012", "tension", "ville", null, null, 1, null, null);
+		await addShortage("2013", "remise_a_disposition", "inconnu", null, null, 1, null, null);
+		await addShortage("2014", "tension", "ville", null, null, 0, null, null);
+		// 2014 is delisted; every status counts.
+		expect((await loadHealth(env.DB, NOW)).quality.detail_pending).toBe(2);
 	});
 
 	it("does not count the indérminée typo as unparsed", async () => {

@@ -291,8 +291,8 @@ export async function seed(): Promise<void> {
 				.prepare(
 					`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, dci_raw, status, status_raw, scope, scope_raw,
 						expected_return_earliest, expected_return_latest, expected_return_precision, expected_return_part, expected_return_raw,
-						returned_at, situation_start, therapeutic_areas, therapeutic_areas_norm, ansm_updated_at, list_hash, first_seen_at, last_seen_at, listed)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'h', ?, ?, ?)`,
+						returned_at, situation_start, therapeutic_areas, therapeutic_areas_norm, ansm_updated_at, list_hash, detail_hash, first_seen_at, last_seen_at, listed)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'h', 'd', ?, ?, ?)`,
 				)
 				.bind(
 					s.id,

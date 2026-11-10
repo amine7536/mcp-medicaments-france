@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { type AiRunner, type Extractor, type ModelAnswer, workersAiExtractor } from "../src/ingest/extract";
 import { ANSM_LIST_URL, ANSM_ORIGIN, DISPO_URL, type Fetcher } from "../src/ingest/http";
 
 /** Raw bytes of `test/fixtures/<path>`. */
@@ -67,3 +68,44 @@ export function fakeFetcher(opts: FakeOptions = {}): FakeFetcher {
 }
 
 export const detailCalls = (f: FakeFetcher): string[] => f.calls.filter((u) => u !== ANSM_LIST_URL && u !== DISPO_URL);
+
+/** The model answer for a page with no side and no return. */
+export const NO_ANSWER: ModelAnswer = { hopital: "inconnu", ville: "inconnu", lignes_lieu: [], ligne_retour: 0, retour: "" };
+
+/** Model answers for the rupture/tension detail fixtures, by list id; line numbers match each fixture's observation lines. */
+export const FIXTURE_ANSWERS: Record<string, ModelAnswer> = {
+	"1566": { ...NO_ANSWER, ligne_retour: 4, retour: "fin novembre 2026" },
+	"1625": { ...NO_ANSWER, hopital: "rupture", lignes_lieu: [1], ligne_retour: 3, retour: "courant 2027" },
+	"1624": { ...NO_ANSWER, ville: "tension", lignes_lieu: [1], ligne_retour: 4, retour: "début décembre 2026" },
+	"880": { ...NO_ANSWER, ville: "contingentement", lignes_lieu: [2] },
+	"1510": { ...NO_ANSWER, ligne_retour: 4, retour: "indéterminée" },
+	"256": { ...NO_ANSWER, ligne_retour: 3, retour: "inconnue" },
+};
+
+export type FakeRun = AiRunner["run"];
+
+export interface StubExtractor extends Extractor {
+	/** Ids the extractor was called for. */
+	calls: string[];
+}
+
+/**
+ * The real Workers AI extractor over a fake `Ai` per call: `run` resolves `{ response: answers[id] }` (default
+ * `NO_ANSWER`), or is the given fake `run` (one that throws or never resolves).
+ */
+export function stubExtract(answers: Record<string, ModelAnswer> = FIXTURE_ANSWERS, run?: FakeRun): StubExtractor {
+	const calls: string[] = [];
+	const extract: Extractor = (lines, id, timeoutMs) => {
+		calls.push(id);
+		const ai: AiRunner = { run: run ?? (async () => ({ response: answers[id] ?? NO_ANSWER })) };
+		return workersAiExtractor(ai)(lines, id, timeoutMs);
+	};
+	return Object.assign(extract, { calls });
+}
+
+/** A fake `AI` binding for tests that go through `/admin/ingest` or `scheduled`; every page gets `NO_ANSWER`. */
+export function fakeAi(): Ai {
+	const ai: AiRunner = { run: async () => ({ response: NO_ANSWER }) };
+	// Only `run` is used by the ingest; the rest of the binding is never reached.
+	return ai as unknown as Ai;
+}

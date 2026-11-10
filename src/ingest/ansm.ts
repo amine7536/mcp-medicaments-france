@@ -1,4 +1,4 @@
-import { type ExpectedReturn, isUndetermined, parseExpectedReturn, parseFrDate } from "../lib/dates";
+import { parseFrDate } from "../lib/dates";
 import { sha256Hex } from "../lib/hash";
 import { consume } from "../lib/html";
 import { decodeHTML } from "entities/decode";
@@ -57,8 +57,12 @@ function mapStatus(label: string): Status {
 	return STATUS_BY_LABEL[label.replace(/[’‘]/g, "'").toLowerCase()] ?? "autre";
 }
 
-/** Splits `Name – [DCI]` at the last ` – [` / ` - [` separator. */
-export function splitNameDci(cell: string): { raw_name: string; dci_raw: string | null } {
+/** ANSM's trailing "updated" marker, optionally followed by `*`. */
+const MAJ_MARKER = /\s+\[MAJ\]\s*\*?\s*$/i;
+
+/** Splits `Name – [DCI]` at the last ` – [` / ` - [` separator, after dropping a trailing ` [MAJ]` marker. */
+export function splitNameDci(input: string): { raw_name: string; dci_raw: string | null } {
+	const cell = input.replace(MAJ_MARKER, "");
 	const matches = [...cell.matchAll(/\s[–-]\s\[/g)];
 	const last = matches.at(-1);
 	if (last === undefined) return { raw_name: cell.replace(/\*+$/, "").trim(), dci_raw: null };
@@ -133,84 +137,15 @@ export async function parseList(html: string): Promise<ListRow[]> {
 	);
 }
 
-const SCOPE_HEADS = ["RUPTURE DE STOCK", "RUPTURE", "TENSION D APPROVISIONNEMENT", "DISTRIBUTION CONTINGENTEE", "CONTINGENTEMENT QUANTITATIF"];
-const SCOPE_SIDES: Array<[string, { ville: boolean; hopital: boolean }]> = [
-	["EN VILLE ET A L HOPITAL", { ville: true, hopital: true }],
-	["A L HOPITAL ET EN VILLE", { ville: true, hopital: true }],
-	["EN VILLE", { ville: true, hopital: false }],
-	["A L HOPITAL", { ville: false, hopital: true }],
-];
-
-/** Sides stated by a free-text `<head> <side>` line ("Tension d'approvisionnement en ville ;"), or null. */
-function freeTextSides(t: string): { ville: boolean; hopital: boolean } | null {
-	for (const head of SCOPE_HEADS) {
-		if (!t.startsWith(`${head} `)) continue;
-		const rest = t.slice(head.length + 1);
-		for (const [side, sides] of SCOPE_SIDES) {
-			if (rest === side || rest.startsWith(`${side} `)) return sides;
-		}
-	}
-	return null;
+/** The deterministic fields of an ANSM detail page and its cleaned observation lines, in page order. */
+export interface DetailPage {
+	situation_start: string | null;
+	dci: string | null;
+	observations: string[];
 }
 
-/**
- * Derives the impacted side(s) from the `Situation en ville / à l'hôpital :` observation lines,
- * or, when the page has none, from free-text `<head> <side>` lines.
- */
-export function parseScope(lis: string[]): { scope: Scope; scope_raw: string | null } {
-	const raw: string[] = [];
-	const impacted = { ville: false, hopital: false };
-	for (const li of lis) {
-		const t = normalize(li);
-		const side = t.startsWith("SITUATION EN VILLE") ? "ville" : t.startsWith("SITUATION A L HOPITAL") ? "hopital" : null;
-		if (side === null) continue;
-		raw.push(li);
-		const colon = li.indexOf(":");
-		const value = colon === -1 ? "" : normalize(li.slice(colon + 1));
-		if (value.includes("NON IMPACTE")) continue;
-		if (value.includes("RUPTURE") || value.includes("TENSION")) impacted[side] = true;
-	}
-	if (raw.length === 0) {
-		for (const li of lis) {
-			const sides = freeTextSides(normalize(li));
-			if (sides === null) continue;
-			raw.push(li);
-			impacted.ville ||= sides.ville;
-			impacted.hopital ||= sides.hopital;
-		}
-	}
-	const scope: Scope =
-		impacted.ville && impacted.hopital ? "ville_hopital" : impacted.ville ? "ville" : impacted.hopital ? "hopital" : "inconnu";
-	return { scope, scope_raw: raw.length > 0 ? raw.join(" | ") : null };
-}
-
-const isRemiseLine = (t: string): boolean =>
-	(t.startsWith("DATE DE REMISE A DISPOSITION") || t.startsWith("REMISE A DISPOSITION")) && !t.includes("DE LA SPECIALITE");
-
-/** A page-level line (not about one pack or presentation) when there is one, else the first. */
-function preferPageLevel(lines: string[]): string | undefined {
-	const pageLevel = lines.find((li) => {
-		const t = normalize(li);
-		return !t.includes("CONDITIONNEMENT") && !t.includes("PRESENTATION");
-	});
-	return pageLevel ?? lines[0];
-}
-
-/**
- * Picks the observation line giving this entry's expected return, or null: a remise line, else a
- * "remise à disposition normale" line, else the first line containing the word "revient".
- */
-export function pickReturnLine(lis: string[]): string | null {
-	const remise = lis.filter((li) => isRemiseLine(normalize(li)));
-	const line =
-		preferPageLevel(remise.filter((li) => !normalize(li).includes("NORMALE"))) ??
-		preferPageLevel(remise.filter((li) => normalize(li).includes("NORMALE"))) ??
-		lis.find((li) => /(?:^| )REVIENT(?: |$)/.test(normalize(li)));
-	return line?.trim() ?? null;
-}
-
-/** Parses an ANSM detail page. `status` is the entry's list status; `id` is used for logging. */
-export async function parseDetail(html: string, status: Status, id: string): Promise<Detail> {
+/** Parses an ANSM detail page. */
+export async function parseDetail(html: string): Promise<DetailPage> {
 	let period = "";
 	let dci: string | null = null;
 	let title = "";
@@ -266,30 +201,9 @@ export async function parseDetail(html: string, status: Status, id: string): Pro
 		html,
 	);
 
-	const observations = lis.map(clean).filter((li) => li !== "");
-	const { scope, scope_raw } = parseScope(observations);
-
-	let expected: ExpectedReturn = { earliest: null, latest: null, precision: null, part: null };
-	let expected_return_raw: string | null = null;
-	if (status === "rupture" || status === "tension") {
-		const line = pickReturnLine(observations);
-		if (line !== null) {
-			expected_return_raw = line;
-			expected = parseExpectedReturn(line);
-			if (expected.earliest === null && !isUndetermined(line)) log("return_unparsed", { id });
-		}
-	}
-
-	const fields: DetailFields = {
+	return {
 		situation_start: parseFrDate(clean(period).replace(/^au\s+/i, "")),
 		dci,
-		scope,
-		scope_raw,
-		expected_return_earliest: expected.earliest,
-		expected_return_latest: expected.latest,
-		expected_return_precision: expected.precision,
-		expected_return_part: expected.part,
-		expected_return_raw,
+		observations: lis.map(clean).filter((li) => li !== ""),
 	};
-	return { ...fields, detail_hash: await sha256Hex(JSON.stringify(fields)) };
 }

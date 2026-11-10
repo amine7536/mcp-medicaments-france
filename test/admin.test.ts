@@ -5,12 +5,14 @@ import { ANSM_LIST_URL } from "../src/ingest/http";
 import { runIngest } from "../src/ingest/run";
 import worker from "../src/index";
 import { count, ran, resetDb } from "./db";
-import { type FakeFetcher, fakeFetcher } from "./fixtures";
+import { type FakeFetcher, fakeAi, fakeFetcher, stubExtract } from "./fixtures";
 
 const TOKEN = "s3cret-token";
 const URL = "https://medicaments-france.a3e.dev/admin/ingest";
+/** The test env with a fake AI binding, so no route reaches Workers AI. */
+const TEST_ENV: Env = { ...env, AI: fakeAi() };
 
-async function call(init: RequestInit<IncomingRequestCfProperties> = {}, testEnv: Env = env): Promise<Response> {
+async function call(init: RequestInit<IncomingRequestCfProperties> = {}, testEnv: Env = TEST_ENV): Promise<Response> {
 	const ctx = createExecutionContext();
 	const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>(URL, { method: "POST", ...init }), testEnv, ctx);
 	await waitOnExecutionContext(ctx);
@@ -39,8 +41,8 @@ const runs = () => count("SELECT COUNT(*) AS n FROM ingest_runs");
 describe("POST /admin/ingest", () => {
 	it("404 when the secret is unset or empty", async () => {
 		// ADMIN_TOKEN is a required secret in the types; drop it to simulate an unset secret.
-		const { ADMIN_TOKEN: _, ...unset } = env;
-		for (const testEnv of [unset as unknown as Env, { ...env, ADMIN_TOKEN: "" }]) {
+		const { ADMIN_TOKEN: _, ...unset } = TEST_ENV;
+		for (const testEnv of [unset as unknown as Env, { ...TEST_ENV, ADMIN_TOKEN: "" }]) {
 			const res = await call({ headers: auth }, testEnv);
 			expect(res.status).toBe(404);
 			expect(await res.json()).toEqual({ error: "not_found" });
@@ -109,7 +111,7 @@ describe("POST /admin/ingest", () => {
 
 	it("leaves other paths at 404", async () => {
 		const ctx = createExecutionContext();
-		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://x/admin"), env, ctx);
+		const res = await worker.fetch(new Request<unknown, IncomingRequestCfProperties>("https://x/admin"), TEST_ENV, ctx);
 		expect(res.status).toBe(404);
 	});
 });
@@ -118,7 +120,7 @@ describe("hook", { timeout: 30_000 }, () => {
 	it("a thrown hook error keeps the run ok", async () => {
 		const hook = vi.fn().mockRejectedValue(new Error("boom"));
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
+		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() }));
 		expect(res).toMatchObject({ status: "ok", message: "bootstrap; dispo=ok" });
 		expect(hook).toHaveBeenCalledWith(env, { id: res.id, bootstrap: true });
 		expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "hook_failed", id: res.id, reason: "boom" }));
@@ -128,7 +130,7 @@ describe("hook", { timeout: 30_000 }, () => {
 
 	it("appends the hook fragment to the message", async () => {
 		const afterIngest = vi.fn().mockResolvedValue("matched=3");
-		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest }));
+		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, afterIngest, extract: stubExtract() }));
 		expect(res.message).toBe("bootstrap; dispo=ok; matched=3");
 	});
 });
@@ -138,7 +140,7 @@ describe("scheduled", () => {
 		fake = fakeFetcher({ list: SHORT_LIST });
 		vi.stubGlobal("fetch", fake);
 		const ctx = createExecutionContext();
-		await worker.scheduled({ scheduledTime: Date.now(), cron: "0 5 * * *", noRetry() {} }, env, ctx);
+		await worker.scheduled({ scheduledTime: Date.now(), cron: "0 5 * * *", noRetry() {} }, TEST_ENV, ctx);
 		await waitOnExecutionContext(ctx);
 		expect(fake.calls[0]).toBe(ANSM_LIST_URL);
 		expect(await env.DB.prepare("SELECT status FROM ingest_runs").first()).toEqual({ status: "aborted" });
@@ -150,7 +152,7 @@ describe("scheduled", () => {
 			.run();
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const ctx = createExecutionContext();
-		await worker.scheduled({ scheduledTime: Date.now(), cron: "0 5 * * *", noRetry() {} }, env, ctx);
+		await worker.scheduled({ scheduledTime: Date.now(), cron: "0 5 * * *", noRetry() {} }, TEST_ENV, ctx);
 		await waitOnExecutionContext(ctx);
 		expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "ingest_skipped" }));
 		expect(fake.calls).toEqual([]);

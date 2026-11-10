@@ -18,7 +18,7 @@ import {
 import { runIngest } from "../src/ingest/run";
 import { normalize } from "../src/lib/normalize";
 import { queryCount, ran, resetDb } from "./db";
-import { fakeFetcher, fixtureBytes, LIST_HTML } from "./fixtures";
+import { fakeFetcher, fixtureBytes, LIST_HTML, stubExtract } from "./fixtures";
 
 const shortage = (id: string, name: string, path = `/p/${id}`): ListedShortage => ({
 	id,
@@ -344,7 +344,7 @@ describe("matchAll", () => {
 		const row = parseDispo(fixtureBytes("bdpm/CIS_CIP_Dispo_Spec.txt"), 10).find((r) => listed.has(r.ansm_path));
 		if (!row) throw new Error("no dispo row on a listed path");
 		await seedMedicine({ cis: row.cis, name: "SEEDED MEDICINE" }).run();
-		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0 }));
+		const res = ran(await runIngest(env, fakeFetcher(), { dispoMinRows: 10, detailIntervalMs: 0, extract: stubExtract() }));
 		expect(res.status).toBe("ok");
 		const fragment = res.message.split("; ").find((p) => p.startsWith("match: "));
 		expect(fragment?.split(" ")).toEqual(expect.arrayContaining(["dispo=1", `none=${rows.length - 1}`]));

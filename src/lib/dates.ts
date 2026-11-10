@@ -123,33 +123,17 @@ function season(y: number, name: string): ExpectedReturn {
 const PARTS: Record<string, ExpectedReturn["part"]> = { DEBUT: "debut", MI: "mi", FIN: "fin" };
 const monthIndex = (name: string): number => MONTHS.indexOf(name) + 1;
 
-/** The words after "DISPOSITION", or after the first whole word "REVIENT" when there is no "DISPOSITION". */
-function tailOf(t: string): string | null {
-	let rest: string;
-	const idx = t.indexOf("DISPOSITION");
-	if (idx !== -1) rest = t.slice(idx + "DISPOSITION".length);
-	else {
-		const m = /(?:^| )REVIENT(?: |$)/.exec(t);
-		if (m === null) return null;
-		rest = t.slice(m.index + m[0].length);
-	}
-	const words = rest.split(" ").filter((w) => w !== "");
-	while (words.length > 0 && LEADING_WORDS.has(words[0] as string)) words.shift();
-	return words.join(" ");
-}
-
-/** Whether an ANSM expected-return line states the return is undetermined (including the "indérminée" typo). */
+/** Whether an ANSM expected-return text states the return is undetermined or unknown (including the "indérminée" typo). */
 export function isUndetermined(line: string): boolean {
 	const t = normalize(line);
-	return t.includes("INDETERMINE") || t.includes("INDERMINE");
+	return t.includes("INDETERMINE") || t.includes("INDERMINE") || t.includes("INCONNU");
 }
 
-/** Parses an ANSM expected-return line into a date window. Never invents a single day. */
-export function parseExpectedReturn(line: string): ExpectedReturn {
-	if (isUndetermined(line)) return NONE;
-	const t = normalize(line);
-	const tail = tailOf(t);
-	if (tail === null) return NONE;
+/** Parses a bare return expression ("fin novembre 2026", "courant 2026") into a date window. Never invents a single day. */
+export function parseReturnWhen(expr: string): ExpectedReturn {
+	const words = normalize(expr).split(" ").filter((w) => w !== "");
+	while (words.length > 0 && LEADING_WORDS.has(words[0] as string)) words.shift();
+	const tail = words.join(" ");
 
 	let m: RegExpExecArray | null;
 	let y: number;
