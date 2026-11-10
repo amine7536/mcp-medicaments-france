@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.6](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.5...v1.13.6) (2026-11-10)
+
+
+### Bug Fixes
+
+* **ingest:** delete return changes recorded by parser upgrades ([#99](https://github.com/amine7536/mcp-medicaments-france/issues/99)) ([68e591b](https://github.com/amine7536/mcp-medicaments-france/commit/68e591b46310db69795125b3f88e877452d5fb57))
+
 ## [1.13.5](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.4...v1.13.5) (2026-11-10)
 
 
