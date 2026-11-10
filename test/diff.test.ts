@@ -38,6 +38,21 @@ const history = (id?: string) =>
 
 const shortage = (id: string) => env.DB.prepare("SELECT * FROM shortages WHERE id = ?").bind(id).first();
 
+const RETURN_LI = "<li>Date de remise &agrave; disposition pr&eacute;vue fin novembre 2026</li>";
+
+/** Serves the 1566 detail with its return line replaced by `line`, or removed when null. */
+function serveReturn(line: string | null): FakeOptions["detail"] {
+	const html = fixtureText("ansm/detail-1566.html").replace(RETURN_LI, line === null ? "" : `<li>${line}</li>`);
+	return (path) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined);
+}
+
+/** Runs once with `before` as 1566's return line, then again with `after` and the list row updated. */
+async function twoReturns(before: string | null, after: string | null) {
+	await run({ detail: serveReturn(before) });
+	expect((await shortage("1566"))?.expected_return_raw).toBe(before);
+	return run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(after) });
+}
+
 let logSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
@@ -172,6 +187,127 @@ describe("diff", { timeout: 30_000 }, () => {
 				new_expected_return: "Date de remise à disposition prévue : fin novembre 2026.",
 			}),
 		]);
+	});
+
+	it("writes no return_date_change when both wordings are undetermined", async () => {
+		const { res } = await twoReturns("Date de remise à disposition prévue indéterminée.", "Date de remise à disposition indéterminée.");
+		expect(await history()).toEqual([]);
+		expect(res.counts.entries_changed).toBe(0);
+	});
+
+	it("writes no return_date_change when both wordings parse to the same window", async () => {
+		const { res } = await twoReturns("Remise à disposition prévue fin décembre 2026.", "Date de remise à disposition prévue : fin décembre 2026");
+		expect(await history()).toEqual([]);
+		expect(res.counts.entries_changed).toBe(0);
+		expect((await shortage("1566"))?.expected_return_raw).toBe("Date de remise à disposition prévue : fin décembre 2026");
+	});
+
+	it("records a return_date_change between two different unparsed wordings", async () => {
+		const { res } = await twoReturns("Remise à disposition prévue prochainement", "Remise à disposition prévue bientôt");
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				change_type: "return_date_change",
+				old_expected_return: "Remise à disposition prévue prochainement",
+				new_expected_return: "Remise à disposition prévue bientôt",
+			}),
+		]);
+	});
+
+	it("records a return_date_change from no return line to an unparsed one", async () => {
+		const { res } = await twoReturns(null, "Remise à disposition prévue prochainement");
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				change_type: "return_date_change",
+				old_expected_return: null,
+				new_expected_return: "Remise à disposition prévue prochainement",
+			}),
+		]);
+	});
+
+	it("stores a dropped return line without a return_date_change and keeps it as lost", async () => {
+		await run();
+		const raw = (await shortage("1566"))?.expected_return_raw;
+		const dropped = { list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) };
+		let { res } = await run(dropped);
+		expect(await history()).toEqual([]);
+		expect(res.counts.entries_changed).toBe(0);
+		expect(await shortage("1566")).toMatchObject({ expected_return_raw: null, expected_return_earliest: null, expected_return_lost_raw: raw });
+		const lostLogs = logSpy.mock.calls.filter((c: unknown[]) => c[0] === JSON.stringify({ event: "return_lost", id: "1566" }));
+		expect(lostLogs).toHaveLength(1);
+
+		const again = await run(dropped);
+		expect(detailCalls(again.f)).toEqual([]);
+		expect((await shortage("1566"))?.expected_return_lost_raw).toBe(raw);
+
+		({ res } = await run({ list: setUpdated(LIST_HTML, "1566", "28/10/2026"), detail: serveReturn("Remise à disposition prévue fin novembre 2026.") }));
+		expect(await history()).toEqual([]);
+		expect(res.counts.entries_changed).toBe(0);
+		expect(await shortage("1566")).toMatchObject({
+			expected_return_raw: "Remise à disposition prévue fin novembre 2026.",
+			expected_return_lost_raw: null,
+		});
+	});
+
+	it("records the lost text as the old value when a different return comes back", async () => {
+		await run();
+		const raw = (await shortage("1566"))?.expected_return_raw;
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) });
+		const { res } = await run({
+			list: setUpdated(LIST_HTML, "1566", "28/10/2026"),
+			detail: serveReturn("Date de remise à disposition prévue fin décembre 2026"),
+		});
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				change_type: "return_date_change",
+				old_expected_return: raw,
+				new_expected_return: "Date de remise à disposition prévue fin décembre 2026",
+			}),
+		]);
+		expect((await shortage("1566"))?.expected_return_lost_raw).toBeNull();
+	});
+
+	it("records the lost text as the old value when the return comes back undetermined", async () => {
+		await run();
+		const raw = (await shortage("1566"))?.expected_return_raw;
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) });
+		const { res } = await run({
+			list: setUpdated(LIST_HTML, "1566", "28/10/2026"),
+			detail: serveReturn("Date de remise à disposition prévue indéterminée."),
+		});
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				change_type: "return_date_change",
+				old_expected_return: raw,
+				new_expected_return: "Date de remise à disposition prévue indéterminée.",
+			}),
+		]);
+		expect((await shortage("1566"))?.expected_return_lost_raw).toBeNull();
+	});
+
+	it("writes no return_date_change between no return line and an undetermined one", async () => {
+		await run({ detail: serveReturn(null) });
+		let { res } = await run({
+			list: setUpdated(LIST_HTML, "1566", "27/10/2026"),
+			detail: serveReturn("Date de remise à disposition prévue indéterminée."),
+		});
+		expect(res.counts.entries_changed).toBe(0);
+		({ res } = await run({ list: setUpdated(LIST_HTML, "1566", "28/10/2026"), detail: serveReturn(null) }));
+		expect(res.counts.entries_changed).toBe(0);
+		expect(await history()).toEqual([]);
+		expect(await shortage("1566")).toMatchObject({ expected_return_raw: null, expected_return_lost_raw: null });
+		expect(logSpy.mock.calls.some((c: unknown[]) => typeof c[0] === "string" && c[0].includes('"return_lost"'))).toBe(false);
+	});
+
+	it("clears the lost return when the status leaves rupture and tension", async () => {
+		await run();
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) });
+		expect((await shortage("1566"))?.expected_return_lost_raw).not.toBeNull();
+		await run({ list: setLabel(setUpdated(LIST_HTML, "1566", "27/10/2026"), "1566", "Remise à disposition"), detail: serveReturn(null) });
+		expect((await shortage("1566"))?.expected_return_lost_raw).toBeNull();
 	});
 
 	it("writes no return_date_change on tension -> remise", async () => {

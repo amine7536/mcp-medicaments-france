@@ -26,7 +26,7 @@ export interface Health {
 	};
 	counts: { listed: number; by_status: Record<Status, number>; medicines: number; mitm: number; bdpm_dispo: number };
 	match: { matched_ge_0_8: number; rate: number | null };
-	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; unmatched: number };
+	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; return_lost: number; unmatched: number };
 	generated_at: string;
 }
 
@@ -35,6 +35,7 @@ const LISTED_SQL = `SELECT
 	COALESCE(SUM(EXISTS (SELECT 1 FROM shortage_matches m WHERE m.shortage_id = s.id AND m.is_best = 1 AND m.confidence >= ?1)), 0) AS matched,
 	COALESCE(SUM(s.status = 'autre'), 0) AS unknown_status,
 	COALESCE(SUM(s.status IN ('rupture', 'tension') AND s.scope = 'inconnu'), 0) AS scope_inconnu,
+	COALESCE(SUM(s.status IN ('rupture', 'tension') AND s.expected_return_lost_raw IS NOT NULL), 0) AS return_lost,
 	COALESCE(SUM(NOT EXISTS (SELECT 1 FROM shortage_matches m WHERE m.shortage_id = s.id)), 0) AS unmatched
 FROM shortages s WHERE s.listed = 1`;
 
@@ -68,7 +69,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 	const run = first<Run>(lastRun);
 	const statusCounts = new Map(((byStatus?.results ?? []) as Array<{ status: string; n: number }>).map((r) => [r.status, r.n]));
 	const t = first<{ medicines: number; mitm: number; bdpm_dispo: number }>(totals) ?? { medicines: 0, mitm: 0, bdpm_dispo: 0 };
-	const l = first<{ listed: number; matched: number; unknown_status: number; scope_inconnu: number; unmatched: number }>(listed);
+	const l = first<{ listed: number; matched: number; unknown_status: number; scope_inconnu: number; return_lost: number; unmatched: number }>(listed);
 	const listedCount = l?.listed ?? 0;
 	const matched = l?.matched ?? 0;
 	const returnUnparsed = ((unparsed?.results ?? []) as Array<{ raw: string }>).filter((r) => !isUndetermined(r.raw)).length;
@@ -87,6 +88,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 			unknown_status: l?.unknown_status ?? 0,
 			scope_inconnu: l?.scope_inconnu ?? 0,
 			return_unparsed: returnUnparsed,
+			return_lost: l?.return_lost ?? 0,
 			unmatched: l?.unmatched ?? 0,
 		},
 		generated_at: now.toISOString(),
