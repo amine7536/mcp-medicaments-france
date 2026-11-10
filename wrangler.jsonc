@@ -30,6 +30,9 @@
 			"dataset": "ruptures_usage"
 		}
 	],
+	"ai": {
+		"binding": "AI"
+	},
 	"ratelimits": [
 		{
 			"name": "MCP_LIMIT",
@@ -77,6 +80,9 @@
 					"dataset": "ruptures_candidate_usage"
 				}
 			],
+			"ai": {
+				"binding": "AI"
+			},
 			"ratelimits": [
 				{
 					"name": "MCP_LIMIT",

@@ -26,7 +26,15 @@ export interface Health {
 	};
 	counts: { listed: number; by_status: Record<Status, number>; medicines: number; mitm: number; bdpm_dispo: number };
 	match: { matched_ge_0_8: number; rate: number | null };
-	quality: { unknown_status: number; scope_inconnu: number; return_unparsed: number; return_lost: number; unmatched: number };
+	quality: {
+		unknown_status: number;
+		scope_inconnu: number;
+		return_unparsed: number;
+		return_lost: number;
+		unmatched: number;
+		/** Listed rows whose detail fetch or extraction failed, retried next run. */
+		detail_pending: number;
+	};
 	generated_at: string;
 }
 
@@ -36,7 +44,8 @@ const LISTED_SQL = `SELECT
 	COALESCE(SUM(s.status = 'autre'), 0) AS unknown_status,
 	COALESCE(SUM(s.status IN ('rupture', 'tension') AND s.scope = 'inconnu'), 0) AS scope_inconnu,
 	COALESCE(SUM(s.status IN ('rupture', 'tension') AND s.expected_return_lost_raw IS NOT NULL), 0) AS return_lost,
-	COALESCE(SUM(NOT EXISTS (SELECT 1 FROM shortage_matches m WHERE m.shortage_id = s.id)), 0) AS unmatched
+	COALESCE(SUM(NOT EXISTS (SELECT 1 FROM shortage_matches m WHERE m.shortage_id = s.id)), 0) AS unmatched,
+	COALESCE(SUM(s.detail_hash IS NULL), 0) AS detail_pending
 FROM shortages s WHERE s.listed = 1`;
 
 /** Health status: `stale` without a recent ok ANSM run, else `degraded` when the latest run failed or is stuck. */
@@ -69,7 +78,15 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 	const run = first<Run>(lastRun);
 	const statusCounts = new Map(((byStatus?.results ?? []) as Array<{ status: string; n: number }>).map((r) => [r.status, r.n]));
 	const t = first<{ medicines: number; mitm: number; bdpm_dispo: number }>(totals) ?? { medicines: 0, mitm: 0, bdpm_dispo: 0 };
-	const l = first<{ listed: number; matched: number; unknown_status: number; scope_inconnu: number; return_lost: number; unmatched: number }>(listed);
+	const l = first<{
+		listed: number;
+		matched: number;
+		unknown_status: number;
+		scope_inconnu: number;
+		return_lost: number;
+		unmatched: number;
+		detail_pending: number;
+	}>(listed);
 	const listedCount = l?.listed ?? 0;
 	const matched = l?.matched ?? 0;
 	const returnUnparsed = ((unparsed?.results ?? []) as Array<{ raw: string }>).filter((r) => !isUndetermined(r.raw)).length;
@@ -90,6 +107,7 @@ export async function loadHealth(db: D1Database, now: Date): Promise<Health> {
 			return_unparsed: returnUnparsed,
 			return_lost: l?.return_lost ?? 0,
 			unmatched: l?.unmatched ?? 0,
+			detail_pending: l?.detail_pending ?? 0,
 		},
 		generated_at: now.toISOString(),
 	};

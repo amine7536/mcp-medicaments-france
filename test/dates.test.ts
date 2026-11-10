@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ExpectedReturn, isUndetermined, parseExpectedReturn, parseFrDate } from "../src/lib/dates";
+import { type ExpectedReturn, isUndetermined, parseFrDate, parseReturnWhen } from "../src/lib/dates";
 
 const NONE: ExpectedReturn = { earliest: null, latest: null, precision: null, part: null };
 const P = "Date de remise à disposition prévue";
@@ -11,117 +11,98 @@ const r = (
 	part: ExpectedReturn["part"] = null,
 ): ExpectedReturn => ({ earliest, latest, precision, part });
 
-describe("parseExpectedReturn: spec cases", () => {
+describe("parseReturnWhen: measured expressions", () => {
 	it.each<[string, ExpectedReturn]>([
-		[`${P} fin novembre 2026`, r("2026-11-01", "2026-11-30", "month", "fin")],
-		[`${P} : fin 2026`, r("2026-01-01", "2026-12-31", "year", "fin")],
-		[`${P}, au mieux, fin 2026`, r("2026-01-01", "2026-12-31", "year", "fin")],
-		[
-			"Date de remise à disposition au niveau des laboratoires exploitants : fin novembre 2026. Un délai peut être nécessaire",
-			r("2026-11-01", "2026-11-30", "month", "fin"),
-		],
-		["Remise à disposition prévue indéterminée", NONE],
-		[`${P} courant 2027`, r("2027-01-01", "2027-12-31", "year")],
-		[`${P} au troisième trimestre 2027`, r("2027-07-01", "2027-09-30", "quarter")],
-		[`${P} le 15/12/2026`, r("2026-12-15", "2026-12-15", "day")],
-		["Mise à jour du 27 janvier 2016 : remise à disposition prévue prochainement", NONE],
-	])("%s", (line, expected) => {
-		expect(parseExpectedReturn(line)).toEqual(expected);
+		["fin novembre 2026", r("2026-11-01", "2026-11-30", "month", "fin")],
+		["février 2027", r("2027-02-01", "2027-02-28", "month")],
+		["courant 2026", r("2026-01-01", "2026-12-31", "year")],
+		["fin 2026", r("2026-01-01", "2026-12-31", "year", "fin")],
+		["deuxième trimestre 2027", r("2027-04-01", "2027-06-30", "quarter")],
+		["courant décembre 2026", r("2026-12-01", "2026-12-31", "month")],
+		["en octobre 2024", r("2024-10-01", "2024-10-31", "month")],
+	])("%s", (expr, expected) => {
+		expect(parseReturnWhen(expr)).toEqual(expected);
 	});
 });
 
-describe("parseExpectedReturn: rules", () => {
+describe("parseReturnWhen: rules", () => {
 	it.each<[string, ExpectedReturn]>([
-		[`${P} le 5/1/2027`, r("2027-01-05", "2027-01-05", "day")],
-		[`${P} le 3 mars 2027`, r("2027-03-03", "2027-03-03", "day")],
-		[`${P} le 1er mars 2027`, r("2027-03-01", "2027-03-01", "day")],
-		[`${P} début février 2028`, r("2028-02-01", "2028-02-29", "month", "debut")],
-		[`${P} mi-avril 2027`, r("2027-04-01", "2027-04-30", "month", "mi")],
-		[`${P} en août 2027`, r("2027-08-01", "2027-08-31", "month")],
-		[`${P} courant décembre 2026`, r("2026-12-01", "2026-12-31", "month")],
-		[`${P} au 1er trimestre 2027`, r("2027-01-01", "2027-03-31", "quarter")],
-		[`${P} au premier trimestre 2027`, r("2027-01-01", "2027-03-31", "quarter")],
-		[`${P} au 2ème trimestre 2027`, r("2027-04-01", "2027-06-30", "quarter")],
-		[`${P} au second trimestre 2027`, r("2027-04-01", "2027-06-30", "quarter")],
-		[`${P} au 3ème trimestre 2027`, r("2027-07-01", "2027-09-30", "quarter")],
-		[`${P} au quatrième trimestre 2027`, r("2027-10-01", "2027-12-31", "quarter")],
-		[`${P} au 4ème trimestre 2027`, r("2027-10-01", "2027-12-31", "quarter")],
-		[`${P} début 2027`, r("2027-01-01", "2027-12-31", "year", "debut")],
-		[`${P} fin d'année 2026`, r("2026-01-01", "2026-12-31", "year", "fin")],
-		[`${P} début d'année 2027`, NONE],
-		[`${P} en 2027`, r("2027-01-01", "2027-12-31", "year")],
-		[`${P} à partir du 10/03/2027`, r("2027-03-10", "2027-03-10", "day")],
-		[`${P} prochainement`, NONE],
-		["Rupture de stock", NONE],
-	])("%s", (line, expected) => {
-		expect(parseExpectedReturn(line)).toEqual(expected);
-	});
-
-	it("parses a part of a quarter and a season", () => {
-		expect(parseExpectedReturn("Remise à disposition prévue à la fin du troisième trimestre 2026")).toEqual(r("2026-07-01", "2026-09-30", "quarter", "fin"));
-		expect(parseExpectedReturn(`${P} : été 2027`)).toEqual(r("2027-06-01", "2027-08-31", "season"));
-	});
-
-	it.each<[string, ExpectedReturn]>([
-		[`${P} début du premier trimestre 2027`, r("2027-01-01", "2027-03-31", "quarter", "debut")],
-		[`${P} mi du 2ème trimestre 2027`, r("2027-04-01", "2027-06-30", "quarter", "mi")],
-		[`${P} printemps 2027`, r("2027-03-01", "2027-05-31", "season")],
-		[`${P} été 2027`, r("2027-06-01", "2027-08-31", "season")],
-		[`${P} automne 2027`, r("2027-09-01", "2027-11-30", "season")],
-		[`${P} hiver 2026`, r("2026-12-01", "2027-02-28", "season")],
-		[`${P} hiver 2027`, r("2027-12-01", "2028-02-29", "season")],
-		[`${P} été 1999`, NONE],
-		[`${P} hiver 2101`, NONE],
-		[`${P} fin du troisième trimestre 2924`, NONE],
-	])("quarter part and season: %s", (line, expected) => {
-		expect(parseExpectedReturn(line)).toEqual(expected);
-	});
-
-	it("isUndetermined accepts the indéterminée wording and its indérminée typo only", () => {
-		expect(isUndetermined(`${P} : indéterminée.`)).toBe(true);
-		expect(isUndetermined(`${P} INDÉTERMINÉE`)).toBe(true);
-		expect(isUndetermined(`${P} indérminée`)).toBe(true);
-		expect(isUndetermined(`${P} été 2027`)).toBe(false);
-	});
-
-	it("reads the date after the word revient when there is no DISPOSITION", () => {
-		expect(parseExpectedReturn("L'ampoule de 2 ml est en rupture et revient fin décembre 2026.")).toEqual(r("2026-12-01", "2026-12-31", "month", "fin"));
-		expect(parseExpectedReturn("Le produit revient le 15/12/2026")).toEqual(r("2026-12-15", "2026-12-15", "day"));
-		expect(parseExpectedReturn("Remise à disposition prévue fin 2026, le produit revient en mars 2026")).toEqual(r("2026-01-01", "2026-12-31", "year", "fin"));
+		["Fin Novembre 2026.", r("2026-11-01", "2026-11-30", "month", "fin")],
+		["prévue courant 2027", r("2027-01-01", "2027-12-31", "year")],
+		["au troisième trimestre 2027", r("2027-07-01", "2027-09-30", "quarter")],
+		["le 15/12/2026", r("2026-12-15", "2026-12-15", "day")],
+		["le 5/1/2027", r("2027-01-05", "2027-01-05", "day")],
+		["le 3 mars 2027", r("2027-03-03", "2027-03-03", "day")],
+		["le 1er mars 2027", r("2027-03-01", "2027-03-01", "day")],
+		["début février 2028", r("2028-02-01", "2028-02-29", "month", "debut")],
+		["mi-avril 2027", r("2027-04-01", "2027-04-30", "month", "mi")],
+		["en août 2027", r("2027-08-01", "2027-08-31", "month")],
+		["au 1er trimestre 2027", r("2027-01-01", "2027-03-31", "quarter")],
+		["au premier trimestre 2027", r("2027-01-01", "2027-03-31", "quarter")],
+		["au 2ème trimestre 2027", r("2027-04-01", "2027-06-30", "quarter")],
+		["au second trimestre 2027", r("2027-04-01", "2027-06-30", "quarter")],
+		["au 3ème trimestre 2027", r("2027-07-01", "2027-09-30", "quarter")],
+		["au quatrième trimestre 2027", r("2027-10-01", "2027-12-31", "quarter")],
+		["au 4ème trimestre 2027", r("2027-10-01", "2027-12-31", "quarter")],
+		["début 2027", r("2027-01-01", "2027-12-31", "year", "debut")],
+		["fin d'année 2026", r("2026-01-01", "2026-12-31", "year", "fin")],
+		["début d'année 2027", NONE],
+		["en 2027", r("2027-01-01", "2027-12-31", "year")],
+		["à partir du 10/03/2027", r("2027-03-10", "2027-03-10", "day")],
+		["normale estimée deuxième trimestre 2027", r("2027-04-01", "2027-06-30", "quarter")],
+		["prochainement", NONE],
+		["indéterminée", NONE],
+		["inconnue", NONE],
+		["", NONE],
+	])("%s", (expr, expected) => {
+		expect(parseReturnWhen(expr)).toEqual(expected);
 	});
 
 	it.each<[string, ExpectedReturn]>([
-		["Remise à disposition normale prévue fin 2026", r("2026-01-01", "2026-12-31", "year", "fin")],
-		["Remise à disposition normale prévue courant 2026", r("2026-01-01", "2026-12-31", "year")],
-		["Remise à disposition normale prévue courant décembre 2026.", r("2026-12-01", "2026-12-31", "month")],
-		["Remise à disposition normale estimée deuxième trimestre 2027", r("2027-04-01", "2027-06-30", "quarter")],
-		["Date de remise à disposition normale pour le flacon de 100 ml : courant 2026", NONE],
-		["Date de remise à disposition normale inconnue", NONE],
-		["Remise à disposition normale en ville indéterminée", NONE],
-	])("normale line: %s", (line, expected) => {
-		expect(parseExpectedReturn(line)).toEqual(expected);
-	});
-
-	it("isUndetermined tells the undetermined normale lines from the unparsed ones", () => {
-		expect(isUndetermined("Remise à disposition normale indéterminée")).toBe(true);
-		expect(isUndetermined("Remise à disposition normale en ville indéterminée")).toBe(true);
-		expect(isUndetermined("Date de remise à disposition normale inconnue")).toBe(false);
-		expect(isUndetermined("Date de remise à disposition normale pour le flacon de 100 ml : courant 2026")).toBe(false);
-	});
-
-	it("treats the indérminée typo as indeterminate", () => {
-		expect(parseExpectedReturn(`${P} indérminée`)).toEqual(NONE);
+		["à la fin du troisième trimestre 2026", r("2026-07-01", "2026-09-30", "quarter", "fin")],
+		["début du premier trimestre 2027", r("2027-01-01", "2027-03-31", "quarter", "debut")],
+		["mi du 2ème trimestre 2027", r("2027-04-01", "2027-06-30", "quarter", "mi")],
+		["printemps 2027", r("2027-03-01", "2027-05-31", "season")],
+		["été 2027", r("2027-06-01", "2027-08-31", "season")],
+		["automne 2027", r("2027-09-01", "2027-11-30", "season")],
+		["hiver 2026", r("2026-12-01", "2027-02-28", "season")],
+		["hiver 2027", r("2027-12-01", "2028-02-29", "season")],
+		["été 1999", NONE],
+		["hiver 2101", NONE],
+		["fin du troisième trimestre 2924", NONE],
+	])("quarter part and season: %s", (expr, expected) => {
+		expect(parseReturnWhen(expr)).toEqual(expected);
 	});
 
 	it("rejects years outside 2000–2100", () => {
-		expect(parseExpectedReturn(`${P} le 29/11/2924`)).toEqual(NONE);
-		expect(parseExpectedReturn(`${P} fin 2924`)).toEqual(NONE);
-		expect(parseExpectedReturn(`${P} mars 1999`)).toEqual(NONE);
+		expect(parseReturnWhen("le 29/11/2924")).toEqual(NONE);
+		expect(parseReturnWhen("fin 2924")).toEqual(NONE);
+		expect(parseReturnWhen("mars 1999")).toEqual(NONE);
 	});
 
 	it("rejects invalid dates", () => {
-		expect(parseExpectedReturn(`${P} le 31/02/2026`)).toEqual(NONE);
-		expect(parseExpectedReturn(`${P} le 31 avril 2026`)).toEqual(NONE);
+		expect(parseReturnWhen("le 31/02/2026")).toEqual(NONE);
+		expect(parseReturnWhen("le 31 avril 2026")).toEqual(NONE);
+	});
+});
+
+describe("isUndetermined", () => {
+	it("accepts the indéterminée wording and its indérminée typo", () => {
+		expect(isUndetermined(`${P} : indéterminée.`)).toBe(true);
+		expect(isUndetermined(`${P} INDÉTERMINÉE`)).toBe(true);
+		expect(isUndetermined(`${P} indérminée`)).toBe(true);
+		expect(isUndetermined("Remise à disposition normale en ville indéterminée")).toBe(true);
+	});
+
+	it("accepts the inconnue wording", () => {
+		expect(isUndetermined("Date de remise à disposition normale inconnue")).toBe(true);
+		expect(isUndetermined("inconnue")).toBe(true);
+	});
+
+	it("rejects dated and unparsed lines", () => {
+		expect(isUndetermined(`${P} été 2027`)).toBe(false);
+		expect(isUndetermined("Date de remise à disposition normale pour le flacon de 100 ml : courant 2026")).toBe(false);
+		expect(isUndetermined(`${P} prochainement`)).toBe(false);
 	});
 });
 

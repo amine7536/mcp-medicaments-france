@@ -17,6 +17,7 @@ for (const entry of await readdir(FIXTURES_DIR, { recursive: true, withFileTypes
 export default defineConfig({
 	plugins: [
 		cloudflareTest({
+			remoteBindings: false,
 			wrangler: { configPath: "./wrangler.jsonc" },
 			miniflare: { bindings: { TEST_MIGRATIONS, TEST_FIXTURES, ADMIN_TOKEN: "s3cret-token" } },
 		}),

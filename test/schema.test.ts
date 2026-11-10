@@ -88,6 +88,49 @@ describe("schema", () => {
 		]);
 	});
 
+	it("the model extraction migration adds the lost window columns and clears detail_hash on rupture/tension rows to re-read", async () => {
+		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0011_refetch_model_extraction.sql");
+		if (migration === undefined) throw new Error("migration 0011_refetch_model_extraction.sql not loaded");
+		const { results: columns } = await env.DB.prepare("PRAGMA table_info(shortages)").all<{ name: string; type: string }>();
+		const lostColumns = ["expected_return_lost_earliest", "expected_return_lost_latest", "expected_return_lost_precision", "expected_return_lost_part"];
+		expect(columns.filter((c) => lostColumns.includes(c.name)).map((c) => [c.name, c.type])).toEqual(lostColumns.map((c) => [c, "TEXT"]));
+
+		const insert = env.DB.prepare(
+			`INSERT INTO shortages (id, ansm_path, raw_name, raw_name_norm, status, status_raw, scope, expected_return_raw, expected_return_earliest, list_hash, detail_hash, first_seen_at, last_seen_at, listed)
+			VALUES (?, '/x', 'X', 'X', ?, 'S', ?, ?, ?, 'h', 'd', '2026-10-01', '2026-11-10', ?)`,
+		);
+		const dated = "Date de remise à disposition prévue fin 2026";
+		const unparsed = "Remise à disposition au niveau du/des laboratoires exploitants : fin novembre 2026.";
+		const undetermined = "Date de remise à disposition prévue indéterminée";
+		await env.DB.batch([
+			insert.bind("x-inconnu", "rupture", "inconnu", dated, "2026-01-01", 1),
+			insert.bind("x-no-return", "tension", "ville", null, null, 1),
+			insert.bind("x-unparsed", "tension", "hopital", unparsed, null, 1),
+			insert.bind("x-undetermined", "tension", "ville", undetermined, null, 1),
+			insert.bind("x-complete", "rupture", "ville", dated, "2026-01-01", 1),
+			insert.bind("x-remise", "remise_a_disposition", "inconnu", null, null, 1),
+			insert.bind("x-arret", "arret_commercialisation", "inconnu", null, null, 1),
+			insert.bind("x-delisted", "tension", "inconnu", null, null, 0),
+		]);
+		const update = migration.queries.filter((q) => q.includes("UPDATE shortages"));
+		expect(update).toHaveLength(1);
+		await env.DB.prepare(update[0] as string).run();
+		const { results } = await env.DB.prepare(
+			`SELECT id, detail_hash, ${lostColumns.join(", ")} FROM shortages WHERE id LIKE 'x-%' ORDER BY id`,
+		).all<Record<string, string | null>>();
+		expect(results.map((r) => [r.id, r.detail_hash])).toEqual([
+			["x-arret", "d"],
+			["x-complete", "d"],
+			["x-delisted", "d"],
+			["x-inconnu", null],
+			["x-no-return", null],
+			["x-remise", "d"],
+			["x-undetermined", "d"],
+			["x-unparsed", null],
+		]);
+		for (const r of results) for (const c of lostColumns) expect(r[c]).toBeNull();
+	});
+
 	it("the return change noise migration keeps dropped returns and deletes undetermined and dropped return changes", async () => {
 		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0009_return_change_noise.sql");
 		if (migration === undefined) throw new Error("migration 0009_return_change_noise.sql not loaded");

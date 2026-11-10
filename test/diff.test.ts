@@ -1,8 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ModelAnswer } from "../src/ingest/extract";
 import { runIngest } from "../src/ingest/run";
+import { loadHealth } from "../src/health";
 import { count, queryCount, ran, resetDb } from "./db";
-import { detailCalls, type FakeOptions, fakeFetcher, fixtureText, LIST_HTML } from "./fixtures";
+import { detailCalls, FIXTURE_ANSWERS, type FakeOptions, fakeFetcher, fixtureText, LIST_HTML, NO_ANSWER, stubExtract } from "./fixtures";
 
 const OPTS = { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: async () => "" };
 const TOTAL = LIST_HTML.match(/<tr class="product-item"/g)?.length as number;
@@ -22,11 +24,19 @@ const setLabel = (html: string, id: string, label: string): string =>
 const setUpdated = (html: string, id: string, date: string): string =>
 	editRow(html, id, (tr) => tr.replace(/(<td data-value="[^"]*">)\d{2}\/\d{2}\/\d{4}(<\/td>)/, `$1${date}$2`));
 
-async function run(opts: FakeOptions = {}) {
+interface RunOptions extends FakeOptions {
+	/** Model answers by list id (default `FIXTURE_ANSWERS`). */
+	answers?: Record<string, ModelAnswer>;
+}
+
+async function run({ answers = FIXTURE_ANSWERS, ...opts }: RunOptions = {}) {
 	const f = fakeFetcher(opts);
-	const res = ran(await runIngest(env, f, OPTS));
+	const res = ran(await runIngest(env, f, { ...OPTS, extract: stubExtract(answers) }));
 	return { res, f };
 }
+
+/** `FIXTURE_ANSWERS` with 1566's return read from its 4th line as `retour`. */
+const answers1566 = (retour: string): Record<string, ModelAnswer> => ({ ...FIXTURE_ANSWERS, "1566": { ...NO_ANSWER, ligne_retour: 4, retour } });
 
 const history = (id?: string) =>
 	env.DB.prepare(
@@ -40,17 +50,26 @@ const shortage = (id: string) => env.DB.prepare("SELECT * FROM shortages WHERE i
 
 const RETURN_LI = "<li>Date de remise &agrave; disposition pr&eacute;vue fin novembre 2026</li>";
 
-/** Serves the 1566 detail with its return line replaced by `line`, or removed when null. */
-function serveReturn(line: string | null): FakeOptions["detail"] {
-	const html = fixtureText("ansm/detail-1566.html").replace(RETURN_LI, line === null ? "" : `<li>${line}</li>`);
-	return (path) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined);
+/** A 1566 return line and the date expression the model reads from it. */
+interface ReturnLine {
+	line: string;
+	retour: string;
+}
+
+/** Serves the 1566 detail with its return line replaced (removed when null), with the matching model answer. */
+function serveReturn(ret: ReturnLine | null): Pick<RunOptions, "detail" | "answers"> {
+	const html = fixtureText("ansm/detail-1566.html").replace(RETURN_LI, ret === null ? "" : `<li>${ret.line}</li>`);
+	return {
+		detail: (path) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined),
+		answers: ret === null ? { ...FIXTURE_ANSWERS, "1566": NO_ANSWER } : answers1566(ret.retour),
+	};
 }
 
 /** Runs once with `before` as 1566's return line, then again with `after` and the list row updated. */
-async function twoReturns(before: string | null, after: string | null) {
-	await run({ detail: serveReturn(before) });
-	expect((await shortage("1566"))?.expected_return_raw).toBe(before);
-	return run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(after) });
+async function twoReturns(before: ReturnLine | null, after: ReturnLine | null) {
+	await run(serveReturn(before));
+	expect((await shortage("1566"))?.expected_return_raw).toBe(before?.line ?? null);
+	return run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), ...serveReturn(after) });
 }
 
 let logSpy: ReturnType<typeof vi.spyOn>;
@@ -64,7 +83,7 @@ beforeEach(async () => {
 describe("diff", { timeout: 30_000 }, () => {
 	it("spaces detail requests with scheduler.wait", async () => {
 		const wait = vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
-		const res = ran(await runIngest(env, fakeFetcher(), { ...OPTS, detailIntervalMs: 60_000 }));
+		const res = ran(await runIngest(env, fakeFetcher(), { ...OPTS, detailIntervalMs: 60_000, extract: stubExtract() }));
 		expect(res.status).toBe("ok");
 		// Each of the 4 lanes skips the wait once the queue is empty.
 		expect(wait).toHaveBeenCalledTimes(res.detailsFetched - 4);
@@ -143,6 +162,7 @@ describe("diff", { timeout: 30_000 }, () => {
 		const { res } = await run({
 			list: setUpdated(LIST_HTML, "1566", "27/10/2026"),
 			detail: (path) => (path.includes("clindamycine-600-mg") ? new Response(changed) : undefined),
+			answers: answers1566("fin décembre 2026"),
 		});
 		expect(res.counts.entries_changed).toBe(1);
 		expect(await history()).toEqual([
@@ -163,9 +183,10 @@ describe("diff", { timeout: 30_000 }, () => {
 		const before = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue ind&eacute;termin&eacute;e");
 		const after = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue : ind&eacute;termin&eacute;e.");
 		const serve = (html: string) => (path: string) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined);
-		await run({ detail: serve(before) });
+		const answers = answers1566("indéterminée");
+		await run({ detail: serve(before), answers });
 		expect((await shortage("1566"))?.expected_return_raw).toBe("Date de remise à disposition prévue indéterminée");
-		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serve(after) });
+		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serve(after), answers });
 		expect(await history()).toEqual([]);
 		expect(res.counts.entries_changed).toBe(0);
 		expect((await shortage("1566"))?.expected_return_raw).toBe("Date de remise à disposition prévue : indéterminée.");
@@ -176,8 +197,8 @@ describe("diff", { timeout: 30_000 }, () => {
 		const before = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue fin octobre 2026.");
 		const after = detail.replace("pr&eacute;vue fin novembre 2026", "pr&eacute;vue : fin novembre 2026.");
 		const serve = (html: string) => (path: string) => (path.includes("clindamycine-600-mg") ? new Response(html) : undefined);
-		await run({ detail: serve(before) });
-		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serve(after) });
+		await run({ detail: serve(before), answers: answers1566("fin octobre 2026") });
+		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serve(after), answers: answers1566("fin novembre 2026") });
 		expect(res.counts.entries_changed).toBe(1);
 		expect(await history()).toEqual([
 			expect.objectContaining({
@@ -190,20 +211,29 @@ describe("diff", { timeout: 30_000 }, () => {
 	});
 
 	it("writes no return_date_change when both wordings are undetermined", async () => {
-		const { res } = await twoReturns("Date de remise à disposition prévue indéterminée.", "Date de remise à disposition indéterminée.");
+		const { res } = await twoReturns(
+			{ line: "Date de remise à disposition prévue indéterminée.", retour: "indéterminée" },
+			{ line: "Date de remise à disposition indéterminée.", retour: "indéterminée" },
+		);
 		expect(await history()).toEqual([]);
 		expect(res.counts.entries_changed).toBe(0);
 	});
 
 	it("writes no return_date_change when both wordings parse to the same window", async () => {
-		const { res } = await twoReturns("Remise à disposition prévue fin décembre 2026.", "Date de remise à disposition prévue : fin décembre 2026");
+		const { res } = await twoReturns(
+			{ line: "Remise à disposition prévue fin décembre 2026.", retour: "fin décembre 2026" },
+			{ line: "Date de remise à disposition prévue : fin décembre 2026", retour: "fin décembre 2026" },
+		);
 		expect(await history()).toEqual([]);
 		expect(res.counts.entries_changed).toBe(0);
 		expect((await shortage("1566"))?.expected_return_raw).toBe("Date de remise à disposition prévue : fin décembre 2026");
 	});
 
 	it("records a return_date_change between two different unparsed wordings", async () => {
-		const { res } = await twoReturns("Remise à disposition prévue prochainement", "Remise à disposition prévue bientôt");
+		const { res } = await twoReturns(
+			{ line: "Remise à disposition prévue prochainement", retour: "prochainement" },
+			{ line: "Remise à disposition prévue bientôt", retour: "bientôt" },
+		);
 		expect(res.counts.entries_changed).toBe(1);
 		expect(await history()).toEqual([
 			expect.objectContaining({
@@ -215,7 +245,7 @@ describe("diff", { timeout: 30_000 }, () => {
 	});
 
 	it("records a return_date_change from no return line to an unparsed one", async () => {
-		const { res } = await twoReturns(null, "Remise à disposition prévue prochainement");
+		const { res } = await twoReturns(null, { line: "Remise à disposition prévue prochainement", retour: "prochainement" });
 		expect(res.counts.entries_changed).toBe(1);
 		expect(await history()).toEqual([
 			expect.objectContaining({
@@ -229,34 +259,52 @@ describe("diff", { timeout: 30_000 }, () => {
 	it("stores a dropped return line without a return_date_change and keeps it as lost", async () => {
 		await run();
 		const raw = (await shortage("1566"))?.expected_return_raw;
-		const dropped = { list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) };
+		const dropped = { list: setUpdated(LIST_HTML, "1566", "27/10/2026"), ...serveReturn(null) };
 		let { res } = await run(dropped);
 		expect(await history()).toEqual([]);
 		expect(res.counts.entries_changed).toBe(0);
-		expect(await shortage("1566")).toMatchObject({ expected_return_raw: null, expected_return_earliest: null, expected_return_lost_raw: raw });
+		const lostWindow = {
+			expected_return_lost_raw: raw,
+			expected_return_lost_earliest: "2026-11-01",
+			expected_return_lost_latest: "2026-11-30",
+			expected_return_lost_precision: "month",
+			expected_return_lost_part: "fin",
+		};
+		expect(await shortage("1566")).toMatchObject({ expected_return_raw: null, expected_return_earliest: null, ...lostWindow });
 		const lostLogs = logSpy.mock.calls.filter((c: unknown[]) => c[0] === JSON.stringify({ event: "return_lost", id: "1566" }));
 		expect(lostLogs).toHaveLength(1);
 
 		const again = await run(dropped);
 		expect(detailCalls(again.f)).toEqual([]);
-		expect((await shortage("1566"))?.expected_return_lost_raw).toBe(raw);
+		expect(await shortage("1566")).toMatchObject(lostWindow);
 
-		({ res } = await run({ list: setUpdated(LIST_HTML, "1566", "28/10/2026"), detail: serveReturn("Remise à disposition prévue fin novembre 2026.") }));
+		// A refetch that still has no return line keeps the lost window.
+		await run({ ...dropped, list: setUpdated(LIST_HTML, "1566", "27/11/2026") });
+		expect(await shortage("1566")).toMatchObject(lostWindow);
+
+		({ res } = await run({
+			list: setUpdated(LIST_HTML, "1566", "28/10/2026"),
+			...serveReturn({ line: "Remise à disposition au niveau du/des laboratoires exploitants : fin novembre 2026.", retour: "fin novembre 2026" }),
+		}));
 		expect(await history()).toEqual([]);
 		expect(res.counts.entries_changed).toBe(0);
 		expect(await shortage("1566")).toMatchObject({
-			expected_return_raw: "Remise à disposition prévue fin novembre 2026.",
+			expected_return_raw: "Remise à disposition au niveau du/des laboratoires exploitants : fin novembre 2026.",
 			expected_return_lost_raw: null,
+			expected_return_lost_earliest: null,
+			expected_return_lost_latest: null,
+			expected_return_lost_precision: null,
+			expected_return_lost_part: null,
 		});
 	});
 
 	it("records the lost text as the old value when a different return comes back", async () => {
 		await run();
 		const raw = (await shortage("1566"))?.expected_return_raw;
-		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) });
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), ...serveReturn(null) });
 		const { res } = await run({
 			list: setUpdated(LIST_HTML, "1566", "28/10/2026"),
-			detail: serveReturn("Date de remise à disposition prévue fin décembre 2026"),
+			...serveReturn({ line: "Date de remise à disposition prévue fin décembre 2026", retour: "fin décembre 2026" }),
 		});
 		expect(res.counts.entries_changed).toBe(1);
 		expect(await history()).toEqual([
@@ -272,10 +320,10 @@ describe("diff", { timeout: 30_000 }, () => {
 	it("records the lost text as the old value when the return comes back undetermined", async () => {
 		await run();
 		const raw = (await shortage("1566"))?.expected_return_raw;
-		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) });
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), ...serveReturn(null) });
 		const { res } = await run({
 			list: setUpdated(LIST_HTML, "1566", "28/10/2026"),
-			detail: serveReturn("Date de remise à disposition prévue indéterminée."),
+			...serveReturn({ line: "Date de remise à disposition prévue indéterminée.", retour: "indéterminée" }),
 		});
 		expect(res.counts.entries_changed).toBe(1);
 		expect(await history()).toEqual([
@@ -289,13 +337,13 @@ describe("diff", { timeout: 30_000 }, () => {
 	});
 
 	it("writes no return_date_change between no return line and an undetermined one", async () => {
-		await run({ detail: serveReturn(null) });
+		await run(serveReturn(null));
 		let { res } = await run({
 			list: setUpdated(LIST_HTML, "1566", "27/10/2026"),
-			detail: serveReturn("Date de remise à disposition prévue indéterminée."),
+			...serveReturn({ line: "Date de remise à disposition prévue indéterminée.", retour: "indéterminée" }),
 		});
 		expect(res.counts.entries_changed).toBe(0);
-		({ res } = await run({ list: setUpdated(LIST_HTML, "1566", "28/10/2026"), detail: serveReturn(null) }));
+		({ res } = await run({ list: setUpdated(LIST_HTML, "1566", "28/10/2026"), ...serveReturn(null) }));
 		expect(res.counts.entries_changed).toBe(0);
 		expect(await history()).toEqual([]);
 		expect(await shortage("1566")).toMatchObject({ expected_return_raw: null, expected_return_lost_raw: null });
@@ -304,10 +352,10 @@ describe("diff", { timeout: 30_000 }, () => {
 
 	it("clears the lost return when the status leaves rupture and tension", async () => {
 		await run();
-		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), detail: serveReturn(null) });
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), ...serveReturn(null) });
 		expect((await shortage("1566"))?.expected_return_lost_raw).not.toBeNull();
-		await run({ list: setLabel(setUpdated(LIST_HTML, "1566", "27/10/2026"), "1566", "Remise à disposition"), detail: serveReturn(null) });
-		expect((await shortage("1566"))?.expected_return_lost_raw).toBeNull();
+		await run({ list: setLabel(setUpdated(LIST_HTML, "1566", "27/10/2026"), "1566", "Remise à disposition"), ...serveReturn(null) });
+		expect(await shortage("1566")).toMatchObject({ expected_return_lost_raw: null, expected_return_lost_earliest: null, expected_return_lost_precision: null });
 	});
 
 	it("writes no return_date_change on tension -> remise", async () => {
@@ -393,5 +441,156 @@ describe("diff", { timeout: 30_000 }, () => {
 		const counted = queryCount();
 		await run();
 		expect(counted.queries()).toBeLessThanOrEqual(50);
+	});
+});
+
+describe("return comparison by window", { timeout: 30_000 }, () => {
+	it("records nothing when a stored row with no window is re-read with one", async () => {
+		const line = "Date de remise à disposition prévue fin novembre 2026";
+		await run({ answers: answers1566("") });
+		expect(await shortage("1566")).toMatchObject({ expected_return_raw: line, expected_return_earliest: null });
+		const { res } = await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), answers: answers1566("fin novembre 2026") });
+		expect(res.counts.entries_changed).toBe(0);
+		expect(await history()).toEqual([]);
+		expect(await shortage("1566")).toMatchObject({ expected_return_raw: line, expected_return_earliest: "2026-11-01", expected_return_part: "fin" });
+	});
+
+	it("records nothing for the same window under the new-layout wording", async () => {
+		const { res } = await twoReturns(
+			{ line: "Date de remise à disposition prévue fin novembre 2026", retour: "fin novembre 2026" },
+			{ line: "Remise à disposition au niveau du/des laboratoires exploitants : fin novembre 2026.", retour: "fin novembre 2026" },
+		);
+		expect(res.counts.entries_changed).toBe(0);
+		expect(await history()).toEqual([]);
+	});
+
+	it("records nothing from indéterminée to inconnue", async () => {
+		const { res } = await twoReturns(
+			{ line: "Date de remise à disposition prévue indéterminée.", retour: "indéterminée" },
+			{ line: "Date de remise à disposition normale inconnue", retour: "inconnue" },
+		);
+		expect(res.counts.entries_changed).toBe(0);
+		expect(await history()).toEqual([]);
+	});
+
+	it("records a return_date_change for a different window", async () => {
+		const { res } = await twoReturns(
+			{ line: "Remise à disposition au niveau du/des laboratoires exploitants : fin novembre 2026.", retour: "fin novembre 2026" },
+			{ line: "Remise à disposition au niveau du/des laboratoires exploitants : février 2027.", retour: "février 2027" },
+		);
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				change_type: "return_date_change",
+				old_expected_return: "Remise à disposition au niveau du/des laboratoires exploitants : fin novembre 2026.",
+				new_expected_return: "Remise à disposition au niveau du/des laboratoires exploitants : février 2027.",
+			}),
+		]);
+	});
+
+	it("records a return_date_change when a dropped return comes back with a different window", async () => {
+		await run();
+		await run({ list: setUpdated(LIST_HTML, "1566", "27/10/2026"), ...serveReturn(null) });
+		const { res } = await run({
+			list: setUpdated(LIST_HTML, "1566", "28/10/2026"),
+			...serveReturn({ line: "Remise à disposition au niveau du/des laboratoires exploitants : février 2027.", retour: "février 2027" }),
+		});
+		expect(res.counts.entries_changed).toBe(1);
+		expect(await history()).toEqual([
+			expect.objectContaining({
+				change_type: "return_date_change",
+				old_expected_return: "Date de remise à disposition prévue fin novembre 2026",
+				new_expected_return: "Remise à disposition au niveau du/des laboratoires exploitants : février 2027.",
+			}),
+		]);
+	});
+});
+
+describe("model extraction in the ingest", { timeout: 30_000 }, () => {
+	const extractLogs = (): Array<{ id: string; reason: string }> =>
+		logSpy.mock.calls
+			.map((c: unknown[]) => c[0])
+			.filter((l: unknown): l is string => typeof l === "string" && l.includes('"extract_failed"'))
+			.map((l: string) => JSON.parse(l) as { id: string; reason: string });
+
+	const extractedIds = async (): Promise<Set<string>> => {
+		const rows = await env.DB.prepare("SELECT id FROM shortages WHERE status IN ('rupture', 'tension')").all<{ id: string }>();
+		return new Set(rows.results.map((r) => r.id));
+	};
+
+	it("calls the model only for rupture and tension pages", async () => {
+		const extract = stubExtract();
+		const res = ran(await runIngest(env, fakeFetcher(), { ...OPTS, extract }));
+		expect(res.status).toBe("ok");
+		expect(new Set(extract.calls)).toEqual(await extractedIds());
+		for (const id of ["1590", "1270"]) {
+			expect(extract.calls).not.toContain(id);
+			expect(await shortage(id)).toMatchObject({
+				scope: "inconnu",
+				scope_raw: null,
+				expected_return_raw: null,
+				expected_return_earliest: null,
+				expected_return_latest: null,
+				expected_return_precision: null,
+				expected_return_part: null,
+				detail_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+			});
+		}
+		expect(await shortage("1590")).toMatchObject({ situation_start: expect.any(String) });
+	});
+
+	it("keeps the stored values when the model call fails and retries next run", async () => {
+		await run();
+		const before = await shortage("1566");
+		const list = setUpdated(LIST_HTML, "1566", "27/10/2026");
+		const failing = stubExtract(FIXTURE_ANSWERS, async () => {
+			throw new Error("JSON Mode couldn't be met");
+		});
+		const res = ran(await runIngest(env, fakeFetcher({ list }), { ...OPTS, extract: failing }));
+		expect(res).toMatchObject({ status: "ok", message: "extract_failed=1; dispo=ok" });
+		expect(await shortage("1566")).toMatchObject({
+			detail_hash: null,
+			scope: before?.scope,
+			expected_return_raw: before?.expected_return_raw,
+			expected_return_earliest: before?.expected_return_earliest,
+			ansm_updated_at: "2026-10-27",
+		});
+		expect(extractLogs()).toEqual([{ event: "extract_failed", id: "1566", reason: "JSON Mode couldn't be met" }]);
+		expect((await loadHealth(env.DB, new Date())).quality.detail_pending).toBe(1);
+		expect(await history()).toEqual([]);
+
+		const retry = await run({ list });
+		expect(detailCalls(retry.f)).toEqual([expect.stringContaining("clindamycine-600-mg")]);
+		expect((await shortage("1566"))?.detail_hash).toBe(before?.detail_hash);
+	});
+
+	it("starts no model call and fetches no rupture or tension page once the budget is spent", async () => {
+		const fakeRun = vi.fn(async () => ({ response: NO_ANSWER }));
+		const f = fakeFetcher();
+		const res = ran(await runIngest(env, f, { ...OPTS, extract: stubExtract(FIXTURE_ANSWERS, fakeRun), extractBudgetMs: 0 }));
+		const ids = await extractedIds();
+		expect(res.status).toBe("ok");
+		expect(fakeRun).not.toHaveBeenCalled();
+		expect(res.message).toBe(`bootstrap; extract_failed=${ids.size}; dispo=ok`);
+		expect(res.counts.entries_new).toBe(TOTAL);
+		expect(res.detailsFetched).toBe(TOTAL - ids.size);
+		expect(detailCalls(f)).toHaveLength(TOTAL - ids.size);
+		expect(detailCalls(f)).not.toContainEqual(expect.stringContaining("clindamycine-600-mg"));
+		const logs = extractLogs();
+		expect(new Set(logs.map((l) => l.id))).toEqual(ids);
+		for (const l of logs) expect(l.reason).toBe("budget");
+		expect(await count("SELECT COUNT(*) AS n FROM shortages WHERE status IN ('rupture', 'tension') AND detail_hash IS NOT NULL")).toBe(0);
+		expect(await count("SELECT COUNT(*) AS n FROM shortages WHERE status NOT IN ('rupture', 'tension') AND detail_hash IS NULL")).toBe(0);
+	});
+
+	it("times out a model call that never answers and keeps the run ok", async () => {
+		const never = () => new Promise<never>(() => {});
+		const res = ran(await runIngest(env, fakeFetcher(), { ...OPTS, extract: stubExtract(FIXTURE_ANSWERS, never), extractTimeoutMs: 5 }));
+		const ids = await extractedIds();
+		expect(res.status).toBe("ok");
+		expect(res.message).toBe(`bootstrap; extract_failed=${ids.size}; dispo=ok`);
+		const logs = extractLogs();
+		expect(new Set(logs.map((l) => l.id))).toEqual(ids);
+		for (const l of logs) expect(l.reason).toBe("timeout after 5 ms");
 	});
 });

@@ -1,6 +1,8 @@
-import { type ListRow, parseDetail, parseList } from "./ansm";
+import { sha256Hex } from "../lib/hash";
+import { type DetailFields, type ListRow, parseDetail, parseList, type Status } from "./ansm";
 import { applyDiff, type DetailOutcome, type DiffCounts, loadShortages, needsDetail } from "./diff";
 import { ingestDispo } from "./dispo";
+import { type ExtractedFields, type Extractor, NO_FIELDS, workersAiExtractor } from "./extract";
 import { ANSM_LIST_URL, ANSM_ORIGIN, errorMessage, type Fetcher, get, log } from "./http";
 import { afterIngest } from "./match";
 import { checkSanity } from "./sanity";
@@ -16,7 +18,16 @@ interface IngestOptions {
 	detailIntervalMs?: number;
 	/** Hook called after a successful diff (default `afterIngest`). */
 	afterIngest?: typeof afterIngest;
+	/** Reads scope and expected return from a page's observation lines (default: Workers AI on `env.AI`). */
+	extract?: Extractor;
+	/** Timeout of one model call (default 30 s). */
+	extractTimeoutMs?: number;
+	/** Time after the detail phase starts past which no model call starts (default 60 s). */
+	extractBudgetMs?: number;
 }
+
+/** List statuses whose detail page is read by the model. */
+const EXTRACTED_STATUSES = new Set<Status>(["rupture", "tension"]);
 
 type RunStatus = "ok" | "aborted" | "error";
 
@@ -28,31 +39,76 @@ export interface IngestResult {
 	detailsFetched: number;
 }
 
-/** Fetches and parses detail pages with `DETAIL_CONCURRENCY` lanes, each spacing its request starts. */
-async function fetchDetails(rows: ListRow[], fetcher: Fetcher, intervalMs: number): Promise<Map<string, DetailOutcome>> {
-	const out = new Map<string, DetailOutcome>();
+interface DetailOptions {
+	intervalMs: number;
+	extract: Extractor;
+	timeoutMs: number;
+	budgetMs: number;
+}
+
+interface DetailsResult {
+	details: Map<string, DetailOutcome>;
+	/** Detail pages requested. */
+	fetched: number;
+	detailFailed: number;
+	extractFailed: number;
+}
+
+/**
+ * Fetches and parses detail pages with `DETAIL_CONCURRENCY` lanes, each spacing its request starts.
+ * Rupture and tension pages go through the extractor; once the budget is spent, they are neither fetched nor extracted.
+ */
+async function fetchDetails(rows: ListRow[], fetcher: Fetcher, opts: DetailOptions): Promise<DetailsResult> {
+	const result: DetailsResult = { details: new Map(), fetched: 0, detailFailed: 0, extractFailed: 0 };
+	const phaseStart = Date.now();
+	const extractFailed = (id: string): null => {
+		result.details.set(id, { ok: false });
+		result.extractFailed++;
+		return null;
+	};
+	const overBudget = (id: string): boolean => {
+		if (Date.now() - phaseStart < opts.budgetMs) return false;
+		log("extract_failed", { id, reason: "budget" });
+		extractFailed(id);
+		return true;
+	};
+	/** The extracted fields of a page, or null after recording a failed or skipped extraction (the extractor logs its own failures). */
+	const extract = async (id: string, lines: string[]): Promise<ExtractedFields | null> => {
+		if (overBudget(id)) return null;
+		const outcome = await opts.extract(lines, id, opts.timeoutMs);
+		return outcome.ok ? outcome.fields : extractFailed(id);
+	};
 	let next = 0;
 	const lane = async (): Promise<void> => {
 		while (next < rows.length) {
 			const row = rows[next++] as ListRow;
+			const extracted = EXTRACTED_STATUSES.has(row.status);
+			if (extracted && overBudget(row.id)) continue;
 			const started = Date.now();
+			result.fetched++;
 			try {
 				const res = await get(fetcher, ANSM_ORIGIN + row.ansm_path);
 				if (res.status !== 200) {
 					await res.body?.cancel();
 					throw new Error(`HTTP ${res.status}`);
 				}
-				out.set(row.id, { ok: true, detail: await parseDetail(await res.text(), row.status, row.id) });
+				const page = await parseDetail(await res.text());
+				const fields = extracted ? await extract(row.id, page.observations) : NO_FIELDS;
+				if (fields !== null) {
+					const merged: DetailFields = { situation_start: page.situation_start, dci: page.dci, ...fields };
+					result.details.set(row.id, { ok: true, detail: { ...merged, detail_hash: await sha256Hex(JSON.stringify(merged)) } });
+				}
 			} catch (err) {
-				out.set(row.id, { ok: false });
+				result.details.set(row.id, { ok: false });
+				result.detailFailed++;
 				log("detail_failed", { id: row.id, reason: errorMessage(err) });
 			}
-			const wait = intervalMs - (Date.now() - started);
+			const wait = opts.intervalMs - (Date.now() - started);
 			if (wait > 0 && next < rows.length) await scheduler.wait(wait);
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(DETAIL_CONCURRENCY, rows.length) }, lane));
-	return out;
+	return result;
 }
 
 export type IngestOutcome = IngestResult | { skipped: "ingest_running" } | { error: string };
@@ -138,11 +194,16 @@ export async function runIngest(env: Env, fetcher: Fetcher, opts: IngestOptions 
 		} else {
 			const dispo = await ingestDispo(db, fetcher, opts.dispoMinRows);
 			const toFetch = rows.filter((row) => needsDetail(row, stored.get(row.id)));
-			detailsFetched = toFetch.length;
-			const details = await fetchDetails(toFetch, fetcher, opts.detailIntervalMs ?? 250);
-			const failed = [...details.values()].filter((d) => !d.ok).length;
+			const { details, fetched, detailFailed, extractFailed } = await fetchDetails(toFetch, fetcher, {
+				intervalMs: opts.detailIntervalMs ?? 250,
+				extract: opts.extract ?? workersAiExtractor(env.AI),
+				timeoutMs: opts.extractTimeoutMs ?? 30_000,
+				budgetMs: opts.extractBudgetMs ?? 60_000,
+			});
+			detailsFetched = fetched;
 			counts = await applyDiff(db, rows, stored, details, { now, bootstrap });
-			if (failed > 0) parts.push(`detail_failed=${failed}`);
+			if (detailFailed > 0) parts.push(`detail_failed=${detailFailed}`);
+			if (extractFailed > 0) parts.push(`extract_failed=${extractFailed}`);
 			parts.push(`dispo=${dispo}`);
 			try {
 				parts.push(await (opts.afterIngest ?? afterIngest)(env, { id, bootstrap }));

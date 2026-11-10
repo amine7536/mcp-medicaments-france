@@ -5,7 +5,7 @@ import { DISPO_URL } from "../src/ingest/http";
 import { runIngest } from "../src/ingest/run";
 import { checkSanity } from "../src/ingest/sanity";
 import { count, ran, resetDb } from "./db";
-import { fakeFetcher, LIST_HTML } from "./fixtures";
+import { fakeFetcher, LIST_HTML, stubExtract } from "./fixtures";
 
 const rows = (n: number, autre = 0): { id: string; status: Status }[] =>
 	Array.from({ length: n }, (_, i) => ({ id: String(i), status: i < autre ? "autre" : "rupture" }));
@@ -69,7 +69,7 @@ describe("runIngest abort and error paths", () => {
 	it("an abort skips the shortage file, the details and the hook", async () => {
 		const truncated = LIST_HTML.replace(/(<tr class="product-item"[\s\S]*?<\/tr>\s*){150}/, "");
 		const f = fakeFetcher({ list: truncated });
-		const res = ran(await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
+		const res = ran(await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() }));
 		expect(res.status).toBe("aborted");
 		expect(res.message).toBe("bootstrap; list has 140 rows, below 200");
 		expect(f.calls).toHaveLength(1);
@@ -82,7 +82,7 @@ describe("runIngest abort and error paths", () => {
 
 	it("a non-200 list ends error without writes", async () => {
 		const f = fakeFetcher({ list: () => new Response("busy", { status: 503 }) });
-		const res = ran(await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
+		const res = ran(await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() }));
 		expect(res).toMatchObject({ status: "error", message: "list fetch failed: HTTP 503" });
 		expect(f.calls).toHaveLength(1);
 		await expectNothingWritten();
@@ -94,7 +94,7 @@ describe("runIngest abort and error paths", () => {
 				throw new TypeError("Network connection lost.");
 			},
 		});
-		const res = ran(await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
+		const res = ran(await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() }));
 		expect(res).toMatchObject({ status: "error", message: "Network connection lost." });
 		await expectNothingWritten();
 		expect(await count("SELECT COUNT(*) AS n FROM ingest_runs WHERE status = 'error'")).toBe(1);
@@ -149,7 +149,7 @@ describe("runIngest claim and close", () => {
 			.bind(new Date(Date.now() - 60_000).toISOString())
 			.run();
 		const f = fakeFetcher();
-		const res = await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook });
+		const res = await runIngest(env, f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() });
 		expect(res).toEqual({ skipped: "ingest_running" });
 		expect(f.calls).toEqual([]);
 		expect(hook).not.toHaveBeenCalled();
@@ -161,7 +161,7 @@ describe("runIngest claim and close", () => {
 
 	it("a failed close still ends the row error", { timeout: 30_000 }, async () => {
 		const f = fakeFetcher();
-		const res = ran(await runIngest(failingEnv("UPDATE ingest_runs SET status = ?"), f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook }));
+		const res = ran(await runIngest(failingEnv("UPDATE ingest_runs SET status = ?"), f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() }));
 		expect(res).toMatchObject({ status: "error", message: "D1_ERROR: injected" });
 		const row = await env.DB.prepare("SELECT status, message, finished_at FROM ingest_runs WHERE id = ?").bind(res.id).first();
 		expect(row).toMatchObject({ status: "error", message: "D1_ERROR: injected" });
@@ -171,7 +171,7 @@ describe("runIngest claim and close", () => {
 
 	it("a failed claim returns the error and opens no run", async () => {
 		const f = fakeFetcher();
-		const res = await runIngest(failingEnv("INSERT INTO ingest_runs"), f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook });
+		const res = await runIngest(failingEnv("INSERT INTO ingest_runs"), f, { dispoMinRows: 10, detailIntervalMs: 0, afterIngest: hook, extract: stubExtract() });
 		expect(res).toEqual({ error: "D1_ERROR: injected" });
 		expect(f.calls).toEqual([]);
 		expect(await count("SELECT COUNT(*) AS n FROM ingest_runs")).toBe(0);
