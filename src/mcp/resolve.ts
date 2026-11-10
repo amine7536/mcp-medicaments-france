@@ -77,7 +77,7 @@ export const inShortage = (status: string | undefined): boolean => status === "r
 /**
  * The `candidates` data of a resolution and its summary: the first `RESOLVE_LIMIT`, in rupture or tension first and otherwise
  * in resolution order, with holder, marketing and shortage status, MITM status and ATC code, `best_match` on the best matches
- * shown and `best_match_total` when there is one. The count in rupture or tension across all matches is in the summary only.
+ * shown and `best_match_total` when there is one. The count in rupture or tension across all matches is `in_shortage_total` when non-zero.
  */
 export async function candidatesData(
 	db: D1Database,
@@ -87,6 +87,7 @@ export async function candidatesData(
 	const shortages = await currentShortages(db, resolved.cis);
 	const isInShortage = (c: string): boolean => inShortage(shortages.get(c)?.current.status);
 	const shown = resolved.cis.toSorted((a, b) => Number(isInShortage(b)) - Number(isInShortage(a))).slice(0, RESOLVE_LIMIT);
+	const inShortageTotal = resolved.cis.filter(isInShortage).length;
 	const best = new Set(resolved.best);
 	const candidates = (await orderedMedicines(db, shown)).map((m) => ({
 		cis: m.cis,
@@ -104,8 +105,9 @@ export async function candidatesData(
 		capped: resolved.capped,
 		candidates,
 		...(resolved.best.length > 0 ? { best_match_total: resolved.best.length } : {}),
+		...(inShortageTotal > 0 ? { in_shortage_total: inShortageTotal } : {}),
 	};
-	return { data, summary: candidatesSummary(query, data.total, resolved.cis.filter(isInShortage).length, data.best_match_total ?? 0) };
+	return { data, summary: candidatesSummary(query, data.total, inShortageTotal, data.best_match_total ?? 0) };
 }
 
 /** The brand token of a normalized name: its first token, when it has at least 3 characters and is not all digits. */

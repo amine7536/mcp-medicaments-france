@@ -1325,6 +1325,17 @@ describe("name search across tools", () => {
 			some(best.candidates, (c: { best_match?: true }) => c.best_match);
 		}
 
+		// Matches in rupture or tension: the count is in the data.
+		const inShortage = [
+			(await call(getAvailability, { name: "doliprane" })).data,
+			(await call(isMajorTherapeuticInterest, { name: "doliprane" })).data,
+			(await call(getMedicineInfo, { name: "doliprane" })).data,
+		];
+		for (const candidates of inShortage) {
+			expect(candidates.kind).toBe("candidates");
+			filled(candidates.in_shortage_total);
+		}
+
 		// More matches than shown, with a complete set: the MITM mix is in the data.
 		const mixCodes = [...Array.from({ length: RESOLVE_LIMIT }, () => "A10BA02"), "A10BD02", null];
 		await seedMitm(await seedSubstanceMatches(60200800, "KINDINE", mixCodes.map(() => null)), mixCodes);
@@ -1574,7 +1585,7 @@ describe("name search across tools", () => {
 		const links = Array.from({ length: inShortage }, (_, i) => (i % 2 === 0 ? SHORTAGES.dolipraneRupture.id : SHORTAGES.dolipraneTension.id));
 		const cis = await seedSubstanceMatches(60200100, "CROWDINE", [null, null, ...links]);
 		const { data, result } = await call(getMedicineInfo, { name: "crowdine" });
-		expect(data).toMatchObject({ kind: "candidates", total: inShortage + 2 });
+		expect(data).toMatchObject({ kind: "candidates", total: inShortage + 2, in_shortage_total: inShortage });
 		// Rupture and tension are not ordered against each other: rank order holds within the medicines in shortage.
 		expect(candidateCis(data)).toEqual(cis.slice(2, 2 + RESOLVE_LIMIT));
 		// The count across all matches reaches the summary, not the number shown.
@@ -1588,8 +1599,8 @@ describe("name search across tools", () => {
 		const resolved = await resolveName(env.DB, "cappedine", 1);
 		if (resolved.kind !== "candidates") throw new Error(`expected candidates, got ${resolved.kind}`);
 		const { data, summary } = await candidatesData(env.DB, "cappedine", resolved);
-		expect(data).toMatchObject({ total: links.length, capped: true });
-		expect(summary).toBe(candidatesSummary("cappedine", links.length, 3, 0));
+		expect(data).toMatchObject({ total: links.length, capped: true, in_shortage_total: 3 });
+		expect(summary).toBe(candidatesSummary("cappedine", links.length, data.in_shortage_total ?? 0, 0));
 		expect(statuses(data).slice(0, 3)).toEqual(["rupture", "tension", "rupture"]);
 	});
 
@@ -1598,6 +1609,7 @@ describe("name search across tools", () => {
 		const cis = await seedSubstanceMatches(60200300, "CALMINE", [null, null, SHORTAGES.remise.id]);
 		const { data, result } = await call(getMedicineInfo, { name: "calmine" });
 		expect(data).toMatchObject({ kind: "candidates", total: 3 });
+		expect(data).not.toHaveProperty("in_shortage_total");
 		expect(candidateCis(data)).toEqual(cis);
 		expect(statuses(data)).toEqual([null, null, SHORTAGES.remise.status]);
 		expect(firstLine(result)).toBe(candidatesSummary("calmine", 3, 0, 0));
@@ -1608,11 +1620,11 @@ describe("name search across tools", () => {
 	it("get_availability and is_major_therapeutic_interest report the medicines in rupture or tension of their candidates", async () => {
 		const expected = candidatesSummary("doliprane", 2, 1, 0);
 		const availability = await call(getAvailability, { name: "doliprane" });
-		expect(availability.data).toMatchObject({ kind: "candidates", total: 2 });
+		expect(availability.data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
 		expect(availability.data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
 		expect(firstLine(availability.result)).toBe(expected);
 		const mitm = await call(isMajorTherapeuticInterest, { name: "doliprane" });
-		expect(mitm.data).toMatchObject({ kind: "candidates", total: 2 });
+		expect(mitm.data).toMatchObject({ kind: "candidates", total: 2, in_shortage_total: 1 });
 		expect(mitm.data.candidates[0].cis).toBe(MEDICINES.dolipraneTablet.cis);
 		// is_major_therapeutic_interest appends the MITM mix to the same sentence.
 		expect(firstLine(mitm.result).startsWith(expected)).toBe(true);
