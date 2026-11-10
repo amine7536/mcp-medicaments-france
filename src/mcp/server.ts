@@ -9,7 +9,7 @@ import { recentChanges } from "./tools/recentChanges";
 import { searchMedicine } from "./tools/searchMedicine";
 
 export const SERVER_NAME = "medicaments-france";
-export const SERVER_VERSION = "1.13.5"; // x-release-please-version
+export const SERVER_VERSION = "1.13.6"; // x-release-please-version
 export const SERVER_TITLE = "Médicaments en France";
 export const SERVER_DESCRIPTION =
 	"Recherchez un médicament vendu en France par nom (ex. Doliprane, amoxicilline), code CIS ou code CIP13 (sur la boîte) : présentations, prix, taux de remboursement Sécurité sociale, conditions de prescription et de délivrance (ordonnance), informations de sécurité ANSM et statut de médicament d'intérêt thérapeutique majeur (MITM). Vérifiez s'il est en rupture de stock ou en tension d'approvisionnement, avec la date de retour prévue, et consultez les ruptures en cours et les changements récents.";
