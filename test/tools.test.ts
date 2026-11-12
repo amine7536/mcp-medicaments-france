@@ -20,6 +20,19 @@ import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, MEDICINES, MONTH_RAW,
 import { withAddedFields } from "./addedOutputFields";
 import publishedOutputSchemas from "./fixtures/output-schemas.json";
 
+/** The served substances of the composition-seeded AMOXICILLINE BIOGARAN: a fraction without reference has no `reference` key. */
+const AMOXICILLINE_SUBSTANCES = [
+	{
+		name: "AMOXICILLINE TRIHYDRATÉE",
+		dosage: "574 mg",
+		reference: "une gélule",
+		therapeutic_fractions: [
+			{ name: "AMOXICILLINE", dosage: "500 mg", reference: "une gélule" },
+			{ name: "AMOXICILLINE ANHYDRE", dosage: null },
+		],
+	},
+];
+
 const SOURCE_LINE = `Source: ANSM (updated 2026-10-27), BDPM (release ${BDPM_RELEASE}, imported 2026-10-05).`;
 const UNKNOWN_SOURCE_LINE = "Source: ANSM (updated unknown), BDPM (release unknown, imported unknown).";
 const SAFETY_LINE = `Safety: ${SAFETY}`;
@@ -204,6 +217,14 @@ describe("search_medicine", () => {
 		expect(data.unmatched_shortages.map((s: { shortage_id: string }) => s.shortage_id)).toEqual([SHORTAGES.dolipraneUnmatched.id]);
 		expect(data.unmatched_shortages[0].match_confidence).toBeNull();
 		expect(summary(result)).toContain(SHORTAGES.dolipraneUnmatched.name);
+	});
+
+	it("serves the composition rows of a medicine, and its substances rows when it has no composition row", async () => {
+		const [amoxicilline] = (await call(searchMedicine, { query: "amoxicilline" })).data.results;
+		expect(amoxicilline.substances).toEqual(AMOXICILLINE_SUBSTANCES);
+		const [kardegic] = (await call(searchMedicine, { query: "kardegic" })).data.results;
+		expect(kardegic.substances).toEqual([{ name: "ACÉTYLSALICYLATE DE LYSINE", dosage: "75 mg" }]);
+		expect(Object.keys(kardegic.substances[0])).toEqual(["name", "dosage"]);
 	});
 
 	it("only_in_shortage keeps rupture and tension results; limit truncates", async () => {
@@ -855,6 +876,8 @@ describe("get_medicine_info", () => {
 			holder: null,
 			marketing_status: null,
 			is_mitm: true,
+			amm_status: "Autorisation active",
+			substances: [{ name: "PARACÉTAMOL", dosage: "1000 mg" }],
 		});
 		expect(Medicine.strict().safeParse(data.medicine).success).toBe(true);
 		for (const p of data.presentations) expect(Presentation.strict().safeParse(p).success).toBe(true);
@@ -908,12 +931,45 @@ describe("get_medicine_info", () => {
 		const { cis, name } = MEDICINES.amoxicilline;
 		await env.DB.prepare("UPDATE medicines SET routes = 'orale', holder = 'BIOGARAN', marketing_status = 'Commercialisée' WHERE cis = ?").bind(cis).run();
 		try {
-			const identity = { cis, name, form: "gélule", routes: "orale", holder: "BIOGARAN", marketing_status: "Commercialisée", is_mitm: true };
+			const identity = {
+				cis,
+				name,
+				form: "gélule",
+				routes: "orale",
+				holder: "BIOGARAN",
+				marketing_status: "Commercialisée",
+				is_mitm: true,
+				amm_status: "Autorisation active",
+				substances: AMOXICILLINE_SUBSTANCES,
+			};
 			expect((await call(getMedicineInfo, { cis })).data.medicine).toEqual(identity);
 			expect((await call(getMedicineInfo, { name: "amoxicilline" })).data.medicine).toEqual(identity);
 			expect((await call(getMedicineInfo, { cis: MEDICINES.kardegic.cis })).data.medicine.is_mitm).toBe(false);
 		} finally {
 			await env.DB.prepare("UPDATE medicines SET routes = NULL, holder = NULL, marketing_status = NULL WHERE cis = ?").bind(cis).run();
+		}
+	});
+
+	it("serves the AMM status and the composition with references and therapeutic fractions", async () => {
+		const zymad = (await call(getMedicineInfo, { cis: MEDICINES.zymad.cis })).data.medicine;
+		expect(zymad).toMatchObject({ amm_status: "Autorisation abrogée", substances: [{ name: "CHOLÉCALCIFÉROL", dosage: "80 000 UI" }] });
+		const { data } = await call(getMedicineInfo, { cis: MEDICINES.amoxicilline.cis });
+		expect(data.medicine.substances).toEqual(AMOXICILLINE_SUBSTANCES);
+		expect(Data.safeParse(data).success).toBe(true);
+	});
+
+	it("omits amm_status and substances for a medicine with a NULL status and no substance", async () => {
+		const cis = "60000099";
+		await env.DB.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, bdpm_updated_at) VALUES (?, 'SANS COMPOSITION', 'SANS COMPOSITION', ?)")
+			.bind(cis, BDPM_RELEASE)
+			.run();
+		try {
+			const { data } = await call(getMedicineInfo, { cis });
+			expect(data.kind).toBe("info");
+			expect(Object.keys(data.medicine)).not.toContain("amm_status");
+			expect(Object.keys(data.medicine)).not.toContain("substances");
+		} finally {
+			await env.DB.prepare("DELETE FROM medicines WHERE cis = ?").bind(cis).run();
 		}
 	});
 

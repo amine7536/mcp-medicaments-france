@@ -86,6 +86,22 @@ export const NotFound = outputObject({
 	did_you_mean: z.string().nullable(),
 });
 
+/** A therapeutic fraction (BDPM FT row) of a substance: the dosage of its active part, for example the base of a salt. */
+export const TherapeuticFraction = outputObject({
+	name: z.string(),
+	dosage: z.string().nullable(),
+	reference: z.string().optional(),
+});
+
+/** An active substance (BDPM SA row) of a medicine; `reference` and `therapeutic_fractions` are absent when the BDPM has none. */
+export const Substance = outputObject({
+	name: z.string(),
+	dosage: z.string().nullable(),
+	reference: z.string().optional(),
+	therapeutic_fractions: z.array(TherapeuticFraction).optional(),
+});
+export type Substance = z.infer<typeof Substance>;
+
 export const Medicine = outputObject({
 	cis: Cis,
 	name: z.string(),
@@ -94,6 +110,10 @@ export const Medicine = outputObject({
 	holder: z.string().nullable(),
 	marketing_status: z.string().nullable(),
 	is_mitm: z.boolean(),
+	/** BDPM authorisation (AMM) status; absent when unknown. */
+	amm_status: z.string().optional(),
+	/** Absent when the BDPM lists no substance. */
+	substances: z.array(Substance).optional(),
 });
 export type Medicine = z.infer<typeof Medicine>;
 

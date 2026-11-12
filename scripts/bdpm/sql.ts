@@ -48,8 +48,9 @@ export function insertStatements(
 }
 
 const COLS = {
-	medicines: ["cis", "denomination", "denomination_norm", "form", "routes", "marketing_status", "holder", "bdpm_updated_at"],
+	medicines: ["cis", "denomination", "denomination_norm", "form", "routes", "amm_status", "marketing_status", "holder", "bdpm_updated_at"],
 	substances: ["cis", "substance_name", "substance_norm", "dosage"],
+	composition: ["cis", "substance_name", "dosage", "reference", "therapeutic_fractions"],
 	mitm: ["cis", "atc_code"],
 	medicines_fts: ["cis", "denomination_norm", "substances_norm"],
 	presentations: [
@@ -88,23 +89,33 @@ export const TRGM_CREATE =
 export const TRGM_FILL =
 	"INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) SELECT cis, denomination_norm, substances_norm FROM medicines_fts";
 
-/** Full import file: creates the trigram index if missing, deletes, size-capped inserts, refills the trigram index, then the ingest_runs row. No BEGIN/COMMIT. */
+/** Creates the composition table when missing (same statement as migration 0013), so the import works before or after that migration. */
+export const COMPOSITION_CREATE =
+	"CREATE TABLE IF NOT EXISTS composition (cis TEXT NOT NULL, substance_name TEXT NOT NULL, dosage TEXT, reference TEXT, therapeutic_fractions TEXT)";
+/** Index of the composition table (same statement as migration 0013). */
+export const COMPOSITION_INDEX = "CREATE INDEX IF NOT EXISTS idx_composition_cis ON composition (cis)";
+
+/** Full import file: creates the trigram index and the composition table if missing, deletes, size-capped inserts, refills the trigram index, then the ingest_runs row. No BEGIN/COMMIT. */
 export function buildImportSql(input: ImportSqlInput): string {
-	const { medicines, substances, mitm, fts, presentations, prescription_conditions, safety_information, skipped, release, startedAt, finishedAt } = input;
-	const skippedTotal = skipped.medicines + skipped.substances + skipped.mitm;
-	const message = `medicines=${medicines.length} substances=${substances.length} mitm=${mitm.length} presentations=${presentations.length} prescription_conditions=${prescription_conditions.length} safety_information=${safety_information.length} skipped=${skippedTotal}`;
+	const { medicines, substances, composition, mitm, fts, presentations, prescription_conditions, safety_information, skipped, release, startedAt, finishedAt } = input;
+	const skippedTotal = skipped.medicines + skipped.substances + skipped.mitm + skipped.fractions;
+	const message = `medicines=${medicines.length} substances=${substances.length} composition=${composition.length} mitm=${mitm.length} presentations=${presentations.length} prescription_conditions=${prescription_conditions.length} safety_information=${safety_information.length} skipped=${skippedTotal}`;
 	const statements = [
 		`${TRGM_CREATE};`,
+		`${COMPOSITION_CREATE};`,
+		`${COMPOSITION_INDEX};`,
 		"DELETE FROM medicines_fts;",
 		"DELETE FROM medicines_trgm;",
 		"DELETE FROM mitm;",
 		"DELETE FROM substances;",
+		"DELETE FROM composition;",
 		"DELETE FROM medicines;",
 		"DELETE FROM presentations;",
 		"DELETE FROM prescription_conditions;",
 		"DELETE FROM safety_information;",
 		...insertStatements("medicines", COLS.medicines, values(medicines, COLS.medicines)),
 		...insertStatements("substances", COLS.substances, values(substances, COLS.substances)),
+		...insertStatements("composition", COLS.composition, values(composition, COLS.composition)),
 		...insertStatements("mitm", COLS.mitm, values(mitm, COLS.mitm)),
 		...insertStatements("medicines_fts", COLS.medicines_fts, values(fts, COLS.medicines_fts)),
 		`${TRGM_FILL};`,

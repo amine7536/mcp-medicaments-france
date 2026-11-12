@@ -108,6 +108,8 @@ async function info(db: D1Database, now: Date, m: MedicineRow, cip13: string | n
 		holder: m.holder,
 		marketing_status: m.marketing_status,
 		is_mitm: m.is_mitm,
+		...(m.amm_status !== null ? { amm_status: m.amm_status } : {}),
+		...(m.substances.length > 0 ? { substances: m.substances } : {}),
 	};
 	const [{ presentations, prescription_conditions, safety_information }, shortages] = await Promise.all([
 		loadInfo(db, m.cis, cip13, utcDate(now)),

@@ -37,6 +37,20 @@ export const ADDED_ENUM_VALUES: readonly AddedEnumValue[] = EXPECTED_RETURN_NODE
 	value: "season",
 }));
 
+/** The substance items of `search_medicine` results. */
+const SUBSTANCE_ITEMS = "/properties/data/oneOf/0/properties/results/items/properties/substances/items";
+
+/** The served JSON Schema of a substance's `therapeutic_fractions`. */
+const THERAPEUTIC_FRACTIONS = {
+	type: "array",
+	items: {
+		type: "object",
+		properties: { name: { type: "string" }, dosage: { type: ["string", "null"] }, reference: { type: "string" } },
+		required: ["name", "dosage"],
+		additionalProperties: {},
+	},
+};
+
 /** The output fields served beyond the published schema fixture; none of them is required. */
 export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 	...EXPECTED_RETURN_NODES.map(({ tool, path }) => ({ tool, path, property: "likely_overdue", schema: { type: "boolean", const: true } })),
@@ -99,6 +113,28 @@ export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 		property,
 		schema: { type: "string" },
 	})),
+	{ tool: "search_medicine", path: SUBSTANCE_ITEMS, property: "reference", schema: { type: "string" } },
+	{ tool: "search_medicine", path: SUBSTANCE_ITEMS, property: "therapeutic_fractions", schema: THERAPEUTIC_FRACTIONS },
+	{ tool: "get_medicine_info", path: "/properties/data/oneOf/0/properties/medicine", property: "amm_status", schema: { type: "string" } },
+	{
+		tool: "get_medicine_info",
+		path: "/properties/data/oneOf/0/properties/medicine",
+		property: "substances",
+		schema: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					name: { type: "string" },
+					dosage: { type: ["string", "null"] },
+					reference: { type: "string" },
+					therapeutic_fractions: THERAPEUTIC_FRACTIONS,
+				},
+				required: ["name", "dosage"],
+				additionalProperties: {},
+			},
+		},
+	},
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);

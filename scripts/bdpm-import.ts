@@ -53,9 +53,9 @@ async function main(): Promise<void> {
 	const { skipped } = mapped;
 	console.log(`BDPM release ${release}`);
 	console.log(
-		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length} presentations=${mapped.presentations.length} prescription_conditions=${mapped.prescription_conditions.length} safety_information=${mapped.safety_information.length}`,
+		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} composition=${mapped.composition.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length} presentations=${mapped.presentations.length} prescription_conditions=${mapped.prescription_conditions.length} safety_information=${mapped.safety_information.length}`,
 	);
-	console.log(`skipped medicines=${skipped.medicines} substances=${skipped.substances} mitm=${skipped.mitm}`);
+	console.log(`skipped medicines=${skipped.medicines} substances=${skipped.substances} mitm=${skipped.mitm} fractions=${skipped.fractions}`);
 	console.log(`wrote ${SQL_PATH}`);
 }
 
