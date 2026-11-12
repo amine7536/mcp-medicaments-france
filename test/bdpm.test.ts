@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { fetchBytes } from "../scripts/bdpm/download";
 import { cleanIndications, parseAnchor, parseApproval, parsePrice, parseRates, validateAndMap, type BdpmInput } from "../scripts/bdpm/map";
 import { decodeUtf8, parseBanner } from "../scripts/bdpm/parse";
-import { buildImportSql, insertStatements, sqlLiteral, TRGM_CREATE, TRGM_FILL } from "../scripts/bdpm/sql";
+import { buildImportSql, COMPOSITION_CREATE, COMPOSITION_INDEX, insertStatements, sqlLiteral, TRGM_CREATE, TRGM_FILL } from "../scripts/bdpm/sql";
 import { USER_AGENT } from "../src/ingest/http";
 import { decodeCp1252 } from "../src/lib/cp1252";
+import { normalize } from "../src/lib/normalize";
 import { parseTsv } from "../src/lib/tsv";
 
 const cis = (i: number): string => String(60_000_000 + i);
@@ -14,8 +15,8 @@ function medicineRow(i: number, denomination = `MEDICAMENT ${i} 10 mg, comprimé
 	return [cis(i), denomination, "comprimé", "orale", "Autorisation active", "Procédure nationale", "Commercialisée", "01/01/2020", "", "", "LABO", "Non"];
 }
 
-function compoRow(i: number, name: string, nature = "SA"): string[] {
-	return [cis(i), "comprimé", "1234", name, "10 mg", "un comprimé", nature, "1"];
+function compoRow(i: number, name: string, nature = "SA", element = "comprimé", dosage = "10 mg", reference = "un comprimé", link = "1"): string[] {
+	return [cis(i), element, "1234", name, dosage, reference, nature, link];
 }
 
 const cip13 = (i: number): string => String(3_400_900_000_000 + i);
@@ -143,10 +144,25 @@ describe("validateAndMap", () => {
 			denomination_norm: "NIFEDIPINE VIATRIS LP 30 MG",
 			form: "comprimé",
 			routes: null,
+			amm_status: "Autorisation active",
 			marketing_status: "Commercialisée",
 			holder: "VIATRIS",
 			bdpm_updated_at: "2026-09-29",
 		});
+	});
+
+	it("maps the AMM status from col 5, null when empty", () => {
+		const cisBdpm = input().cisBdpm;
+		cisBdpm[1] = medicineRow(1).with(4, "Autorisation abrogée");
+		cisBdpm[2] = medicineRow(2).with(4, "");
+		const { medicines } = validateAndMap(input({ cisBdpm }));
+		expect(medicines.slice(0, 3).map((m) => m.amm_status)).toEqual(["Autorisation active", "Autorisation abrogée", null]);
+	});
+
+	it("rejects a composition nature other than SA or FT", () => {
+		const compo = input().compo;
+		compo[7] = compoRow(7, "AMLODIPINE", "ST");
+		expect(() => validateAndMap(input({ compo }))).toThrow('CIS_COMPO_bdpm.txt: line 8 has nature "ST", expected SA or FT');
 	});
 
 	it("keeps SA substances only", () => {
@@ -161,12 +177,77 @@ describe("validateAndMap", () => {
 		const base = input();
 		base.cisBdpm[5] = medicineRow(5, "");
 		base.compo.push(compoRow(1, ""));
+		base.compo.push(compoRow(1, "FRACTION SANS SUBSTANCE", "FT", "comprimé", "1 mg", "un comprimé", "2"));
 		base.mitm.push(["99999999", "N02BE01", "X", "", "", "", ""]);
-		const { medicines, mitm, fts, skipped } = validateAndMap(base);
-		expect(skipped).toEqual({ medicines: 1, substances: 1, mitm: 2 });
+		const { medicines, mitm, fts, composition, skipped } = validateAndMap(base);
+		expect(skipped).toEqual({ medicines: 1, substances: 1, mitm: 2, fractions: 1 });
+		expect(composition).toHaveLength(25_000);
+		expect(composition.some((r) => r.therapeutic_fractions?.includes("FRACTION SANS SUBSTANCE"))).toBe(false);
 		expect(medicines).toHaveLength(11_999);
 		expect(fts).toHaveLength(11_999);
 		expect(mitm).toHaveLength(5_999);
+	});
+
+	it("links therapeutic fractions to the substance of the same element and link number", () => {
+		const [a, b, c] = [12_001, 12_002, 12_003];
+		const base = input();
+		base.cisBdpm.push(medicineRow(a), medicineRow(b), medicineRow(c));
+		base.compo.push(
+			compoRow(a, "AMLODIPINE", "FT", "gélule", "5,00 mg", "une gélule"),
+			compoRow(a, "AMLODIPINE (BÉSILATE D')", "SA", "gélule", "", ""),
+			compoRow(b, "VALSARTAN", "FT", "comprimé", "51,4 mg"),
+			compoRow(b, "COMPLEXE SODIQUE SACUBITRIL VALSARTAN HÉMIPENTAHYDRATÉ", "SA", "comprimé", "", ""),
+			compoRow(b, "SACUBITRIL", "FT", "comprimé", "48,6 mg"),
+			compoRow(c, "LÉVONORGESTREL", "SA", "comprimé blanc", "0,150 mg"),
+			compoRow(c, "LÉVONORGESTREL", "SA", "comprimé rose", "0,200 mg"),
+			compoRow(c, "X", "FT", "comprimé rose", "1 mg"),
+		);
+		const { composition, substances, fts, skipped } = validateAndMap(base);
+		const ours = new Set([cis(a), cis(b), cis(c)]);
+		const fractions = (...f: Array<{ name: string; dosage: string | null; reference: string | null }>): string => JSON.stringify(f);
+
+		expect(composition.filter((r) => ours.has(r.cis))).toEqual([
+			{
+				cis: cis(a),
+				substance_name: "AMLODIPINE (BÉSILATE D')",
+				dosage: null,
+				reference: null,
+				therapeutic_fractions: fractions({ name: "AMLODIPINE", dosage: "5,00 mg", reference: "une gélule" }),
+			},
+			{
+				cis: cis(b),
+				substance_name: "COMPLEXE SODIQUE SACUBITRIL VALSARTAN HÉMIPENTAHYDRATÉ",
+				dosage: null,
+				reference: null,
+				therapeutic_fractions: fractions({ name: "VALSARTAN", dosage: "51,4 mg", reference: "un comprimé" }, { name: "SACUBITRIL", dosage: "48,6 mg", reference: "un comprimé" }),
+			},
+			{ cis: cis(c), substance_name: "LÉVONORGESTREL", dosage: "0,150 mg", reference: "un comprimé", therapeutic_fractions: null },
+			{
+				cis: cis(c),
+				substance_name: "LÉVONORGESTREL",
+				dosage: "0,200 mg",
+				reference: "un comprimé",
+				therapeutic_fractions: fractions({ name: "X", dosage: "1 mg", reference: "un comprimé" }),
+			},
+		]);
+
+		const sa = (c: number, name: string, dosage: string | null) => ({ cis: cis(c), substance_name: name, substance_norm: normalize(name), dosage });
+		expect(substances.filter((s) => ours.has(s.cis))).toEqual([
+			sa(a, "AMLODIPINE (BÉSILATE D')", null),
+			sa(b, "COMPLEXE SODIQUE SACUBITRIL VALSARTAN HÉMIPENTAHYDRATÉ", null),
+			sa(c, "LÉVONORGESTREL", "0,150 mg"),
+			sa(c, "LÉVONORGESTREL", "0,200 mg"),
+		]);
+
+		const saNorm = (...names: string[]): string => [...new Set(names.map(normalize))].sort().join(" ");
+		expect(fts.filter((r) => ours.has(r.cis)).map((r) => [r.cis, r.substances_norm])).toEqual([
+			[cis(a), saNorm("AMLODIPINE (BÉSILATE D')")],
+			[cis(b), saNorm("COMPLEXE SODIQUE SACUBITRIL VALSARTAN HÉMIPENTAHYDRATÉ")],
+			[cis(c), saNorm("LÉVONORGESTREL")],
+		]);
+		expect(fts.find((r) => r.cis === cis(c))?.substances_norm.split(" ")).not.toContain("X");
+		expect(substances.some((s) => s.substance_name === "X")).toBe(false);
+		expect(skipped.fractions).toBe(0);
 	});
 
 	it("assembles FTS rows with distinct, sorted substances", () => {
@@ -433,17 +514,29 @@ describe("sql", () => {
 		});
 		expect(sql).not.toMatch(/\b(BEGIN|COMMIT)\b/i);
 		const lines = sql.trimEnd().split("\n");
-		expect(lines.slice(0, 9)).toEqual([
+		expect(lines.slice(0, 12)).toEqual([
 			`${TRGM_CREATE};`,
+			`${COMPOSITION_CREATE};`,
+			`${COMPOSITION_INDEX};`,
 			"DELETE FROM medicines_fts;",
 			"DELETE FROM medicines_trgm;",
 			"DELETE FROM mitm;",
 			"DELETE FROM substances;",
+			"DELETE FROM composition;",
 			"DELETE FROM medicines;",
 			"DELETE FROM presentations;",
 			"DELETE FROM prescription_conditions;",
 			"DELETE FROM safety_information;",
 		]);
+		expect(sql).toContain(
+			"INSERT INTO medicines (cis, denomination, denomination_norm, form, routes, amm_status, marketing_status, holder, bdpm_updated_at) VALUES " +
+				"('60000000','MEDICAMENT 0 10 mg, comprimé','MEDICAMENT 0 10 MG COMPRIME','comprimé','orale','Autorisation active','Commercialisée','LABO','2026-09-29'),",
+		);
+		expect(sql).toContain(
+			"INSERT INTO composition (cis, substance_name, dosage, reference, therapeutic_fractions) VALUES ('60000000','SUBSTANCE 0','10 mg','un comprimé',NULL),",
+		);
+		const lastSubstances = lines.findLastIndex((l) => l.startsWith("INSERT INTO substances "));
+		expect(lines[lastSubstances + 1]?.startsWith("INSERT INTO composition ")).toBe(true);
 		expect(sql).toContain(
 			"INSERT INTO safety_information (cis, title, url, starts_on, ends_on) VALUES ('60000000','Protoxyde d''azote : des intoxications en hausse','https://ansm.sante.fr/actualites/protoxyde-dazote-des-intoxications-en-hausse','2026-01-15','2027-01-15'),",
 		);
@@ -454,7 +547,7 @@ describe("sql", () => {
 		);
 		expect(lines.at(-1)).toBe(
 			"INSERT INTO ingest_runs (source, started_at, finished_at, status, entries_seen, bdpm_release, message) VALUES " +
-				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 mitm=6000 presentations=15000 prescription_conditions=20000 safety_information=5000 skipped=0');",
+				"('bdpm', '2026-10-27T10:00:00.000Z', '2026-10-27T10:01:00.000Z', 'ok', 12000, '2026-09-29', 'medicines=12000 substances=25000 composition=25000 mitm=6000 presentations=15000 prescription_conditions=20000 safety_information=5000 skipped=0');",
 		);
 	});
 });
@@ -481,5 +574,34 @@ describe("trigram index in the import", () => {
 		const lastFts = lines.findLastIndex((l) => l.startsWith("INSERT INTO medicines_fts "));
 		expect(lastFts).toBeGreaterThan(0);
 		expect(lines.indexOf(`${TRGM_FILL};`)).toBeGreaterThan(lastFts);
+	});
+});
+
+describe("composition table in the import", () => {
+	it("creates the composition table with the migration's statements before inserting it", () => {
+		const migration = env.TEST_MIGRATIONS.find((m) => m.name === "0013_composition.sql");
+		const statements = migration?.queries.map((q) =>
+			q
+				.split("\n")
+				.filter((line) => !line.trimStart().startsWith("--"))
+				.join("\n")
+				.trim()
+				.replace(/;$/, ""),
+		);
+		expect(statements).toContain(COMPOSITION_CREATE);
+		expect(statements).toContain(COMPOSITION_INDEX);
+		const sql = buildImportSql({
+			...validateAndMap(input()),
+			release: "2026-09-29",
+			startedAt: "2026-10-27T10:00:00.000Z",
+			finishedAt: "2026-10-27T10:01:00.000Z",
+		});
+		const lines = sql.trimEnd().split("\n");
+		const firstInsert = lines.findIndex((l) => l.startsWith("INSERT INTO composition "));
+		expect(firstInsert).toBeGreaterThan(0);
+		expect(lines.indexOf(`${COMPOSITION_CREATE};`)).toBeLessThan(firstInsert);
+		expect(lines.indexOf(`${COMPOSITION_INDEX};`)).toBeLessThan(firstInsert);
+		expect(lines.indexOf(`${COMPOSITION_CREATE};`)).toBeGreaterThanOrEqual(0);
+		expect(lines.indexOf(`${COMPOSITION_INDEX};`)).toBeGreaterThanOrEqual(0);
 	});
 });

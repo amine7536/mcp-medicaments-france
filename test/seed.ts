@@ -17,6 +17,8 @@ interface Med {
 	form: string;
 	substances: Array<[string, string]>;
 	atc?: string;
+	/** BDPM AMM status; "Autorisation active" when absent. */
+	amm?: string;
 }
 
 export const MEDICINES = {
@@ -35,8 +37,30 @@ export const MEDICINES = {
 	/** No shortage and no related entry. */
 	kardegic: { cis: "60000004", name: "KARDEGIC 75 mg, poudre pour solution buvable en sachet", form: "poudre", substances: [["ACÉTYLSALICYLATE DE LYSINE", "75 mg"]] },
 	/** Commercialisation stopped (city). */
-	zymad: { cis: "60000005", name: "ZYMAD 80 000 UI, solution buvable en ampoule", form: "solution buvable", substances: [["CHOLÉCALCIFÉROL", "80 000 UI"]] },
+	/** Commercialisation stopped (city); authorisation abrogated. */
+	zymad: {
+		cis: "60000005",
+		name: "ZYMAD 80 000 UI, solution buvable en ampoule",
+		form: "solution buvable",
+		substances: [["CHOLÉCALCIFÉROL", "80 000 UI"]],
+		amm: "Autorisation abrogée",
+	},
 } satisfies Record<string, Med>;
+
+/** BDPM composition rows by CIS, in source order; the other medicines have none and fall back to their `substances` rows. */
+export const COMPOSITION: Record<string, ReadonlyArray<{ substance_name: string; dosage: string | null; reference: string | null; therapeutic_fractions: string | null }>> = {
+	"60000003": [
+		{
+			substance_name: "AMOXICILLINE TRIHYDRATÉE",
+			dosage: "574 mg",
+			reference: "une gélule",
+			therapeutic_fractions: JSON.stringify([
+				{ name: "AMOXICILLINE", dosage: "500 mg", reference: "une gélule" },
+				{ name: "AMOXICILLINE ANHYDRE", dosage: null, reference: null },
+			]),
+		},
+	],
+};
 
 interface Presentation {
 	cip13: string;
@@ -236,12 +260,12 @@ const HISTORY: Array<[shortage: string, type: string, old_status: string | null,
 export async function seed(): Promise<void> {
 	await resetDb();
 	const db = env.DB;
-	const stmts: D1PreparedStatement[] = ["substances", "mitm", "medicines_fts", "medicines_trgm", "presentations", "prescription_conditions", "safety_information"].map((t) => db.prepare(`DELETE FROM ${t}`));
+	const stmts: D1PreparedStatement[] = ["substances", "composition", "mitm", "medicines_fts", "medicines_trgm", "presentations", "prescription_conditions", "safety_information"].map((t) => db.prepare(`DELETE FROM ${t}`));
 	for (const m of Object.values(MEDICINES) as Med[]) {
 		stmts.push(
 			db
-				.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, form, bdpm_updated_at) VALUES (?, ?, ?, ?, ?)")
-				.bind(m.cis, m.name, normalize(m.name), m.form, BDPM_RELEASE),
+				.prepare("INSERT INTO medicines (cis, denomination, denomination_norm, form, amm_status, bdpm_updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+				.bind(m.cis, m.name, normalize(m.name), m.form, m.amm ?? "Autorisation active", BDPM_RELEASE),
 		);
 		for (const [name, dosage] of m.substances) {
 			stmts.push(
@@ -261,6 +285,15 @@ export async function seed(): Promise<void> {
 				.prepare("INSERT INTO medicines_trgm (cis, denomination_norm, substances_norm) VALUES (?, ?, ?)")
 				.bind(m.cis, normalize(m.name), m.substances.map(([n]) => normalize(n)).join(" ")),
 		);
+	}
+	for (const [cis, rows] of Object.entries(COMPOSITION)) {
+		for (const r of rows) {
+			stmts.push(
+				db
+					.prepare("INSERT INTO composition (cis, substance_name, dosage, reference, therapeutic_fractions) VALUES (?, ?, ?, ?, ?)")
+					.bind(cis, r.substance_name, r.dosage, r.reference, r.therapeutic_fractions),
+			);
+		}
 	}
 	for (const p of Object.values(PRESENTATIONS) as Presentation[]) {
 		stmts.push(

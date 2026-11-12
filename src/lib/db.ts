@@ -1,4 +1,4 @@
-import type { Presentation, SafetyInformation, ShortageRow } from "../mcp/schemas";
+import type { Presentation, SafetyInformation, ShortageRow, Substance } from "../mcp/schemas";
 import { ftsTokens, normalize, tokens } from "./normalize";
 
 const SHORTAGE_COLUMNS = [
@@ -215,29 +215,70 @@ export interface MedicineRow {
 	routes: string | null;
 	holder: string | null;
 	marketing_status: string | null;
+	amm_status: string | null;
 	is_mitm: boolean;
 	atc_code: string | null;
-	substances: Array<{ name: string; dosage: string | null }>;
+	substances: Substance[];
 }
 
-/** Medicines by CIS with their substances and MITM status; unknown CIS are absent. */
+interface CompositionRow {
+	cis: string;
+	name: string;
+	dosage: string | null;
+	reference: string | null;
+	/** JSON array of `{name, dosage, reference}`, reference null when empty. */
+	therapeutic_fractions: string | null;
+}
+
+/** A `composition` row as a substance item: `reference` and `therapeutic_fractions` only when set, each fraction's `reference` only when set. */
+function toSubstance(r: CompositionRow): Substance {
+	const fractions =
+		r.therapeutic_fractions === null
+			? null
+			: (JSON.parse(r.therapeutic_fractions) as Array<{ name: string; dosage: string | null; reference: string | null }>).map((f) => ({
+					name: f.name,
+					dosage: f.dosage,
+					...(f.reference !== null ? { reference: f.reference } : {}),
+				}));
+	return {
+		name: r.name,
+		dosage: r.dosage,
+		...(r.reference !== null ? { reference: r.reference } : {}),
+		...(fractions !== null ? { therapeutic_fractions: fractions } : {}),
+	};
+}
+
+/**
+ * Medicines by CIS with their substances, AMM status and MITM status; unknown CIS are absent. A CIS with `composition` rows
+ * gets its substances from them; one without (before the first import that fills the table) gets them from `substances`.
+ */
 export async function getMedicines(db: D1Database, cis: readonly string[]): Promise<Map<string, MedicineRow>> {
 	const out = new Map<string, MedicineRow>();
 	if (cis.length === 0) return out;
 	const ids = json(cis);
-	const [meds, subs] = await db.batch([
+	const [meds, subs, compo] = await db.batch([
 		db
 			.prepare(
-				"SELECT m.cis, m.denomination AS name, m.denomination_norm, m.form, m.routes, m.holder, m.marketing_status, t.atc_code FROM medicines m LEFT JOIN mitm t ON t.cis = m.cis WHERE m.cis IN (SELECT value FROM json_each(?))",
+				"SELECT m.cis, m.denomination AS name, m.denomination_norm, m.form, m.routes, m.holder, m.marketing_status, m.amm_status, t.atc_code FROM medicines m LEFT JOIN mitm t ON t.cis = m.cis WHERE m.cis IN (SELECT value FROM json_each(?))",
 			)
 			.bind(ids),
 		db.prepare("SELECT cis, substance_name AS name, dosage FROM substances WHERE cis IN (SELECT value FROM json_each(?)) ORDER BY rowid").bind(ids),
+		db
+			.prepare(
+				"SELECT cis, substance_name AS name, dosage, reference, therapeutic_fractions FROM composition WHERE cis IN (SELECT value FROM json_each(?)) ORDER BY rowid",
+			)
+			.bind(ids),
 	]);
 	for (const m of (meds?.results ?? []) as Array<Omit<MedicineRow, "is_mitm" | "substances">>) {
 		out.set(m.cis, { ...m, is_mitm: m.atc_code !== null, substances: [] });
 	}
+	const composed = new Set<string>();
+	for (const r of (compo?.results ?? []) as CompositionRow[]) {
+		composed.add(r.cis);
+		out.get(r.cis)?.substances.push(toSubstance(r));
+	}
 	for (const s of (subs?.results ?? []) as Array<{ cis: string; name: string; dosage: string | null }>) {
-		out.get(s.cis)?.substances.push({ name: s.name, dosage: s.dosage });
+		if (!composed.has(s.cis)) out.get(s.cis)?.substances.push({ name: s.name, dosage: s.dosage });
 	}
 	return out;
 }

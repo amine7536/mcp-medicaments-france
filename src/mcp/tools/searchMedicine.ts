@@ -3,7 +3,7 @@ import { cisByCip13, currentShortages, MATCH_CAP, orderedMedicines, searchNames,
 import { normalize, tokens } from "../../lib/normalize";
 import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { inShortage, matchCount } from "../resolve";
-import { Cip13, Cis, describeShortage, isValidEan13, outputObject, ShortageSummary, toShortageSummary } from "../schemas";
+import { Cip13, Cis, describeShortage, isValidEan13, outputObject, ShortageSummary, Substance, toShortageSummary } from "../schemas";
 import { INFO_ONLY, NOT_FOUND_HINT, type Tool } from "../tool";
 
 const UNMATCHED_LIMIT = 10;
@@ -44,7 +44,7 @@ export const Data = z.discriminatedUnion("kind", [
 				cis: Cis,
 				name: z.string(),
 				form: z.string().nullable(),
-				substances: z.array(outputObject({ name: z.string(), dosage: z.string().nullable() })),
+				substances: z.array(Substance),
 				is_mitm: z.boolean(),
 				shortage: ShortageSummary.nullable(),
 				shortage_note: z.literal(SHORTAGE_NOTE).optional(),

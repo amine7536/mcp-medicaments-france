@@ -18,6 +18,7 @@ export interface MedicineRow {
 	denomination_norm: string;
 	form: string | null;
 	routes: string | null;
+	amm_status: string | null;
 	marketing_status: string | null;
 	holder: string | null;
 	bdpm_updated_at: string;
@@ -28,6 +29,16 @@ interface SubstanceRow {
 	substance_name: string;
 	substance_norm: string;
 	dosage: string | null;
+}
+
+/** A substance (SA row) with its reference and the therapeutic fractions (FT rows) linked to it. */
+interface CompositionRow {
+	cis: string;
+	substance_name: string;
+	dosage: string | null;
+	reference: string | null;
+	/** JSON array of `{name, dosage, reference}` in file order; null when no FT row is linked. */
+	therapeutic_fractions: string | null;
 }
 
 interface MitmRow {
@@ -77,11 +88,14 @@ interface Skipped {
 	medicines: number;
 	substances: number;
 	mitm: number;
+	/** FT rows linked to no stored SA row. */
+	fractions: number;
 }
 
 export interface Mapped {
 	medicines: MedicineRow[];
 	substances: SubstanceRow[];
+	composition: CompositionRow[];
 	mitm: MitmRow[];
 	fts: FtsRow[];
 	presentations: PresentationRow[];
@@ -226,6 +240,40 @@ function mapSafetyInformation(rows: string[][]): SafetyInformationRow[] {
 	});
 }
 
+/** Composition nature: active substance or therapeutic fraction. */
+const NATURES = new Set(["SA", "FT"]);
+
+/** An FT row links to the SA rows of the same CIS, element designation and link number. */
+const fractionKey = (r: string[]): string => `${req(r[0])}\t${req(r[1])}\t${req(r[7])}`;
+
+/**
+ * One row per SA row with a non-empty name, in file order, with the FT rows of the same CIS, element and link number
+ * (in file order, wherever they sit in the file). FT rows linked to no stored SA row are counted, not stored.
+ */
+function mapComposition(rows: string[][]): { composition: CompositionRow[]; unattached: number } {
+	const fractions = new Map<string, Array<{ name: string; dosage: string | null; reference: string | null }>>();
+	for (const r of rows) {
+		if (r[6] !== "FT") continue;
+		const key = fractionKey(r);
+		let list = fractions.get(key);
+		if (!list) fractions.set(key, (list = []));
+		list.push({ name: req(r[3]), dosage: opt(r[4]), reference: opt(r[5]) });
+	}
+	const attached = new Set<string>();
+	const composition: CompositionRow[] = [];
+	for (const r of rows) {
+		const name = req(r[3]);
+		if (r[6] !== "SA" || name === "") continue;
+		const key = fractionKey(r);
+		const linked = fractions.get(key);
+		if (linked) attached.add(key);
+		composition.push({ cis: req(r[0]), substance_name: name, dosage: opt(r[4]), reference: opt(r[5]), therapeutic_fractions: linked ? JSON.stringify(linked) : null });
+	}
+	let unattached = 0;
+	for (const [key, list] of fractions) if (!attached.has(key)) unattached += list.length;
+	return { composition, unattached };
+}
+
 /** Validates the parsed BDPM files and maps them to table rows. Throws on any validation failure. */
 export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescriptionConditions, safetyInformation, bannerDate }: BdpmInput): Mapped {
 	validate(cisBdpm, FILES.cisBdpm);
@@ -237,9 +285,14 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 	mitm.forEach((row, i) => {
 		if (req(row[1]) === "") throw new Error(`${FILES.mitm.name}: line ${i + 1} has an empty ATC, expected a non-empty value`);
 	});
+	compo.forEach((row, i) => {
+		const nature = req(row[6]);
+		if (!NATURES.has(nature)) throw new Error(`${FILES.compo.name}: line ${i + 1} has nature "${nature}", expected SA or FT`);
+	});
 	if (bannerDate === null) throw new Error("telechargement: release date banner not found or invalid");
 
-	const skipped: Skipped = { medicines: 0, substances: 0, mitm: 0 };
+	const { composition, unattached } = mapComposition(compo);
+	const skipped: Skipped = { medicines: 0, substances: 0, mitm: 0, fractions: unattached };
 
 	const medicines: MedicineRow[] = [];
 	for (const r of cisBdpm) {
@@ -254,6 +307,7 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 			denomination_norm: normalize(denomination),
 			form: opt(r[2]),
 			routes: opt(r[3]),
+			amm_status: opt(r[4]),
 			marketing_status: opt(r[6]),
 			holder: opt(r[10]),
 			bdpm_updated_at: bannerDate,
@@ -300,5 +354,5 @@ export function validateAndMap({ cisBdpm, compo, mitm, presentations, prescripti
 		substances_norm: [...(byCis.get(m.cis) ?? [])].sort().join(" "),
 	}));
 
-	return { medicines, substances, mitm: mitmRows, fts, presentations: presentationRows, prescription_conditions: conditionRows, safety_information: safetyRows, skipped };
+	return { medicines, substances, composition, mitm: mitmRows, fts, presentations: presentationRows, prescription_conditions: conditionRows, safety_information: safetyRows, skipped };
 }
