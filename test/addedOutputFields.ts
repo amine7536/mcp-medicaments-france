@@ -51,6 +51,23 @@ const THERAPEUTIC_FRACTIONS = {
 	},
 };
 
+/** The served JSON Schema of a HAS opinion list of `get_medicine_info`. */
+const HAS_OPINION_ITEMS = {
+	type: "array",
+	items: {
+		type: "object",
+		properties: {
+			date: { type: "string", format: "date", pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$" },
+			dossier: { type: "string" },
+			motif: { type: "string" },
+			value: { type: "string" },
+			ct_url: { type: "string", format: "uri" },
+		},
+		required: ["date", "dossier", "motif", "value"],
+		additionalProperties: {},
+	},
+};
+
 /** The output fields served beyond the published schema fixture; none of them is required. */
 export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 	...EXPECTED_RETURN_NODES.map(({ tool, path }) => ({ tool, path, property: "likely_overdue", schema: { type: "boolean", const: true } })),
@@ -133,6 +150,17 @@ export const ADDED_OUTPUT_FIELDS: readonly AddedOutputField[] = [
 				required: ["name", "dosage"],
 				additionalProperties: {},
 			},
+		},
+	},
+	{
+		tool: "get_medicine_info",
+		path: "/properties/data/oneOf/0",
+		property: "has_opinions",
+		schema: {
+			type: "object",
+			properties: { smr: HAS_OPINION_ITEMS, asmr: HAS_OPINION_ITEMS },
+			required: ["smr", "asmr"],
+			additionalProperties: {},
 		},
 	},
 ];

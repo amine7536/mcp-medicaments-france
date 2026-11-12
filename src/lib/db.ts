@@ -1,4 +1,4 @@
-import type { Presentation, SafetyInformation, ShortageRow, Substance } from "../mcp/schemas";
+import type { HasOpinions, Presentation, SafetyInformation, ShortageRow, Substance } from "../mcp/schemas";
 import { ftsTokens, normalize, tokens } from "./normalize";
 
 const SHORTAGE_COLUMNS = [
@@ -516,4 +516,28 @@ export async function getMedicineInfo(db: D1Database, cis: string, cip13: string
 		prescription_conditions: ((conditions?.results ?? []) as Array<{ condition: string }>).map((r) => r.condition),
 		safety_information: (safety?.results ?? []) as SafetyInformation[],
 	};
+}
+
+/**
+ * The HAS opinions of a CIS listed in the BDPM: per kind, the items of its latest opinion date ordered by position, each with the HAS page
+ * of its dossier when `has_ct_links` has one (key absent otherwise). Null when the CIS has no opinion.
+ */
+export async function getHasOpinions(db: D1Database, cis: string): Promise<HasOpinions | null> {
+	const [opinions, links] = await db.batch([
+		db
+			.prepare(
+				"SELECT o.kind, o.opinion_date, o.dossier, o.motif, o.value FROM has_opinions o WHERE o.cis = ? AND o.kind IN ('smr', 'asmr') AND o.opinion_date = (SELECT MAX(l.opinion_date) FROM has_opinions l WHERE l.cis = o.cis AND l.kind = o.kind) ORDER BY o.kind, o.position",
+			)
+			.bind(cis),
+		db.prepare("SELECT dossier, url FROM has_ct_links WHERE dossier IN (SELECT dossier FROM has_opinions WHERE cis = ?)").bind(cis),
+	]);
+	const rows = (opinions?.results ?? []) as Array<{ kind: "smr" | "asmr"; opinion_date: string; dossier: string; motif: string; value: string }>;
+	if (rows.length === 0) return null;
+	const urls = new Map(((links?.results ?? []) as Array<{ dossier: string; url: string }>).map((l) => [l.dossier, l.url]));
+	const out: HasOpinions = { smr: [], asmr: [] };
+	for (const r of rows) {
+		const url = urls.get(r.dossier);
+		out[r.kind].push({ date: r.opinion_date, dossier: r.dossier, motif: r.motif, value: r.value, ...(url !== undefined ? { ct_url: url } : {}) });
+	}
+	return out;
 }

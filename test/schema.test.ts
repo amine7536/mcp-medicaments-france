@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 const TABLES = [
 	"bdpm_dispo",
 	"composition",
+	"has_ct_links",
+	"has_opinions",
 	"ingest_runs",
 	"medicines",
 	"medicines_fts",

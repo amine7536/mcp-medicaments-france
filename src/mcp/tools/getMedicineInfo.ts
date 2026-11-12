@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { cisByCip13, currentShortages, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
+import { cisByCip13, currentShortages, getHasOpinions, getMedicineInfo as loadInfo, getMedicines, MARKETED, type MedicineRow } from "../../lib/db";
 import { envelopeSchema, loadSourceDates, toolResult } from "../envelope";
 import { candidatesData, notFound, resolveName } from "../resolve";
 import {
@@ -7,6 +7,8 @@ import {
 	Cip13,
 	Cis,
 	describeShortage,
+	type HasOpinion,
+	HasOpinions,
 	isValidEan13,
 	Medicine,
 	NotFound,
@@ -44,6 +46,8 @@ export const Data = z.discriminatedUnion("kind", [
 		safety_information: z.array(SafetyInformation),
 		ansm_shortage: ShortageSummary.nullable(),
 		status_conflict: z.string().nullable(),
+		/** Absent when the BDPM lists no HAS opinion for the medicine. */
+		has_opinions: HasOpinions.optional(),
 	}),
 	Candidates,
 	NotFound,
@@ -68,7 +72,22 @@ function statusConflict(entries: readonly ShortageRow[], presentations: readonly
 	return `Status conflict: the BDPM lists ${marketed} marketed box(es), but ANSM lists "${stop.status_raw}" (entry ${stop.id})${since}. The BDPM may not reflect the marketing stop.`;
 }
 
-/** The medicine line, the ANSM shortage status and status conflict when any, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`). */
+const opinionItems = (items: readonly HasOpinion[]): string => items.map((o) => `${o.value} (${o.motif})`).join(", ");
+
+/** One line: the latest SMR and ASMR opinion of each non-empty kind, the per-indication caveat and the HAS pages of the shown items. */
+function hasOpinionsLine(opinions: HasOpinions): string {
+	const kinds = (["smr", "asmr"] as const)
+		.filter((k) => opinions[k].length > 0)
+		.map((k) => `${k.toUpperCase()} of ${(opinions[k][0] as HasOpinion).date}: ${opinionItems(opinions[k])}`);
+	const urls = [...new Set([...opinions.smr, ...opinions.asmr].flatMap((o) => (o.ct_url === undefined ? [] : [o.ct_url])))];
+	const pages =
+		urls.length === 0
+			? "the HAS opinion gives the indications (no HAS page URL listed in the BDPM)"
+			: `the HAS opinion page gives the indications: ${urls.join(", ")}`;
+	return `Latest HAS opinions listed in the BDPM (newer HAS opinions may be missing): ${kinds.join("; ")}. SMR and ASMR values can differ by indication; ${pages}.`;
+}
+
+/** The medicine line, the ANSM shortage status and status conflict when any, one line per marketed presentation (at most `SUMMARY_LIMIT`), the BDPM conditions verbatim, then the ANSM safety information titles and links (at most `SAFETY_SUMMARY_LIMIT`), then the HAS opinions when any. */
 function infoSummary(
 	medicine: Medicine,
 	presentations: Presentation[],
@@ -76,6 +95,7 @@ function infoSummary(
 	safety: SafetyInformation[],
 	shortage: ShortageSummary | null,
 	conflict: string | null,
+	opinions: HasOpinions | null,
 ): string {
 	const marketed = presentations.filter((p) => p.marketing_status === MARKETED);
 	const lines = [`${medicine.name} (CIS ${medicine.cis}): ${marketed.length} marketed box(es) out of ${presentations.length}.`];
@@ -96,6 +116,7 @@ function infoSummary(
 					.map((item) => `${item.title} (${item.url})`)
 					.join("; ")}. ${SAFETY_ADVICE}`,
 	);
+	if (opinions !== null) lines.push(hasOpinionsLine(opinions));
 	return lines.join("\n");
 }
 
@@ -111,16 +132,26 @@ async function info(db: D1Database, now: Date, m: MedicineRow, cip13: string | n
 		...(m.amm_status !== null ? { amm_status: m.amm_status } : {}),
 		...(m.substances.length > 0 ? { substances: m.substances } : {}),
 	};
-	const [{ presentations, prescription_conditions, safety_information }, shortages] = await Promise.all([
+	const [{ presentations, prescription_conditions, safety_information }, shortages, has_opinions] = await Promise.all([
 		loadInfo(db, m.cis, cip13, utcDate(now)),
 		currentShortages(db, [m.cis]),
+		getHasOpinions(db, m.cis),
 	]);
 	const linked = shortages.get(m.cis);
 	const ansm_shortage = linked === undefined ? null : toShortageSummary(linked.current, now);
 	const status_conflict = linked === undefined ? null : statusConflict([linked.current, ...linked.others], presentations);
 	return {
-		data: { kind: "info", medicine, presentations, prescription_conditions, safety_information, ansm_shortage, status_conflict },
-		summary: infoSummary(medicine, presentations, prescription_conditions, safety_information, ansm_shortage, status_conflict),
+		data: {
+			kind: "info",
+			medicine,
+			presentations,
+			prescription_conditions,
+			safety_information,
+			ansm_shortage,
+			status_conflict,
+			...(has_opinions !== null ? { has_opinions } : {}),
+		},
+		summary: infoSummary(medicine, presentations, prescription_conditions, safety_information, ansm_shortage, status_conflict, has_opinions),
 	};
 }
 
