@@ -82,7 +82,7 @@ function hasOpinionsLine(opinions: HasOpinions): string {
 	const urls = [...new Set([...opinions.smr, ...opinions.asmr].flatMap((o) => (o.ct_url === undefined ? [] : [o.ct_url])))];
 	const pages =
 		urls.length === 0
-			? "the HAS opinion gives the indications (no HAS page URL listed in the BDPM)"
+			? "the HAS opinion gives the indications (no HAS page URL served)"
 			: `the HAS opinion page gives the indications: ${urls.join(", ")}`;
 	return `Latest HAS opinions listed in the BDPM (newer HAS opinions may be missing): ${kinds.join("; ")}. SMR and ASMR values can differ by indication; ${pages}.`;
 }
