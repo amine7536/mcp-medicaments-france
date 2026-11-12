@@ -131,6 +131,25 @@ export const SAFETY_INFORMATION: Record<string, ReadonlyArray<{ title: string; u
 	],
 };
 
+/** BDPM HAS opinion rows (positions per kind as the import assigns them), inserted in reverse to check the ordering. */
+export const HAS_OPINIONS: ReadonlyArray<{ cis: string; kind: "smr" | "asmr"; dossier: string; motif: string; opinion_date: string; value: string; position: number }> = [
+	// KARDEGIC: an older SMR opinion, then two SMR values of one linked dossier and one of a dossier without a stored page at the latest date.
+	{ cis: "60000004", kind: "smr", dossier: "CT-500", motif: "Inscription (CT)", opinion_date: "2019-05-02", value: "Important", position: 1 },
+	{ cis: "60000004", kind: "smr", dossier: "CT-900", motif: "Inscription (CT)", opinion_date: "2025-08-27", value: "Insuffisant", position: 2 },
+	{ cis: "60000004", kind: "smr", dossier: "CT-900", motif: "Inscription (CT)", opinion_date: "2025-08-27", value: "Modéré", position: 3 },
+	{ cis: "60000004", kind: "smr", dossier: "CT-901", motif: "Extension d'indication", opinion_date: "2025-08-27", value: "Faible", position: 4 },
+	{ cis: "60000004", kind: "asmr", dossier: "CT-500", motif: "Inscription (CT)", opinion_date: "2019-05-02", value: "IV", position: 1 },
+	{ cis: "60000004", kind: "asmr", dossier: "CT-900", motif: "Inscription (CT)", opinion_date: "2025-08-27", value: "V", position: 2 },
+	// ZYMAD: ASMR only, on a dossier without a stored page.
+	{ cis: "60000005", kind: "asmr", dossier: "CT-700", motif: "Réévaluation ASMR", opinion_date: "2024-03-01", value: "Commentaires sans chiffrage de l'ASMR", position: 3 },
+];
+
+/** BDPM HAS opinion pages of single-page dossiers; CT-901 and CT-700 have none (what the import leaves for a multi-page dossier). */
+export const HAS_CT_LINKS: Readonly<Record<string, string>> = {
+	"CT-500": "https://www.has-sante.fr/jcms/c_500",
+	"CT-900": "https://www.has-sante.fr/jcms/p_900",
+};
+
 interface Shortage {
 	id: string;
 	name: string;
@@ -260,7 +279,7 @@ const HISTORY: Array<[shortage: string, type: string, old_status: string | null,
 export async function seed(): Promise<void> {
 	await resetDb();
 	const db = env.DB;
-	const stmts: D1PreparedStatement[] = ["substances", "composition", "mitm", "medicines_fts", "medicines_trgm", "presentations", "prescription_conditions", "safety_information"].map((t) => db.prepare(`DELETE FROM ${t}`));
+	const stmts: D1PreparedStatement[] = ["substances", "composition", "mitm", "medicines_fts", "medicines_trgm", "presentations", "prescription_conditions", "safety_information", "has_opinions", "has_ct_links"].map((t) => db.prepare(`DELETE FROM ${t}`));
 	for (const m of Object.values(MEDICINES) as Med[]) {
 		stmts.push(
 			db
@@ -318,6 +337,14 @@ export async function seed(): Promise<void> {
 			);
 		}
 	}
+	for (const o of [...HAS_OPINIONS].reverse()) {
+		stmts.push(
+			db
+				.prepare("INSERT INTO has_opinions (cis, kind, dossier, motif, opinion_date, value, position) VALUES (?, ?, ?, ?, ?, ?, ?)")
+				.bind(o.cis, o.kind, o.dossier, o.motif, o.opinion_date, o.value, o.position),
+		);
+	}
+	for (const [dossier, url] of Object.entries(HAS_CT_LINKS)) stmts.push(db.prepare("INSERT INTO has_ct_links (dossier, url) VALUES (?, ?)").bind(dossier, url));
 	for (const s of Object.values(SHORTAGES) as Shortage[]) {
 		stmts.push(
 			db

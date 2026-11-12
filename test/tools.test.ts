@@ -4,10 +4,10 @@ import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/valida
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as z from "zod";
 import { log } from "../src/ingest/http";
-import { type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKETED } from "../src/lib/db";
+import { getHasOpinions, type HistoryRow, getMedicineInfo as loadInfo, MARKETED, MEDICINE_MARKETED } from "../src/lib/db";
 import { normalize } from "../src/lib/normalize";
 import { ANSM_SOURCE_URL, BDPM_SOURCE_URL, COVERAGE_NOTE, DISCLAIMER, isStale, SAFETY, sourceLine } from "../src/mcp/envelope";
-import { CHANGE_TYPES, describeShortage, ean13CheckDigit, isValidEan13, likelyOverdueNote, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
+import { CHANGE_TYPES, describeShortage, ean13CheckDigit, HasOpinion, HasOpinions, isValidEan13, likelyOverdueNote, Medicine, Presentation, SafetyInformation, type ShortageRow } from "../src/mcp/schemas";
 import { candidatesData, candidatesSummary, RESOLVE_LIMIT, resolveName } from "../src/mcp/resolve";
 import { INFO_ONLY, NOT_FOUND_HINT, runTool, type Tool, type ToolContext, UNAVAILABLE } from "../src/mcp/tool";
 import { getAvailability, LINKED_LIMIT, NOT_LISTED, statusSince } from "../src/mcp/tools/getAvailability";
@@ -16,7 +16,7 @@ import { byCandidates, isMajorTherapeuticInterest, MITM_DEFINITION, mixSentence 
 import { listCurrentShortages } from "../src/mcp/tools/listCurrentShortages";
 import { CHANGES_NOTE, recentChanges } from "../src/mcp/tools/recentChanges";
 import { SHORTAGE_NOTE, searchMedicine } from "../src/mcp/tools/searchMedicine";
-import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
+import { ANSM_LAST_INGEST, BDPM_IMPORTED_AT, BDPM_RELEASE, HAS_CT_LINKS, MEDICINES, MONTH_RAW, NOW, PASSED_RAW, PRESCRIPTION_CONDITIONS, PRESENTATIONS, SAFETY_INFORMATION, SHORTAGES, seed } from "./seed";
 import { withAddedFields } from "./addedOutputFields";
 import publishedOutputSchemas from "./fixtures/output-schemas.json";
 
@@ -1117,8 +1117,69 @@ describe("get_medicine_info", () => {
 		expect(summary(result)).not.toContain(SHORTAGES.dolipraneUnmatched.name);
 	});
 
+	it("serves the latest-date HAS opinions per kind, with the HAS page of single-page dossiers only, and one summary line", async () => {
+		const page = HAS_CT_LINKS["CT-900"];
+		for (const args of [{ cis: MEDICINES.kardegic.cis }, { name: "kardegic" }]) {
+			const { data, result } = await call(getMedicineInfo, args);
+			expect(data.has_opinions).toEqual({
+				smr: [
+					{ date: "2025-08-27", dossier: "CT-900", motif: "Inscription (CT)", value: "Insuffisant", ct_url: page },
+					{ date: "2025-08-27", dossier: "CT-900", motif: "Inscription (CT)", value: "Modéré", ct_url: page },
+					{ date: "2025-08-27", dossier: "CT-901", motif: "Extension d'indication", value: "Faible" },
+				],
+				asmr: [{ date: "2025-08-27", dossier: "CT-900", motif: "Inscription (CT)", value: "V", ct_url: page }],
+			});
+			expect(Object.keys(data.has_opinions.smr[2])).not.toContain("ct_url");
+			expect(HasOpinions.strict().safeParse(data.has_opinions).success).toBe(true);
+			for (const item of [...data.has_opinions.smr, ...data.has_opinions.asmr]) expect(HasOpinion.strict().safeParse(item).success).toBe(true);
+			const lines = summary(result).split("\n");
+			const has = lines.filter((l) => l.includes("HAS opinion"));
+			expect(has).toHaveLength(1);
+			expect(lines.indexOf(has[0] as string)).toBe(lines.findIndex((l) => l === NO_SAFETY_INFORMATION || l.startsWith("ANSM safety information")) + 1);
+			for (const v of ["2025-08-27", "Insuffisant", "Modéré", "Faible", "V (Inscription (CT))", "Extension d'indication", page]) expect(has[0]).toContain(v);
+			// Older opinions are not served.
+			expect(text(result)).not.toContain("2019-05-02");
+			expect(text(result)).not.toContain(HAS_CT_LINKS["CT-500"]);
+			expect(text(result).match(/https:\/\/www\.has-sante\.fr\/\S+/g)?.every((u) => u.startsWith(page))).toBe(true);
+		}
+	});
+
+	it("serves an empty SMR list for a medicine with ASMR opinions only, and no HAS page URL without a stored page", async () => {
+		const { data, result } = await call(getMedicineInfo, { cis: MEDICINES.zymad.cis });
+		expect(data.has_opinions).toEqual({
+			smr: [],
+			asmr: [{ date: "2024-03-01", dossier: "CT-700", motif: "Réévaluation ASMR", value: "Commentaires sans chiffrage de l'ASMR" }],
+		});
+		const line = summary(result).split("\n").find((l) => l.includes("HAS opinion")) as string;
+		expect(line).toContain("2024-03-01");
+		expect(line).toContain("Commentaires sans chiffrage de l'ASMR");
+		expect(line).not.toMatch(/\bSMR of/);
+		expect(text(result)).not.toContain("has-sante.fr");
+	});
+
+	it("has no has_opinions key and no HAS line for a medicine without opinions", async () => {
+		for (const cis of [MEDICINES.dolipraneTablet.cis, MEDICINES.amoxicilline.cis]) {
+			const { data, result } = await call(getMedicineInfo, { cis });
+			expect(Object.keys(data)).not.toContain("has_opinions");
+			expect(summary(result)).not.toContain("HAS opinion");
+		}
+		expect(await getHasOpinions(env.DB, MEDICINES.dolipraneTablet.cis)).toBeNull();
+	});
+
+	it("reads the HAS opinions in a single D1 batch", async () => {
+		const batch = vi.spyOn(env.DB, "batch");
+		try {
+			expect((await getHasOpinions(env.DB, MEDICINES.kardegic.cis))?.smr).toHaveLength(3);
+			expect(batch).toHaveBeenCalledTimes(1);
+		} finally {
+			batch.mockRestore();
+		}
+	});
+
 	it("candidates and not_found variants", async () => {
-		expect((await call(getMedicineInfo, { name: "doliprane" })).data.kind).toBe("candidates");
+		const candidates = (await call(getMedicineInfo, { name: "doliprane" })).data;
+		expect(candidates.kind).toBe("candidates");
+		expect(Object.keys(candidates)).not.toContain("has_opinions");
 		for (const args of [{ cis: "69999999" }, { cip13: UNKNOWN_CIP13 }, { name: "zzzunknown" }]) {
 			const { data, result } = await call(getMedicineInfo, args);
 			expect(data).toEqual({ kind: "not_found", possibly_related_shortages: [], did_you_mean: null });
@@ -1414,6 +1475,11 @@ describe("name search across tools", () => {
 		expect(infoConditions.kind).toBe("info");
 		filled(infoConditions.prescription_conditions);
 		filled(infoConditions.safety_information);
+
+		const infoHas = (await call(getMedicineInfo, { cis: MEDICINES.kardegic.cis })).data;
+		filled(infoHas.has_opinions?.smr);
+		filled(infoHas.has_opinions?.asmr);
+		some(infoHas.has_opinions.smr, (o: HasOpinion) => o.ct_url ?? null);
 
 		const infoCandidates = (await call(getMedicineInfo, { name: "otherbrand" })).data;
 		expect(infoCandidates.kind).toBe("candidates");

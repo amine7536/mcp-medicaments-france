@@ -130,7 +130,7 @@ const DECLARED_YEARS = { min: 1900, max: 2100 };
 const opt = (v: string | undefined): string | null => (v === undefined || v === "" ? null : v);
 const req = (v: string | undefined): string => v ?? "";
 
-function validate(rows: string[][], file: (typeof FILES)[keyof typeof FILES]): void {
+export function validate(rows: string[][], file: { name: string; floor: number }): void {
 	if (rows.length < file.floor) {
 		throw new Error(`${file.name}: ${rows.length} rows, below the floor of ${file.floor}`);
 	}

@@ -143,6 +143,23 @@ export const SafetyInformation = outputObject({
 });
 export type SafetyInformation = z.infer<typeof SafetyInformation>;
 
+/** An item of a HAS Transparency Committee opinion listed in the BDPM, without its label; `ct_url` is the HAS opinion page, absent when the dossier has none or several. */
+export const HasOpinion = outputObject({
+	date: z.iso.date(),
+	dossier: z.string(),
+	motif: z.string(),
+	value: z.string(),
+	ct_url: z.url().optional(),
+});
+export type HasOpinion = z.infer<typeof HasOpinion>;
+
+/** The items of a medicine's latest SMR and latest ASMR opinion date; one list may be empty. */
+export const HasOpinions = outputObject({
+	smr: z.array(HasOpinion),
+	asmr: z.array(HasOpinion),
+});
+export type HasOpinions = z.infer<typeof HasOpinions>;
+
 /** A `shortages` row with the match confidence of its context (null when unmatched). */
 export interface ShortageRow {
 	id: string;

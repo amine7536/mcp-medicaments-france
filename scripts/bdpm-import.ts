@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fetchBytes } from "./bdpm/download";
+import { buildHasSql, HAS_FILES, mapHas } from "./bdpm/has";
 import { FILES, validateAndMap } from "./bdpm/map";
 import { decodeCp1252 } from "../src/lib/cp1252";
 import { parseTsv } from "../src/lib/tsv";
@@ -30,6 +31,9 @@ async function main(): Promise<void> {
 	const conditionsBytes = await download(`${BASE}/download/file/${FILES.prescriptionConditions.name}`, FILES.prescriptionConditions.name);
 	// Generated at request time, outside the monthly `/download/file/` release.
 	const safetyBytes = await download(`${BASE}/download/${FILES.safetyInformation.name}`, FILES.safetyInformation.name);
+	const smrBytes = await download(`${BASE}/download/file/${HAS_FILES.smr.name}`, HAS_FILES.smr.name);
+	const asmrBytes = await download(`${BASE}/download/file/${HAS_FILES.asmr.name}`, HAS_FILES.asmr.name);
+	const ctLinksBytes = await download(`${BASE}/download/file/${HAS_FILES.ctLinks.name}`, HAS_FILES.ctLinks.name);
 	const pageBytes = await download(`${BASE}/telechargement`, "telechargement.html");
 
 	const bannerDate = parseBanner(new TextDecoder().decode(pageBytes));
@@ -47,8 +51,17 @@ async function main(): Promise<void> {
 	// validateAndMap throws when the banner date is missing.
 	const release = bannerDate as string;
 
+	const has = mapHas(
+		{
+			smr: parseTsv(decodeCp1252(smrBytes), HAS_FILES.smr.cols, HAS_FILES.smr.name),
+			asmr: parseTsv(decodeCp1252(asmrBytes), HAS_FILES.asmr.cols, HAS_FILES.asmr.name),
+			ctLinks: parseTsv(decodeUtf8(ctLinksBytes), HAS_FILES.ctLinks.cols, HAS_FILES.ctLinks.name),
+		},
+		new Set(mapped.medicines.map((m) => m.cis)),
+	);
+
 	const sql = buildImportSql({ ...mapped, release, startedAt, finishedAt: new Date().toISOString() });
-	await writeFile(SQL_PATH, sql);
+	await writeFile(SQL_PATH, `${buildHasSql(has).join("\n")}\n${sql}`);
 
 	const { skipped } = mapped;
 	console.log(`BDPM release ${release}`);
@@ -56,6 +69,10 @@ async function main(): Promise<void> {
 		`medicines=${mapped.medicines.length} substances=${mapped.substances.length} composition=${mapped.composition.length} mitm=${mapped.mitm.length} fts=${mapped.fts.length} presentations=${mapped.presentations.length} prescription_conditions=${mapped.prescription_conditions.length} safety_information=${mapped.safety_information.length}`,
 	);
 	console.log(`skipped medicines=${skipped.medicines} substances=${skipped.substances} mitm=${skipped.mitm} fractions=${skipped.fractions}`);
+	const smrKept = has.opinions.filter((o) => o.kind === "smr").length;
+	console.log(
+		`has smr=${smrKept} asmr=${has.opinions.length - smrKept} ct_links=${has.ct_links.length}; skipped unknown CIS smr=${has.skipped.smr} asmr=${has.skipped.asmr}; dropped multi-page dossiers=${has.multiPageDossiers}`,
+	);
 	console.log(`wrote ${SQL_PATH}`);
 }
 
