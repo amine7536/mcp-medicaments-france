@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.14.0](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.6...v1.14.0) (2026-11-12)
+
+
+### Features
+
+* **mcp:** add latest has smr and asmr opinions to get_medicine_info ([#103](https://github.com/amine7536/mcp-medicaments-france/issues/103)) ([d3816ed](https://github.com/amine7536/mcp-medicaments-france/commit/d3816ed05b5bba8ad9750c32e70494e60398cb3c))
+
+
+### Bug Fixes
+
+* **bdpm:** serve therapeutic fraction dosages and the authorisation status ([#101](https://github.com/amine7536/mcp-medicaments-france/issues/101)) ([49d2c19](https://github.com/amine7536/mcp-medicaments-france/commit/49d2c190efd21e98868edb2c661458c3b770e110))
+
 ## [1.13.6](https://github.com/amine7536/mcp-medicaments-france/compare/v1.13.5...v1.13.6) (2026-11-10)
 
 
